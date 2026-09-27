@@ -1,0 +1,135 @@
+# ==========================================
+# MedAxis - Production Stack
+# ==========================================
+
+name: medaxis
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: medaxis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-medaxis}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-medaxis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: medaxis-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medaxis-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-medaxis}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./backend/app:/app/app:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medaxis-celery
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-medaxis}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./backend/app:/app/app:ro
+    command: celery -A app.tasks.celery_app worker -l info -c 2
+    healthcheck:
+      test: ["CMD-SHELL", "pidof python3.12 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medaxis-celery-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - redis
+    volumes:
+      - ./backend/app:/app/app:ro
+    command: celery -A app.tasks.celery_app beat -l info
+    healthcheck:
+      test: ["CMD-SHELL", "pidof python3.12 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medaxis-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  redis_data:

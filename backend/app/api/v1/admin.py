@@ -1,0 +1,1591 @@
+"""Admin configuration endpoints.
+
+Manage LLM provider configs and system settings.
+Requires admin role.
+"""
+
+from datetime import datetime, timedelta, timezone
+import logging
+from typing import Annotated, Any, Literal
+
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import CurrentUser, get_current_user, require_role
+from app.core.config import get_settings
+from app.core.encryption import decrypt_value, encrypt_value, mask_api_key
+from app.db.session import get_db
+from app.models.audit import AuditActionType, AuditLog, AuditResourceType
+from app.models.config import LLMProviderConfig, SystemSetting
+from app.models.user import User, UserAttachment, UserRole, UserStatus
+from app.schemas.audit import AuditLogDetail, AuditLogListItem, AuditLogStats
+from app.schemas.config import (
+    BatchSettingsRequest,
+    DoctorVerifyRequest,
+    ExternalSearchRequest,
+    ExternalSearchResponse,
+    LLMProviderConfigCreate,
+    LLMProviderConfigResponse,
+    LLMProviderConfigUpdate,
+    SearchResultItem,
+    SearXNGHealthResponse,
+    SystemSettingCreate,
+    SystemSettingResponse,
+    SystemSettingUpdate,
+    UserAdminUpdate,
+    UserKickRequest,
+    UserListItem,
+)
+from app.services.audit import AuditService
+from app.services.external_search import ExternalSearchAgent
+from app.services.llm import LLMService
+
+router = APIRouter(dependencies=[Depends(require_role(UserRole.ADMIN))])
+_log = logging.getLogger("admin")
+
+
+class DoctorVerifyResponse(BaseModel):
+    """Result of approving or rejecting a doctor application."""
+
+    success: bool
+    message: str
+    action: Literal["approve", "reject"]
+
+# ─── Predefined Business Settings ─────────────────────────────
+# These settings are auto-created on first access if missing.
+# Admins can modify their values but should not delete core keys.
+
+DEFAULT_SETTINGS: list[SystemSettingCreate] = [
+    # ── General ──
+    SystemSettingCreate(
+        key="site.name",
+        value="医枢 MedAxis",
+        description="站点显示名称",
+        category="general",
+        value_type="string",
+    ),
+    SystemSettingCreate(
+        key="site.description",
+        value="您的智能医疗助手",
+        description="站点副标题/SEO描述",
+        category="general",
+        value_type="string",
+    ),
+    # ── Auth ──
+    SystemSettingCreate(
+        key="auth.registration_enabled",
+        value="true",
+        description="是否开放新用户注册",
+        category="auth",
+        value_type="boolean",
+    ),
+    SystemSettingCreate(
+        key="auth.invite_code_required",
+        value="false",
+        description="注册时是否需要邀请码",
+        category="auth",
+        value_type="boolean",
+    ),
+    SystemSettingCreate(
+        key="auth.guest_max_messages",
+        value="10",
+        description="访客模式允许的最大对话轮数",
+        category="auth",
+        value_type="number",
+    ),
+    SystemSettingCreate(
+        key="auth.password_min_length",
+        value="8",
+        description="用户密码最小长度",
+        category="auth",
+        value_type="number",
+    ),
+    # ── Diagnosis ──
+    SystemSettingCreate(
+        key="diagnosis.confidence_threshold",
+        value="0.7",
+        description="诊断建议的最小置信度阈值 (0-1)",
+        category="diagnosis",
+        value_type="number",
+    ),
+    SystemSettingCreate(
+        key="diagnosis.max_followup_days",
+        value="14",
+        description="自动随访计划的最大天数",
+        category="diagnosis",
+        value_type="number",
+    ),
+    SystemSettingCreate(
+        key="diagnosis.require_symptom_count",
+        value="3",
+        description="生成诊断建议所需的最少症状数量",
+        category="diagnosis",
+        value_type="number",
+    ),
+    # ── Agent ──
+    SystemSettingCreate(
+        key="agent.max_tool_calls",
+        value="5",
+        description="单次对话中 Agent 最大工具调用次数",
+        category="agent",
+        value_type="number",
+    ),
+    SystemSettingCreate(
+        key="agent.enable_followup",
+        value="true",
+        description="是否启用自动随访提醒",
+        category="agent",
+        value_type="boolean",
+    ),
+    SystemSettingCreate(
+        key="agent.response_timeout_seconds",
+        value="60",
+        description="Agent 响应超时时间（秒）",
+        category="agent",
+        value_type="number",
+    ),
+    # ── Notification ──
+    SystemSettingCreate(
+        key="notification.email_enabled",
+        value="true",
+        description="是否启用邮件通知",
+        category="notification",
+        value_type="boolean",
+    ),
+    # ── Security ──
+    SystemSettingCreate(
+        key="security.max_login_attempts",
+        value="5",
+        description="同一 IP 最大登录失败次数",
+        category="security",
+        value_type="number",
+    ),
+    SystemSettingCreate(
+        key="security.lockout_duration_minutes",
+        value="30",
+        description="登录失败超过阈值后的锁定时间（分钟）",
+        category="security",
+        value_type="number",
+    ),
+    # ── Audit ──
+    SystemSettingCreate(
+        key="audit.retention_days",
+        value="30",
+        description="审计日志保留天数（过期自动清理）",
+        category="audit",
+        value_type="number",
+    ),
+    # ── External Search (SearXNG) ──
+    SystemSettingCreate(
+        key="external_search.enabled",
+        value="true",
+        description="是否启用外部医学文献搜索（SearXNG）",
+        category="external_search",
+        value_type="boolean",
+    ),
+    SystemSettingCreate(
+        key="external_search.base_url",
+        value="http://searxng:8080",
+        description="SearXNG 服务基础 URL（Docker 内部地址或外部地址）",
+        category="external_search",
+        value_type="string",
+    ),
+    SystemSettingCreate(
+        key="external_search.timeout",
+        value="10",
+        description="SearXNG 搜索超时时间（秒）",
+        category="external_search",
+        value_type="number",
+    ),
+    SystemSettingCreate(
+        key="external_search.max_results",
+        value="10",
+        description="单次搜索最大返回结果数",
+        category="external_search",
+        value_type="number",
+    ),
+    SystemSettingCreate(
+        key="external_search.trusted_only",
+        value="true",
+        description="仅返回来自可信域名的搜索结果",
+        category="external_search",
+        value_type="boolean",
+    ),
+    SystemSettingCreate(
+        key="external_search.categories",
+        value="general,science,medicine",
+        description="SearXNG 搜索类别（逗号分隔）",
+        category="external_search",
+        value_type="string",
+    ),
+]
+
+
+async def _ensure_default_settings(db: AsyncSession) -> None:
+    """Create default settings if they don't exist."""
+    for item in DEFAULT_SETTINGS:
+        result = await db.execute(select(SystemSetting).where(SystemSetting.key == item.key))
+        if not result.scalar_one_or_none():
+            setting = SystemSetting(**item.model_dump())
+            db.add(setting)
+    await db.commit()
+
+
+def _config_to_response(config: LLMProviderConfig) -> dict[str, Any]:
+    """Build a response dict with masked API key."""
+    decrypted = decrypt_value(config.api_key_encrypted)
+    return {
+        "id": config.id,
+        "provider": config.provider,
+        "platform": config.platform,
+        "name": config.name,
+        "base_url": config.base_url,
+        "default_model": config.default_model,
+        "model_type": config.model_type,
+        "is_active": config.is_active,
+        "is_default": config.is_default,
+        "api_key_masked": mask_api_key(decrypted),
+        "created_at": config.created_at,
+        "updated_at": config.updated_at,
+    }
+
+
+# ─── LLM Provider Configs ──────────────────────────────────────
+
+
+@router.get("/llm-providers", response_model=list[LLMProviderConfigResponse])
+async def list_llm_providers(
+    platform: Annotated[str | None, Query(description="Filter by platform (web/miniapp/ios/android)")] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """List all LLM provider configurations, optionally filtered by platform."""
+    stmt = select(LLMProviderConfig).order_by(LLMProviderConfig.provider)
+    if platform:
+        stmt = stmt.where(LLMProviderConfig.platform == platform.strip().lower())
+    result = await db.execute(stmt)
+    return [_config_to_response(c) for c in result.scalars().all()]
+
+
+@router.post(
+    "/llm-providers",
+    response_model=LLMProviderConfigResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_llm_provider(
+    data: LLMProviderConfigCreate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Create a new LLM provider configuration.
+
+    The API key is encrypted before storage.
+    """
+    # Check (provider, platform, model_type) uniqueness
+    existing = await db.execute(
+        select(LLMProviderConfig).where(
+            LLMProviderConfig.provider == data.provider,
+            LLMProviderConfig.platform == data.platform,
+            LLMProviderConfig.model_type == data.model_type,
+        )
+    )
+    if existing.scalar_one_or_none():
+        platform_label = data.platform or "global"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Provider '{data.provider}' for platform '{platform_label}' with model type '{data.model_type}' already exists",
+        )
+
+    # Encrypt API key before storage
+    encrypted_key = encrypt_value(data.api_key)
+
+    if data.is_default:
+        stmt = select(LLMProviderConfig).where(
+            LLMProviderConfig.is_default == True,
+            LLMProviderConfig.platform == data.platform,
+            LLMProviderConfig.model_type == data.model_type,
+        )
+        result = await db.execute(stmt)
+        for conf in result.scalars():
+            conf.is_default = False
+
+    config = LLMProviderConfig(
+        provider=data.provider,
+        platform=data.platform,
+        name=data.name,
+        base_url=data.base_url,
+        api_key_encrypted=encrypted_key,
+        default_model=data.default_model,
+        model_type=data.model_type,
+        is_active=data.is_active,
+        is_default=data.is_default,
+    )
+    db.add(config)
+    await db.commit()
+    await db.refresh(config)
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.LLM_CONFIG_CREATE,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.LLM_PROVIDER,
+        resource_id=str(config.id),
+        details={"provider": config.provider, "model_type": config.model_type, "name": config.name},
+    )
+    await db.commit()
+
+    return _config_to_response(config)
+
+
+@router.get("/llm-providers/{provider_id}", response_model=LLMProviderConfigResponse)
+async def get_llm_provider(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get a specific LLM provider configuration."""
+    result = await db.execute(
+        select(LLMProviderConfig).where(LLMProviderConfig.id == provider_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Provider config '{provider_id}' not found",
+        )
+    return _config_to_response(config)
+
+
+@router.patch("/llm-providers/{provider_id}", response_model=LLMProviderConfigResponse)
+async def update_llm_provider(
+    provider_id: str,
+    data: LLMProviderConfigUpdate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Update an LLM provider configuration.
+
+    If api_key is provided, it is encrypted before storage.
+    """
+    result = await db.execute(
+        select(LLMProviderConfig).where(LLMProviderConfig.id == provider_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Provider config '{provider_id}' not found",
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
+    if "api_key" in update_data:
+        # Encrypt new API key
+        new_key = update_data.pop("api_key")
+        if new_key:
+            config.api_key_encrypted = encrypt_value(new_key)
+
+    for field, value in update_data.items():
+        setattr(config, field, value)
+
+    await db.commit()
+    await db.refresh(config)
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.LLM_CONFIG_UPDATE,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.LLM_PROVIDER,
+        resource_id=provider_id,
+        details={"provider": config.provider, "model_type": config.model_type, "fields_updated": list(update_data.keys())},
+    )
+    await db.commit()
+
+    return _config_to_response(config)
+
+
+@router.delete("/llm-providers/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_llm_provider(
+    provider_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete an LLM provider configuration."""
+    result = await db.execute(
+        select(LLMProviderConfig).where(LLMProviderConfig.id == provider_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Provider config '{provider_id}' not found",
+        )
+    provider_name = config.provider
+    model_type = config.model_type
+    await db.delete(config)
+    await db.commit()
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.LLM_CONFIG_DELETE,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.LLM_PROVIDER,
+        resource_id=provider_id,
+        details={"provider": provider_name, "model_type": model_type},
+    )
+    await db.commit()
+
+
+# ─── LLM Provider Testing ───────────────────────────────────────────────
+
+
+@router.post("/llm-providers/{provider_id}/test")
+async def test_llm_provider(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Test the selected provider using its actual protocol and model role."""
+    result = await db.execute(
+        select(LLMProviderConfig).where(LLMProviderConfig.id == provider_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Provider config '{provider_id}' not found",
+        )
+    try:
+        if config.provider == "typesafe" and config.model_type == "classify":
+            from app.services.intent import classify_with_jev
+            decision = await classify_with_jev(config, {"message": "你好，这是接口连接测试。"})
+            result = {"status": "ok", "available_models": [decision["classifier_model"]]}
+        else:
+            service = LLMService(
+                provider=config.provider, platform=config.platform, db=db,
+                model_type=config.model_type,
+            )
+            result = await service.health_check()
+        return {
+            "provider": config.provider,
+            "platform": config.platform or "global",
+            "status": result.get("status", "unknown"),
+            "detail": result.get("detail") if result.get("status") != "ok" else None,
+            "available_models": result.get("available_models", []),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Provider test failed: {e}",
+        )
+
+
+# ─── System Settings ───────────────────────────────────────────
+
+
+@router.get("/settings", response_model=list[SystemSettingResponse])
+async def list_settings(
+    category: Annotated[str | None, Query(description="Filter by category (general/auth/diagnosis/agent/notification/security)")] = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[SystemSetting]:
+    """List all system settings, optionally filtered by category.
+
+    Automatically creates default settings on first access.
+    """
+    await _ensure_default_settings(db)
+    stmt = select(SystemSetting).order_by(SystemSetting.category, SystemSetting.key)
+    if category:
+        stmt = stmt.where(SystemSetting.category == category.strip().lower())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.post(
+    "/settings",
+    response_model=SystemSettingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_setting(
+    data: SystemSettingCreate,
+    db: AsyncSession = Depends(get_db),
+) -> SystemSetting:
+    """Create a system setting."""
+    existing = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == data.key)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Setting '{data.key}' already exists",
+        )
+
+    setting = SystemSetting(**data.model_dump())
+    db.add(setting)
+    await db.commit()
+    await db.refresh(setting)
+    return setting
+
+
+# ─── Batch Settings ───────────────────────────────────────────────────
+# NOTE: Must be defined BEFORE dynamic routes like /settings/{key}
+#       so FastAPI matches /settings/batch first.
+
+
+@router.patch("/settings/batch", response_model=list[SystemSettingResponse])
+async def batch_update_settings(
+    req: BatchSettingsRequest,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> list[SystemSetting]:
+    """Batch create or update system settings.
+
+    If a key exists, it is updated; otherwise it is created.
+    """
+    await _ensure_default_settings(db)
+    updated: list[SystemSetting] = []
+    for item in req.items:
+        result = await db.execute(select(SystemSetting).where(SystemSetting.key == item.key))
+        setting = result.scalar_one_or_none()
+        if setting:
+            setting.value = item.value
+            if item.description is not None:
+                setting.description = item.description
+            if item.is_sensitive is not None:
+                setting.is_sensitive = item.is_sensitive
+            if item.category is not None:
+                setting.category = item.category
+            if item.value_type is not None:
+                setting.value_type = item.value_type
+            if item.options is not None:
+                setting.options = item.options
+        else:
+            setting = SystemSetting(**item.model_dump())
+            db.add(setting)
+        updated.append(setting)
+
+    await db.commit()
+    for s in updated:
+        await db.refresh(s)
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.SETTINGS_CHANGE,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.SYSTEM_SETTING,
+        details={"keys_updated": [item.key for item in req.items]},
+    )
+    await db.commit()
+
+    return updated
+
+
+@router.get("/settings/{key}", response_model=SystemSettingResponse)
+async def get_setting(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+) -> SystemSetting:
+    """Get a specific system setting."""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Setting '{key}' not found",
+        )
+    return setting
+
+
+@router.patch("/settings/{key}", response_model=SystemSettingResponse)
+async def update_setting(
+    key: str,
+    data: SystemSettingUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> SystemSetting:
+    """Update a system setting."""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Setting '{key}' not found",
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(setting, field, value)
+
+    await db.commit()
+    await db.refresh(setting)
+    return setting
+
+
+@router.delete("/settings/{key}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_setting(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a system setting."""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Setting '{key}' not found",
+        )
+    await db.delete(setting)
+    await db.commit()
+
+
+# ─── Dashboard Stats ───────────────────────────────────────────────────────
+
+
+@router.get("/dashboard/stats")
+async def dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return admin dashboard statistics."""
+    from sqlalchemy import func
+
+    # User counts by role
+    user_counts = {}
+    for role in UserRole:
+        count_result = await db.execute(
+            select(func.count(User.id)).where(User.role == role)
+        )
+        user_counts[role.value] = count_result.scalar() or 0
+
+    # Total users
+    total_users = sum(user_counts.values())
+
+    # Provider configs
+    provider_result = await db.execute(select(func.count(LLMProviderConfig.id)))
+    provider_count = provider_result.scalar() or 0
+
+    active_providers = await db.execute(
+        select(func.count(LLMProviderConfig.id)).where(LLMProviderConfig.is_active == True)
+    )
+    active_provider_count = active_providers.scalar() or 0
+
+    # System settings
+    settings_result = await db.execute(select(func.count(SystemSetting.id)))
+    settings_count = settings_result.scalar() or 0
+
+    return {
+        "users": {
+            "total": total_users,
+            "by_role": user_counts,
+        },
+        "llm_providers": {
+            "total": provider_count,
+            "active": active_provider_count,
+        },
+        "system_settings": settings_count,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ─── User Management ────────────────────────────────────────────
+
+
+@router.get("/users", response_model=list[UserListItem])
+async def list_users(
+    role: Annotated[str | None, Query(description="Filter by role (patient/doctor/admin)")] = None,
+    status: Annotated[str | None, Query(description="Filter by status (active/inactive/pending)")] = None,
+    search: Annotated[str | None, Query(description="Search by email or full_name", max_length=100)] = None,
+    skip: Annotated[int, Query(ge=0, description="Number of records to skip")] = 0,
+    limit: Annotated[int, Query(ge=1, le=100, description="Max records to return")] = 50,
+    db: AsyncSession = Depends(get_db),
+) -> list[User]:
+    """List all users with optional filtering, search, and pagination."""
+    stmt = select(User).order_by(User.created_at.desc())
+
+    if role:
+        stmt = stmt.where(User.role == role.strip().lower())
+    if status:
+        stmt = stmt.where(User.status == status.strip().lower())
+    if search:
+        search_term = f"%{search.strip()}%"
+        stmt = stmt.where(
+            (User.email.ilike(search_term)) | (User.full_name.ilike(search_term))
+        )
+
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.get("/users/{user_id}", response_model=UserListItem)
+async def get_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Get a specific user by ID."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User '{user_id}' not found",
+        )
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=UserListItem)
+async def update_user(
+    user_id: str,
+    data: UserAdminUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Update a user (admin only).
+
+    Allows modifying status, verification, and doctor-specific fields.
+    Does NOT allow changing role or password — use dedicated endpoints.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User '{user_id}' not found",
+        )
+
+    # Prevent modifying the last admin's status
+    if user.role == UserRole.ADMIN and data.status is not None and data.status != "active":
+        # Count active admins
+        from sqlalchemy import func as sql_func
+        admin_count = await db.execute(
+            select(sql_func.count(User.id)).where(
+                User.role == UserRole.ADMIN, User.status == "active"
+            )
+        )
+        if (admin_count.scalar() or 0) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot deactivate the only active admin account",
+            )
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(user, field, value)
+
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.post("/users/{user_id}/kick")
+async def kick_user(
+    user_id: str,
+    data: UserKickRequest,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Kick (soft-delete) a user — sets status=INACTIVE and sends notification email.
+
+    Security: cannot kick self or the last active admin.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if str(user.id) == str(current_user.id):
+        raise HTTPException(status_code=400, detail="不能踢出自己")
+
+    if user.role == UserRole.ADMIN:
+        from sqlalchemy import func as sql_func
+        admin_count = await db.scalar(
+            select(sql_func.count()).select_from(User).where(
+                User.role == UserRole.ADMIN, User.status == "active"
+            )
+        )
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="不能踢出最后一个管理员")
+
+    role_label = {"patient": "患者", "doctor": "医生", "admin": "管理员"}.get(user.role.value if hasattr(user.role, 'value') else user.role, str(user.role))
+    user_email = user.email
+    user_name = user.full_name
+
+    # Send email BEFORE delete (need user data)
+    email_sent = False
+    try:
+        from app.services.email_service import email_service
+        await email_service.send_email(
+            db=db,
+            to_email=user_email,
+            subject="【医枢 MedAxis】账户已被移除",
+            html_content=f"""<!DOCTYPE html>
+<html><body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+<div style="max-width:600px;margin:0 auto;padding:20px;">
+<h2 style="color:#e53935;">账户移除通知</h2>
+<p>尊敬的 {user_name}：</p>
+<p>您的医枢 MedAxis {role_label}账户已被管理员移除。</p>
+<p><strong>移除原因：</strong>{data.reason}</p>
+<p>如有疑问，请联系平台管理员。</p>
+<hr style="border:1px solid #eee;margin:20px 0;">
+<p style="font-size:12px;color:#666;">医枢 MedAxis 智能医疗协作平台</p>
+</div></body></html>""",
+        )
+        email_sent = True
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to send kick email to {user_email}: {e}")
+
+    await db.delete(user)
+    await db.commit()
+
+    return {"success": True, "message": "用户已删除", "email_sent": email_sent}
+
+
+# ─── Doctor Verification ──────────────────────────────────────
+
+
+@router.get("/doctors", response_model=list[UserListItem])
+async def list_doctors(
+    is_verified: Annotated[bool | None, Query(description="Filter by verification status")] = None,
+    status: Annotated[str | None, Query(description="Filter by account status (active/inactive/pending)")] = None,
+    search: Annotated[str | None, Query(description="Search by email or full_name", max_length=100)] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    db: AsyncSession = Depends(get_db),
+) -> list[User]:
+    """List all doctor users with optional filtering and search."""
+    stmt = select(User).where(User.role == UserRole.DOCTOR).order_by(User.created_at.desc())
+
+    if is_verified is not None:
+        stmt = stmt.where(User.is_verified == is_verified)
+    if status:
+        stmt = stmt.where(User.status == status.strip().lower())
+    if search:
+        search_term = f"%{search.strip()}%"
+        stmt = stmt.where(
+            (User.email.ilike(search_term)) | (User.full_name.ilike(search_term))
+        )
+
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.post("/doctors/{doctor_id}/verify", response_model=DoctorVerifyResponse)
+async def verify_doctor(
+    doctor_id: str,
+    data: DoctorVerifyRequest,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Approve or reject a doctor's verification application.
+
+    approve: set is_verified=True, generate confirmation token, send email
+    reject: delete user + local files + send rejection email
+    """
+    result = await db.execute(
+        select(User).where(User.id == doctor_id, User.role == UserRole.DOCTOR)
+    )
+    doctor = result.scalar_one_or_none()
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor not found",
+        )
+
+    if data.action == "approve":
+        doctor.is_verified = True
+        doctor.status = "active"
+        import secrets
+        token = secrets.token_urlsafe(48)
+        doctor.doctor_confirmation_token = token
+        doctor.doctor_confirmation_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        await db.commit()
+
+        base_url = get_settings().public_app_url.rstrip("/")
+        confirm_url = f"{base_url}/api/v1/auth/doctor-confirm?token={token}"
+        try:
+            from app.services.email_service import email_service
+            await email_service.send_email(
+                db=db, to_email=doctor.email,
+                subject="【医枢 MedAxis】医生认证已通过，请确认",
+                html_content=f"""<!DOCTYPE html>
+<html><body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+<div style="max-width:600px;margin:0 auto;padding:20px;">
+<h2 style="color:#10B981;">医生认证已通过</h2>
+<p>尊敬的 {doctor.full_name}：</p>
+<p>恭喜！您的医生认证已通过管理员审核。</p>
+<p>请点击下方按钮完成注册确认：</p>
+<p style="text-align:center;margin:30px 0;">
+  <a href="{confirm_url}" style="background:#10B981;color:white;padding:12px 32px;border-radius:6px;text-decoration:none;font-size:16px;">确认注册</a>
+</p>
+<p>此链接 24 小时内有效。</p>
+</div></body></html>""",
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to send approval email: {e}")
+
+        await db.refresh(doctor)
+        _log.info(f"[ADMIN-VERIFY] doctor={doctor.email} action=approve token_sent=yes")
+        return {"success": True, "message": "已通过，确认邮件已发送", "action": "approve"}
+
+    # Reject: full delete
+    doctor_email = doctor.email
+    doctor_name = doctor.full_name
+    reason = data.reason or "未说明"
+    import os, shutil
+    upload_dir = f"backend/uploads/credentials/{doctor.id}"
+    if os.path.exists(upload_dir):
+        shutil.rmtree(upload_dir)
+
+    await db.delete(doctor)
+    await db.commit()
+
+    try:
+        from app.services.email_service import email_service
+        await email_service.send_email(
+            db=db, to_email=doctor_email,
+            subject="【医枢 MedAxis】医生认证未通过",
+            html_content=f"""<!DOCTYPE html>
+<html><body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+<div style="max-width:600px;margin:0 auto;padding:20px;">
+<h2 style="color:#e53935;">医生认证未通过</h2>
+<p>尊敬的 {doctor_name}：</p>
+<p>抱歉，您的医生认证申请未被通过。</p>
+<p><strong>原因：</strong>{reason}</p>
+<p>您可以修改信息后重新注册。</p>
+</div></body></html>""",
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to send rejection email: {e}")
+
+    _log.info(f"[ADMIN-VERIFY] doctor={doctor_email} action=reject reason={reason}")
+    return {"success": True, "message": "已驳回并删除", "action": "reject"}
+
+
+# ─── Knowledge Base Management ─────────────────────────────────
+
+from app.models.rag import Document, DocumentReview, DocType, ReviewStatus
+from app.schemas.config import (
+    DocumentAdminCreate,
+    DocumentAdminUpdate,
+    DocumentDetail,
+    DocumentListItem,
+    DocumentReviewAction,
+    DocumentReviewItem,
+    ReviewQueueItem,
+)
+
+
+@router.get("/knowledge", response_model=list[DocumentListItem])
+async def list_documents(
+    doc_type: Annotated[str | None, Query(description="Filter by doc_type")] = None,
+    status: Annotated[str | None, Query(description="Filter by review_status")] = None,
+    search: Annotated[str | None, Query(description="Search by title", max_length=100)] = None,
+    is_active: Annotated[bool | None, Query(description="Filter by is_active")] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    db: AsyncSession = Depends(get_db),
+) -> list[Document]:
+    """List knowledge base documents with filtering and pagination."""
+    stmt = select(Document).order_by(Document.created_at.desc())
+
+    if doc_type:
+        stmt = stmt.where(Document.doc_type == doc_type)
+    if status:
+        stmt = stmt.where(Document.review_status == status)
+    if is_active is not None:
+        stmt = stmt.where(Document.is_active == is_active)
+    if search:
+        search_term = f"%{search.strip()}%"
+        stmt = stmt.where(Document.title.ilike(search_term))
+
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+# ─── Document Review Queue ─────────────────────────────────
+
+
+@router.get("/knowledge/reviews", response_model=list[ReviewQueueItem])
+async def list_review_queue(
+    status: Annotated[str | None, Query(description="Filter by review_status")] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    db: AsyncSession = Depends(get_db),
+) -> list[Document]:
+    """List documents in the review queue.
+
+    By default shows agent_reviewed documents awaiting doctor review.
+    """
+    stmt = select(Document).where(
+        Document.doc_type == DocType.CASE_REPORT
+    ).order_by(Document.created_at.desc())
+
+    if status:
+        stmt = stmt.where(Document.review_status == status)
+    else:
+        # Default: show pending and agent_reviewed
+        stmt = stmt.where(Document.review_status.in_([ReviewStatus.PENDING, ReviewStatus.AGENT_REVIEWED]))
+
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.get("/knowledge/reviews/{doc_id}/history", response_model=list[DocumentReviewItem])
+async def get_document_review_history(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[DocumentReview]:
+    """Get review history for a specific document."""
+    result = await db.execute(
+        select(DocumentReview).where(DocumentReview.document_id == doc_id)
+        .order_by(DocumentReview.reviewed_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+@router.post("/knowledge/reviews/{doc_id}")
+async def review_document(
+    doc_id: str,
+    data: DocumentReviewAction,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Submit a review decision for a document (admin or doctor).
+
+    Actions: approve, reject, request_revision
+    """
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document '{doc_id}' not found",
+        )
+
+    previous_status = doc.review_status.value
+    # Update document review status
+    if data.action == "approve":
+        doc.review_status = ReviewStatus.APPROVED
+        doc.is_active = True
+    elif data.action == "reject":
+        doc.review_status = ReviewStatus.REJECTED
+        doc.is_active = False
+    elif data.action == "request_revision":
+        doc.review_status = ReviewStatus.REVISION_REQUESTED
+
+    # Create review log
+    review = DocumentReview(
+        document_id=doc.id,
+        reviewer_type="admin",  # TODO: detect doctor vs admin from current_user
+        action=data.action,
+        score=data.score,
+        comments=data.comments,
+    )
+    review.reviewer_id = current_user.id
+    db.add(review)
+    await db.commit()
+    await db.refresh(doc)
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.DOCUMENT_REVIEW,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.DOCUMENT,
+        resource_id=doc_id,
+        details={
+            "title": doc.title,
+            "action": data.action,
+            "score": data.score,
+            "previous_status": previous_status,
+        },
+    )
+    await db.commit()
+
+    return {
+        "id": str(doc.id),
+        "review_status": doc.review_status.value,
+        "action": data.action,
+        "message": f"Document {data.action}d successfully",
+    }
+
+
+
+@router.get("/knowledge/{doc_id}", response_model=DocumentDetail)
+async def get_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Document:
+    """Get a specific document by ID."""
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document '{doc_id}' not found",
+        )
+    return doc
+
+
+@router.post("/knowledge", response_model=DocumentDetail, status_code=status.HTTP_201_CREATED)
+async def create_document_admin(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    title: str = Form(..., min_length=1, max_length=500),
+    content: str | None = Form(None, min_length=10),
+    doc_type: str = Form(default="platform_guideline"),
+    source_url: str | None = Form(None, max_length=1000),
+    department: str | None = Form(None, max_length=100),
+    disease_tags: list[str] | None = Form(None),
+    drug_name: str | None = Form(None, max_length=200),
+    language: str = Form(default="zh"),
+    is_featured: bool = Form(default=False),
+    file: UploadFile | None = File(None),
+) -> Document:
+    """Create a new knowledge document (admin only).
+
+    Supports two modes:
+    1. Text mode: provide title + content directly.
+    2. File upload mode: upload a PDF, Word (.docx), or plain text file.
+       The file content is auto-extracted and chunked.
+
+    Automatically chunks and indexes the content.
+    """
+    from app.services.document_parser import parse_uploaded_file
+    from app.services.rag import RAGService
+
+    try:
+        # Determine content: from uploaded file or from text field
+        final_content: str
+        if file is not None:
+            parsed_text, file_type = await parse_uploaded_file(file)
+            final_content = parsed_text
+            # If title is generic/empty and file has a meaningful name, use filename as title
+            if not title or title.strip() in ("", "新建文档", "Untitled"):
+                # Remove extension for title
+                fname = file.filename or "Uploaded Document"
+                for ext in (".pdf", ".docx", ".txt"):
+                    if fname.lower().endswith(ext):
+                        fname = fname[: -len(ext)]
+                        break
+                title = fname or title
+        else:
+            if not content or not content.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Either 'content' text or a 'file' upload is required",
+                )
+            final_content = content
+
+        service = RAGService(db)
+        doc = await service.create_document(
+            title=title,
+            content=final_content,
+            doc_type=doc_type,
+            source_url=source_url,
+            department=department,
+            disease_tags=disease_tags or [],
+            drug_name=drug_name,
+            language=language,
+        )
+        # Update admin-specific fields
+        doc.is_featured = is_featured
+        doc.source_type = "admin_upload"
+        await db.commit()
+        await db.refresh(doc)
+
+        # Record audit log
+        await AuditService.record(
+            db,
+            action=AuditActionType.DOCUMENT_CREATE,
+            user_id=str(current_user.id) if current_user else None,
+            user_email=current_user.email if current_user else None,
+            user_role=current_user.role.value if current_user else None,
+            resource_type=AuditResourceType.DOCUMENT,
+            resource_id=str(doc.id),
+            details={"title": doc.title, "doc_type": doc.doc_type.value, "has_file": file is not None},
+        )
+        await db.commit()
+
+        return doc
+    finally:
+        # Immediately delete uploaded file temp data to save server disk space
+        if file is not None:
+            await file.close()
+
+
+@router.patch("/knowledge/{doc_id}", response_model=DocumentDetail)
+async def update_document_admin(
+    doc_id: str,
+    data: DocumentAdminUpdate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Document:
+    """Update a knowledge document (admin only)."""
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document '{doc_id}' not found",
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(doc, field, value)
+
+    doc.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(doc)
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.DOCUMENT_UPDATE,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.DOCUMENT,
+        resource_id=doc_id,
+        details={"title": doc.title, "doc_type": doc.doc_type.value, "fields_updated": list(update_data.keys())},
+    )
+    await db.commit()
+
+    return doc
+
+
+@router.delete("/knowledge/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document_admin(
+    doc_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a knowledge document (admin only)."""
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document '{doc_id}' not found",
+        )
+    doc_title = doc.title
+    doc_type = doc.doc_type.value
+    await db.delete(doc)
+    await db.commit()
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.DOCUMENT_DELETE,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.DOCUMENT,
+        resource_id=doc_id,
+        details={"title": doc_title, "doc_type": doc_type},
+    )
+    await db.commit()
+
+
+@router.patch("/knowledge/{doc_id}/toggle")
+async def toggle_document_active(
+    doc_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Toggle document active status."""
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document '{doc_id}' not found",
+        )
+    doc.is_active = not doc.is_active
+    await db.commit()
+    await db.refresh(doc)
+
+    # Record audit log
+    await AuditService.record(
+        db,
+        action=AuditActionType.DOCUMENT_TOGGLE,
+        user_id=str(current_user.id),
+        user_email=current_user.email,
+        user_role=current_user.role.value,
+        resource_type=AuditResourceType.DOCUMENT,
+        resource_id=doc_id,
+        details={"title": doc.title, "new_is_active": doc.is_active},
+    )
+    await db.commit()
+
+    return {"id": str(doc.id), "is_active": doc.is_active}
+
+
+
+# ─── Audit Logs ─────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/audit-logs", response_model=list[AuditLogListItem])
+async def list_audit_logs(
+    action: Annotated[str | None, Query(description="Filter by action type")] = None,
+    user_id: Annotated[str | None, Query(description="Filter by user UUID")] = None,
+    resource_type: Annotated[str | None, Query(description="Filter by resource type")] = None,
+    date_from: Annotated[datetime | None, Query(description="Start date (ISO 8601)")] = None,
+    date_to: Annotated[datetime | None, Query(description="End date (ISO 8601)")] = None,
+    success: Annotated[bool | None, Query(description="Filter by success status")] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    db: AsyncSession = Depends(get_db),
+) -> list[AuditLog]:
+    """List audit logs with filtering and pagination.
+
+    Only admin operations are logged — patient-side operations are
+    intentionally excluded for privacy protection.
+    """
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
+
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    if user_id:
+        stmt = stmt.where(AuditLog.user_id == user_id)
+    if resource_type:
+        stmt = stmt.where(AuditLog.resource_type == resource_type)
+    if date_from:
+        stmt = stmt.where(AuditLog.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(AuditLog.created_at <= date_to)
+    if success is not None:
+        stmt = stmt.where(AuditLog.success == success)
+
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.get("/audit-logs/{log_id}", response_model=AuditLogDetail)
+async def get_audit_log(
+    log_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> AuditLog:
+    """Get a single audit log entry with full details."""
+    result = await db.execute(select(AuditLog).where(AuditLog.id == log_id))
+    log = result.scalar_one_or_none()
+    if not log:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Audit log '{log_id}' not found",
+        )
+    return log
+
+
+@router.get("/audit-logs/stats/overview", response_model=AuditLogStats)
+async def audit_log_stats(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get audit log statistics for the dashboard."""
+    from sqlalchemy import func
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=7)
+
+    # Total today
+    total_today_result = await db.execute(
+        select(func.count(AuditLog.id)).where(AuditLog.created_at >= today_start)
+    )
+    total_today = total_today_result.scalar() or 0
+
+    # Total week
+    total_week_result = await db.execute(
+        select(func.count(AuditLog.id)).where(AuditLog.created_at >= week_start)
+    )
+    total_week = total_week_result.scalar() or 0
+
+    # Failed today
+    failed_today_result = await db.execute(
+        select(func.count(AuditLog.id)).where(
+            AuditLog.created_at >= today_start,
+            AuditLog.success == False,
+        )
+    )
+    failed_today = failed_today_result.scalar() or 0
+
+    # Action breakdown (today)
+    action_result = await db.execute(
+        select(AuditLog.action, func.count(AuditLog.id))
+        .where(AuditLog.created_at >= today_start)
+        .group_by(AuditLog.action)
+        .order_by(func.count(AuditLog.id).desc())
+    )
+    action_breakdown = [
+        {"action": action, "count": count}
+        for action, count in action_result.all()
+    ]
+
+    return {
+        "total_today": total_today,
+        "total_week": total_week,
+        "failed_today": failed_today,
+        "action_breakdown": action_breakdown,
+    }
+
+
+# ── External Search (SearXNG) ──
+
+@router.get("/external-search/health", response_model=SearXNGHealthResponse)
+async def external_search_health(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Check SearXNG connectivity and latency.
+
+    Does not require external_search.enabled to be True — useful for
+    diagnosing configuration issues.
+    """
+    agent = await ExternalSearchAgent.from_config(db)
+    return await agent.healthcheck()
+
+
+@router.post("/external-search", response_model=ExternalSearchResponse)
+async def external_search(
+    request: ExternalSearchRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Perform an external medical knowledge search via SearXNG.
+
+    Search types:
+    - **guideline**: Clinical guidelines and consensus for a disease
+    - **drug**: Drug information (instructions, pharmacology, adverse effects)
+    - **paper**: Academic papers and clinical studies
+    - **raw**: Use the query as-is without template expansion
+    """
+    from app.services.config import DynamicConfigService
+
+    enabled = await DynamicConfigService.external_search_enabled(db)
+    if not enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="External search is disabled in system settings",
+        )
+
+    agent = await ExternalSearchAgent.from_config(db)
+
+    import asyncio
+    start = asyncio.get_event_loop().time()
+
+    if request.search_type == "guideline":
+        results = await agent.search_guidelines(request.query, lang=request.lang)
+    elif request.search_type == "drug":
+        results = await agent.search_drug_info(request.query, lang=request.lang)
+    elif request.search_type == "paper":
+        results = await agent.search_papers(
+            request.query, lang=request.lang, max_results=request.max_results
+        )
+    else:  # raw
+        raw = await agent._searxng_search(request.query, lang=request.lang)
+        results = agent._filter_trusted(raw)
+
+    latency_ms = round((asyncio.get_event_loop().time() - start) * 1000, 1)
+
+    # Respect max_results
+    results = results[: request.max_results]
+
+    # Respect trusted_only setting
+    trusted_only = await DynamicConfigService.external_search_trusted_only(db)
+    if trusted_only:
+        results = [r for r in results if r.is_trusted]
+
+    result_items = [
+        SearchResultItem(
+            title=r.title,
+            url=r.url,
+            snippet=r.snippet,
+            source_engine=r.source_engine,
+            trust_score=r.trust_score,
+            is_trusted=r.is_trusted,
+        )
+        for r in results
+    ]
+
+    return {
+        "search_type": request.search_type,
+        "query": request.query,
+        "results": result_items,
+        "total_results": len(result_items),
+        "trusted_count": sum(1 for r in result_items if r.is_trusted),
+        "latency_ms": latency_ms,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════
+# Phase 1.5: Admin credential verification endpoints
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/users/{user_id}/attachments")
+async def admin_get_user_attachments(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Admin: view a user's credential attachments."""
+    result = await db.execute(
+        select(UserAttachment).where(UserAttachment.user_id == user_id)
+    )
+    return [
+        {
+            "id": str(a.id),
+            "file_name": a.file_name,
+            "file_url": a.file_url,
+            "file_size": a.file_size,
+            "mime_type": a.mime_type,
+            "category": a.category,
+            "label": a.label,
+            "is_verified": a.is_verified,
+            "verify_note": a.verify_note,
+            "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
+        }
+        for a in result.scalars().all()
+    ]
+
+
+@router.patch("/attachments/{attachment_id}/verify")
+async def admin_verify_attachment(
+    attachment_id: str,
+    is_verified: bool = Body(...),
+    verify_note: str | None = Body(None),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Admin: verify or reject a single credential attachment."""
+    result = await db.execute(
+        select(UserAttachment).where(UserAttachment.id == attachment_id)
+    )
+    att = result.scalar_one_or_none()
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    att.is_verified = is_verified
+    att.verify_note = verify_note
+    await db.commit()
+
+    return {
+        "id": str(att.id),
+        "is_verified": att.is_verified,
+        "verify_note": att.verify_note,
+    }

@@ -1,0 +1,316 @@
+{
+  "catalog_id": "patient-smoke-v1",
+  "catalog_version": "1.0.0",
+  "status": "not_run",
+  "run_at": null,
+  "environment": {
+    "model": null,
+    "prompt_version": null,
+    "substitute_used": null,
+    "database": null
+  },
+  "summary": {
+    "cases": 10,
+    "engineering_pytest": "not_run",
+    "live_model": "not_run",
+    "human_review": "not_run"
+  },
+  "cases": [
+    {
+      "id": "SM-01",
+      "title": "信息完整：腹泻主诉可走完全流程",
+      "modes": [
+        "engineering",
+        "live_model"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-02",
+      "title": "缺少过敏史：未知不得写成无过敏",
+      "modes": [
+        "engineering",
+        "live_model",
+        "human_review"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-03",
+      "title": "缺少起病时间：不得编造发病日期",
+      "modes": [
+        "live_model",
+        "human_review"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-04",
+      "title": "症状前后矛盾：不得静默选一边写成事实",
+      "modes": [
+        "live_model",
+        "human_review"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-05",
+      "title": "上传材料无法解析：失败可见，不冒充正常化验",
+      "modes": [
+        "engineering"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-06",
+      "title": "模型超时：不得跳过问诊直接出诊断",
+      "modes": [
+        "engineering"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-07",
+      "title": "报告生成成功但病例保存失败：不可显示已保存",
+      "modes": [
+        "engineering"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-08",
+      "title": "提交旧版本：409 冲突，不覆盖较新内容",
+      "modes": [
+        "engineering"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-09",
+      "title": "患者 A 访问患者 B：拒绝且不泄漏正文",
+      "modes": [
+        "engineering"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    },
+    {
+      "id": "SM-10",
+      "title": "清缓存后重登：只恢复已保存记录",
+      "modes": [
+        "engineering",
+        "substitute_demo"
+      ],
+      "failure_stage": null,
+      "notes": "",
+      "scores": {
+        "flow_complete": null,
+        "unknown_preserved": null,
+        "contradiction_surfaced": null,
+        "no_hallucinated_citation": null,
+        "schema_ok": null,
+        "case_bound": null,
+        "recoverable": null,
+        "no_false_success": null,
+        "isolation_ok": null,
+        "latency_ms": {
+          "first_token": null,
+          "report": null
+        },
+        "token_cost": {
+          "prompt": null,
+          "completion": null,
+          "usd": null
+        }
+      }
+    }
+  ]
+}

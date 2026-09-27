@@ -1,0 +1,650 @@
+{
+  "id": "patient-smoke-v1",
+  "version": "1.0.0",
+  "status": "DEFINED_NOT_RUN",
+  "created": "2026-09-27",
+  "split": "dev_smoke",
+  "holdout": null,
+  "language": "zh-CN",
+  "purpose": "固定 10 个合成冒烟案例，分别验证患者侧主线、未知/矛盾信息不被补造、失败不伪成功、跨患者隔离和重登恢复。题集存在不等于已经跑过。",
+  "disclaimer": [
+    "全部为合成成人门诊场景，不含真实患者数据。",
+    "不是临床金标准，不能用于医学准确率声明。",
+    "工程行为与模型内容质量分开记账；替身通过不能记为真实模型通过。",
+    "未审核的题只评工程行为与来源忠实性，不评诊断是否正确。"
+  ],
+  "product_commitments": ["PF-01", "PF-02", "PF-03", "PF-04", "PF-05", "PF-06"],
+  "score_fields": [
+    "flow_complete",
+    "unknown_preserved",
+    "contradiction_surfaced",
+    "no_hallucinated_citation",
+    "schema_ok",
+    "case_bound",
+    "recoverable",
+    "no_false_success",
+    "isolation_ok",
+    "latency_ms",
+    "token_cost"
+  ],
+  "failure_stages": [
+    "register",
+    "first_turn",
+    "follow_up",
+    "upload_parse",
+    "report_generate",
+    "case_persist",
+    "preparation",
+    "feedback",
+    "revision_conflict",
+    "cross_patient",
+    "cache_recovery"
+  ],
+  "cases": [
+    {
+      "id": "SM-01",
+      "title": "信息完整：腹泻主诉可走完全流程",
+      "family": "complete_info",
+      "priority": "P0",
+      "pf": ["PF-01", "PF-02", "PF-03", "PF-04"],
+      "modes": ["engineering", "live_model"],
+      "personas": [
+        {
+          "id": "patient-a",
+          "role": "patient",
+          "label": "合成患者 A",
+          "age": 32,
+          "sex": "female"
+        }
+      ],
+      "script": {
+        "chief_complaint": "水样腹泻三天，每天四五次，没有血便。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "我这三天一直拉肚子，水一样的，一天四五次，没有看到血。有点肚子咕噜咕噜，没有发烧。",
+            "phase_answers": {
+              "hpi_onset": "3天前晚饭后开始",
+              "hpi_quality": "水样便，无血无黏液",
+              "hpi_timing": "每天4-5次",
+              "hpi_associated": "肠鸣，无发热，无呕吐",
+              "hpi_treatment": "自行口服蒙脱石散，次数略减少但仍腹泻",
+              "pmh_allergy": "青霉素过敏，出现过皮疹",
+              "pmh_chronic": "否认慢性病",
+              "med_current": "蒙脱石散，按说明书口服"
+            }
+          },
+          {
+            "speaker": "patient",
+            "text": "没有出国，周围同事也有人拉肚子。想先整理一份给医生看的摘要。"
+          }
+        ],
+        "uploads": [],
+        "fault": null
+      },
+      "required_facts": [
+        {"id": "hpi_onset", "value": "3天前晚饭后开始", "source": "patient_reported"},
+        {"id": "hpi_quality", "value": "水样便，无血无黏液", "source": "patient_reported"},
+        {"id": "pmh_allergy", "value": "青霉素过敏，出现过皮疹", "source": "patient_reported"},
+        {"id": "med_current", "value": "蒙脱石散", "source": "patient_reported"}
+      ],
+      "unknown_facts": [],
+      "forbidden_inferences": [
+        "把辅助报告写成医生确诊",
+        "编造血便、高热或住院史",
+        "把青霉素过敏改成无过敏",
+        "自动创建用药任务或处方"
+      ],
+      "expected": {
+        "flow": "首轮→至少一次补问→结构化报告→同一病例保存→准备包含已知事实→诊后自报可写→重登可恢复",
+        "engineering": [
+          "报告生成与病例保存分别判断",
+          "同一来源会话重复完成只形成一个病例",
+          "准备包列出青霉素过敏，不标过敏史为未知"
+        ],
+        "live_model": [
+          "结构化输出通过 schema",
+          "摘要能回溯到患者原话",
+          "不把科室演示目录显示为个性化诊断推荐"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_patient_demo_case_closure.py::test_diagnosis_case_is_created_once_and_source_material_is_bound",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_intent_latency.py::test_stream_saves_case_before_report_and_returns_case_id",
+          "covers": "engineering"
+        },
+        {
+          "kind": "e2e_script",
+          "cwd": "backend",
+          "path": "tests/patient_demo_e2e.py",
+          "covers": "substitute_demo",
+          "note": "需要独立演示库与 demo server；生成逻辑为替身"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-02",
+      "title": "缺少过敏史：未知不得写成无过敏",
+      "family": "missing_fact",
+      "priority": "P0",
+      "pf": ["PF-03"],
+      "modes": ["engineering", "live_model", "human_review"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 28, "sex": "male"}],
+      "script": {
+        "chief_complaint": "吃完海鲜后皮肤发痒、起疹子。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "昨晚吃完虾以后身上痒，起了红疹，没有喘不上气。",
+            "phase_answers": {
+              "hpi_onset": "昨晚晚饭后约一小时",
+              "hpi_quality": "皮肤瘙痒、红疹，无呼吸困难",
+              "hpi_treatment": "没吃药",
+              "pmh_chronic": "否认慢性病",
+              "med_current": "无正在服用的药物"
+            }
+          },
+          {
+            "speaker": "patient",
+            "text": "过敏史我真的不清楚，以前没专门查过，不要写成没有过敏。"
+          }
+        ],
+        "uploads": [],
+        "fault": null,
+        "omitted_phases": ["pmh_allergy"]
+      },
+      "required_facts": [
+        {"id": "hpi_onset", "value": "昨晚晚饭后约一小时", "source": "patient_reported"},
+        {"id": "hpi_quality", "value": "皮肤瘙痒、红疹，无呼吸困难", "source": "patient_reported"}
+      ],
+      "unknown_facts": [
+        {
+          "id": "pmh_allergy",
+          "must_remain": "unknown",
+          "forbidden_phrases": ["无过敏", "否认过敏", "NKDA", "NKA", "no known allerg", "过敏史：无"]
+        }
+      ],
+      "forbidden_inferences": [
+        "把未提供的过敏史补成否认项",
+        "仅因吃海鲜就写成确诊海鲜过敏",
+        "给出肾上腺素或处方剂量"
+      ],
+      "expected": {
+        "flow": "允许跳过过敏史并继续生成报告；准备包必须保留未知",
+        "engineering": [
+          "collected_info 不出现 pmh_allergy 键时，准备包应含 unknown.allergies",
+          "若把「不清楚」存成 pmh_allergy 的值，当前 build_package 会把它当成已提供事实，这是已知差距，本案例不得判工程已通过未知语义"
+        ],
+        "live_model": [
+          "报告/摘要不得出现 forbidden_phrases",
+          "可提示待向医生说明过敏史未知"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "catalog_contract",
+          "path": "evals/patient-smoke/run_eval.py",
+          "covers": "engineering",
+          "note": "校验缺键时 unknown.allergies 出现；不把「不清楚」现值当作正确语义"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-03",
+      "title": "缺少起病时间：不得编造发病日期",
+      "family": "missing_fact",
+      "priority": "P0",
+      "pf": ["PF-03"],
+      "modes": ["live_model", "human_review"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 41, "sex": "female"}],
+      "script": {
+        "chief_complaint": "干咳一段时间了，具体哪天开始不记得。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "就是干咳，没有痰。会不会有很久了，我真不记得哪天开始的。",
+            "phase_answers": {
+              "hpi_onset": "不清楚",
+              "hpi_quality": "干咳无痰",
+              "hpi_associated": "无发热，无胸痛",
+              "pmh_allergy": "对花粉过敏",
+              "med_current": "无"
+            }
+          },
+          {
+            "speaker": "patient",
+            "text": "不要帮我猜是一周还是一个月，就写我不记得。"
+          }
+        ],
+        "uploads": [],
+        "fault": null
+      },
+      "required_facts": [
+        {"id": "hpi_quality", "value": "干咳无痰", "source": "patient_reported"},
+        {"id": "pmh_allergy", "value": "对花粉过敏", "source": "patient_reported"}
+      ],
+      "unknown_facts": [
+        {
+          "id": "hpi_onset",
+          "must_remain": "unknown",
+          "forbidden_phrases": ["一周前", "两周前", "1个月前", "一个月前", "3天前", "急性起病于"]
+        }
+      ],
+      "forbidden_inferences": [
+        "把「一段时间」量化成具体天数",
+        "把干咳写成肺炎或肺结核确诊",
+        "准备包把起病时间标成已确认"
+      ],
+      "expected": {
+        "flow": "报告可生成，但起病时间保持未知或「患者不记得」",
+        "engineering": [
+          "准备构建器目前只自动标记过敏/用药未知，不起病时间；本案例以模型输出与人工对照为主"
+        ],
+        "live_model": [
+          "摘要出现起病时间时必须能回到「不记得」原话",
+          "不得使用 forbidden_phrases 作为确定事实"
+        ]
+      },
+      "mapped_tests": [],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-04",
+      "title": "症状前后矛盾：不得静默选一边写成事实",
+      "family": "contradiction",
+      "priority": "P0",
+      "pf": ["PF-03"],
+      "modes": ["live_model", "human_review"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 36, "sex": "male"}],
+      "script": {
+        "chief_complaint": "咽痛三天，有没有发烧我自己也说不清。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "这三天嗓子疼，晚上量过体温 38.5℃。",
+            "phase_answers": {
+              "hpi_onset": "3天前",
+              "hpi_quality": "咽痛",
+              "hpi_associated": "发热 38.5℃"
+            }
+          },
+          {
+            "speaker": "patient",
+            "text": "不对，我没发过烧，可能是记错了。你别直接改成没发烧，把矛盾留下来。"
+          }
+        ],
+        "uploads": [],
+        "fault": null
+      },
+      "required_facts": [
+        {"id": "hpi_onset", "value": "3天前", "source": "patient_reported"},
+        {"id": "hpi_quality", "value": "咽痛", "source": "patient_reported"}
+      ],
+      "unknown_facts": [],
+      "contradictions": [
+        {
+          "id": "fever",
+          "statement_a": "晚上量过体温 38.5℃",
+          "statement_b": "我没发过烧",
+          "resolution": "must_not_silently_resolve"
+        }
+      ],
+      "forbidden_inferences": [
+        "只保留「无发热」并删除 38.5℃",
+        "只保留 38.5℃ 并写患者已确认发热",
+        "把矛盾平均成低热"
+      ],
+      "expected": {
+        "flow": "仍可出报告，但核对界面或摘要需同时保留两句来源",
+        "engineering": [
+          "当前准备包没有专门的 contradiction 字段；本案例不能用现有 pytest 判通过"
+        ],
+        "live_model": [
+          "出现发热相关结论时必须标明来源冲突或待核对",
+          "复制摘要不得把冲突写成单一确定事实"
+        ]
+      },
+      "mapped_tests": [],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-05",
+      "title": "上传材料无法解析：失败可见，不冒充正常化验",
+      "family": "parse_failure",
+      "priority": "P0",
+      "pf": ["PF-02", "PF-05", "PF-06"],
+      "modes": ["engineering"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 30, "sex": "female"}],
+      "script": {
+        "chief_complaint": "想把一张化验单一起给医生看，但文件是损坏的。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "我有个血常规，先上传看看。"
+          }
+        ],
+        "uploads": [
+          {
+            "filename": "broken-lab.bin",
+            "content_type": "application/octet-stream",
+            "bytes_b64": "AAECAwQFBgcICQoLDA0ODw==",
+            "expected_status": "failed"
+          }
+        ],
+        "fault": {"type": "unparseable_upload"}
+      },
+      "required_facts": [],
+      "unknown_facts": [],
+      "forbidden_inferences": [
+        "把解析失败写成血红蛋白/白细胞正常值",
+        "把失败任务显示为已完成检查"
+      ],
+      "expected": {
+        "flow": "上传可受理；解析失败后报告/准备仍可继续，但材料状态为失败",
+        "engineering": [
+          "失败任务保留 error，不把失败结果写入可用化验",
+          "已有报告或病例不因本次解析失败被隐藏"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_t3_document_persistence.py::test_document_worker_persists_completed_result_and_failure",
+          "covers": "engineering"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-06",
+      "title": "模型超时：不得跳过问诊直接出诊断",
+      "family": "model_timeout",
+      "priority": "P0",
+      "pf": ["PF-01", "PF-05"],
+      "modes": ["engineering"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 29, "sex": "male"}],
+      "script": {
+        "chief_complaint": "头痛两天。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "这两天头有点痛，想问问是怎么回事。"
+          }
+        ],
+        "uploads": [],
+        "fault": {
+          "type": "first_turn_timeout_or_generation_error",
+          "inject": ["InterviewGenerationError", "RuntimeError(synthetic provider failure)", "classification deadline"]
+        }
+      },
+      "required_facts": [],
+      "unknown_facts": [],
+      "forbidden_inferences": [
+        "超时后返回预置诊断报告",
+        "把占位 SSE 当作有效模型反馈"
+      ],
+      "expected": {
+        "flow": "首轮失败时流式接口报告错误，不进入已完成诊断",
+        "engineering": [
+          "生成失败不能变成 completed diagnosis",
+          "分类超时取消后不得再打诊断模型"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_intent_latency.py::test_failed_first_generation_cannot_become_a_completed_diagnosis",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_intent_latency.py::test_stream_reports_generation_failure_instead_of_direct_diagnosis",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_intent_latency.py::test_classification_deadline_cancels_request_without_second_model_call",
+          "covers": "engineering"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-07",
+      "title": "报告生成成功但病例保存失败：不可显示已保存",
+      "family": "save_failure",
+      "priority": "P0",
+      "pf": ["PF-01", "PF-02", "PF-05"],
+      "modes": ["engineering"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 34, "sex": "female"}],
+      "script": {
+        "chief_complaint": "合成主诉：保存失败反例。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "问诊可以结束，但保存病例时数据库提交失败。"
+          }
+        ],
+        "uploads": [],
+        "fault": {"type": "case_persist_commit_error"}
+      },
+      "required_facts": [],
+      "unknown_facts": [],
+      "forbidden_inferences": [
+        "界面显示病例已保存",
+        "生成一个无来源会话的病例行"
+      ],
+      "expected": {
+        "flow": "保存异常显式失败并回滚；已有报告文本若在会话中仍可看，但不能进入「已保存病例」",
+        "engineering": [
+          "persist_diagnosis_case 失败抛明确错误",
+          "MedicalCase 计数保持 0",
+          "准备保存失败时保留上一成功版本"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_patient_demo_case_closure.py::test_diagnosis_case_persistence_failure_rolls_back_and_is_explicit",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation.py::test_preparation_save_failure_keeps_last_committed_version",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation.py::test_preparation_requires_report_but_does_not_hide_existing_case",
+          "covers": "engineering"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-08",
+      "title": "提交旧版本：409 冲突，不覆盖较新内容",
+      "family": "stale_revision",
+      "priority": "P0",
+      "pf": ["PF-03", "PF-04", "PF-05"],
+      "modes": ["engineering"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 33, "sex": "male"}],
+      "script": {
+        "chief_complaint": "合成主诉：版本冲突。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "先保存准备包，再在另一个窗口改一版，然后用旧 revision 提交。"
+          }
+        ],
+        "uploads": [],
+        "fault": {"type": "stale_revision_submit", "expected_http": 409}
+      },
+      "required_facts": [],
+      "unknown_facts": [],
+      "forbidden_inferences": [
+        "旧草稿覆盖新版本",
+        "冲突后显示保存成功"
+      ],
+      "expected": {
+        "flow": "准备与诊后反馈的 compare-and-swap 均拒绝过期 revision",
+        "engineering": [
+          "PATCH/更新返回 409",
+          "服务端保留较新 revision",
+          "反馈 source_type 仍为 patient_reported，不写入医生诊断字段"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation.py::test_preparation_enforces_owner_and_compare_and_swap",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_post_visit_feedback.py::test_post_visit_feedback_persists_revisions_and_patient_materials",
+          "covers": "engineering"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-09",
+      "title": "患者 A 访问患者 B：拒绝且不泄漏正文",
+      "family": "cross_patient",
+      "priority": "P0",
+      "pf": ["PF-05"],
+      "modes": ["engineering"],
+      "personas": [
+        {"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 30, "sex": "female"},
+        {"id": "patient-b", "role": "patient", "label": "合成患者 B", "age": 31, "sex": "male"}
+      ],
+      "script": {
+        "chief_complaint": "患者 A 的病例含敏感主诉，患者 B 持有 A 的 case_id。",
+        "turns": [
+          {
+            "speaker": "patient-b",
+            "text": "用 B 的 token 读取、修改 A 的病例、准备、反馈和材料。"
+          }
+        ],
+        "uploads": [],
+        "fault": {"type": "cross_patient_access"}
+      },
+      "required_facts": [],
+      "unknown_facts": [],
+      "forbidden_inferences": [
+        "返回 A 的主诉或报告正文",
+        "把越权失败显示为空白成功页"
+      ],
+      "expected": {
+        "flow": "跨患者读写作 403/404；响应体不含 A 的敏感字段",
+        "engineering": [
+          "来源会话归属校验",
+          "准备/反馈/材料下载均按病例所有者拒绝",
+          "化验写入不得绑到他人会话"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_patient_demo_case_closure.py::test_diagnosis_case_rejects_source_session_owned_by_another_patient",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation.py::test_preparation_enforces_owner_and_compare_and_swap",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_post_visit_feedback.py::test_post_visit_feedback_enforces_case_patient_role_and_material_ownership",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_t3_document_persistence.py::test_lab_report_write_rejects_a_session_owned_by_another_patient",
+          "covers": "engineering"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_t3_document_persistence.py::test_case_material_download_requires_the_case_owner",
+          "covers": "engineering"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    },
+    {
+      "id": "SM-10",
+      "title": "清缓存后重登：只恢复已保存记录",
+      "family": "cache_recovery",
+      "priority": "P0",
+      "pf": ["PF-02", "PF-04"],
+      "modes": ["engineering", "substitute_demo"],
+      "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 32, "sex": "female"}],
+      "script": {
+        "chief_complaint": "沿用 SM-01 完整主诉，保存报告、准备和诊后反馈后清除浏览器存储。",
+        "turns": [
+          {
+            "speaker": "patient",
+            "text": "保存后退出，清除 localStorage 与会话 cookie，再登录。"
+          }
+        ],
+        "uploads": [],
+        "fault": {"type": "clear_browser_storage"}
+      },
+      "required_facts": [],
+      "unknown_facts": [],
+      "forbidden_inferences": [
+        "把未保存草稿恢复成已提交",
+        "恢复出其他患者的病例"
+      ],
+      "expected": {
+        "flow": "重登后病例列表、报告、准备包和自报反馈与保存时同一 case_id",
+        "engineering": [
+          "本地缓存丢失后仍可通过病例接口读回报告",
+          "浏览器 E2E 需要独立演示库，禁止把 TEST_DATABASE_URL 指到该库后跑会 drop_all 的 fixture"
+        ]
+      },
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_t3_document_persistence.py::test_patient_can_recover_report_from_owned_case_after_local_cache_loss",
+          "covers": "engineering"
+        },
+        {
+          "kind": "e2e_script",
+          "cwd": "backend",
+          "path": "tests/patient_demo_e2e.py",
+          "covers": "substitute_demo",
+          "note": "历史演示含清缓存重登；本次题集未自动复跑"
+        }
+      ],
+      "evidence_status": "catalog_only"
+    }
+  ]
+}
