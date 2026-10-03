@@ -19,7 +19,9 @@ from dataclasses import dataclass, field
 from enum import Enum as PyEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.models.patient_answer import assertion_status, is_unknown_answer
 
 
 # ---------------------------------------------------------------------------
@@ -151,10 +153,8 @@ def _extract_phase_key(question_id: str) -> str:
                 return f"{parts[0]}_{parts[1]}"
             return question_id
     if question_id.startswith("adv_"):
-        parts = question_id.split("_", 2)
-        if len(parts) >= 3:
-            return f"adv_{parts[1]}"
-        return question_id
+        # 仅去除发题序号；stool_pattern 与 stool_frequency 是不同的信息。
+        return re.sub(r"_\d+$", "", question_id)
     return question_id
 
 
@@ -207,6 +207,9 @@ class QuestionTemplate:
     allow_skip: bool = True
     phase: str = ""
     colloquial_phase: str = ""
+    information_key: str = ""
+    priority: str = "essential"
+    reason: str = ""
 
 
 @dataclass
@@ -218,6 +221,8 @@ class InterviewState:
     collected_info: dict[str, Any] = field(default_factory=dict)
     # Natural language answers keyed by phase ID
     raw_answers: dict[str, str] = field(default_factory=dict)
+    # Ordered patient statements are retained so later answers do not erase earlier ones.
+    raw_answer_history: dict[str, list[str]] = field(default_factory=dict)
     asked_questions: list[str] = field(default_factory=list)
     current_question_id: str | None = None
     is_sufficient: bool = False
@@ -245,6 +250,17 @@ class InterviewState:
     lab_reports: list[dict[str, Any]] = field(default_factory=list)
     # Frontend session ID for bridge lookups (not persisted, set at interview creation)
     _frontend_sid: str = ""
+    # 保留原文出处；与模型推断及发题历史分开，旧会话缺字段时按现有数据恢复。
+    known_information: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    interview_policy: dict[str, int] = field(default_factory=dict)
+    interview_rounds: int = 0
+    stop_reason: str = ""
+    information_gaps: list[str] = field(default_factory=list)
+    generation_action: str = "ask"
+    last_information_fingerprint: str = ""
+    clarification_keys: list[str] = field(default_factory=list)
+    clarification_question_ids: dict[str, str] = field(default_factory=dict)
+    resolved_information: dict[str, dict[str, str]] = field(default_factory=dict)
 
     # Internal keys for storing differential diagnosis info in collected_info (DB compatibility)
     _DIFF_KEY = "__differential_diagnoses__"
@@ -255,6 +271,7 @@ class InterviewState:
             "chief_complaint": self.chief_complaint,
             "collected_info": self.collected_info,
             "raw_answers": self.raw_answers,
+            "raw_answer_history": self.raw_answer_history,
             "asked_questions": self.asked_questions,
             "current_question_id": self.current_question_id,
             "is_sufficient": self.is_sufficient,
@@ -271,6 +288,16 @@ class InterviewState:
             "question_texts": self.question_texts,
             "regeneration_count": self.regeneration_count,
             "lab_reports": self.lab_reports,
+            "known_information": self.known_information,
+            "interview_policy": self.interview_policy,
+            "interview_rounds": self.interview_rounds,
+            "stop_reason": self.stop_reason,
+            "information_gaps": self.information_gaps,
+            "generation_action": self.generation_action,
+            "last_information_fingerprint": self.last_information_fingerprint,
+            "clarification_keys": self.clarification_keys,
+            "clarification_question_ids": self.clarification_question_ids,
+            "resolved_information": self.resolved_information,
         }
 
     @classmethod
@@ -279,6 +306,7 @@ class InterviewState:
             chief_complaint=data.get("chief_complaint", ""),
             collected_info=data.get("collected_info", {}),
             raw_answers=data.get("raw_answers", {}),
+            raw_answer_history=data.get("raw_answer_history", {}),
             asked_questions=data.get("asked_questions", []),
             current_question_id=data.get("current_question_id"),
             is_sufficient=data.get("is_sufficient", False),
@@ -295,6 +323,16 @@ class InterviewState:
             question_texts=data.get("question_texts", {}),
             regeneration_count=(data.get("regeneration_count") or 0),
             lab_reports=data.get("lab_reports", []),
+            known_information=data.get("known_information", {}),
+            interview_policy=data.get("interview_policy", {}),
+            interview_rounds=data.get("interview_rounds", 0),
+            stop_reason=data.get("stop_reason", ""),
+            information_gaps=data.get("information_gaps", []),
+            generation_action=data.get("generation_action", "ask"),
+            last_information_fingerprint=data.get("last_information_fingerprint", ""),
+            clarification_keys=data.get("clarification_keys", []),
+            clarification_question_ids=data.get("clarification_question_ids", {}),
+            resolved_information=data.get("resolved_information", {}),
         )
 
     # ---- Differential diagnosis helpers (store in collected_info for compatibility) ----
@@ -314,6 +352,110 @@ class InterviewState:
     def set_confirmed_features(self, features: dict[str, Any]) -> None:
         self.collected_info[self._FEATURES_KEY] = features
 
+    def record_patient_answer(self, question_id: str, answer: str) -> None:
+        """Keep each distinct patient statement while retaining the latest raw-answer field."""
+        history = self.raw_answer_history.setdefault(question_id, [])
+        previous = self.raw_answers.get(question_id)
+        if previous and (not history or history[-1] != previous):
+            history.append(previous)
+        if not history or history[-1] != answer:
+            history.append(answer)
+        self.raw_answers[question_id] = answer
+        self.pending_question_ids = [qid for qid in self.pending_question_ids if qid != question_id]
+        key = _extract_phase_key(self.question_phase_keys.get(question_id) or question_id)
+        self.remember_information(key, answer, "answer", question_id)
+        current = self.resolved_information.get(key)
+        if current and current["quote"].strip() != answer.strip():
+            self.resolved_information.pop(key, None)
+        if self.clarification_question_ids.get(question_id) == key:
+            from app.services.clinical_context import annotate_patient_text
+            uncertain = is_unknown_answer(answer) or any(
+                clause["status"] in {"unknown", "uncertain", "hypothetical", "non_patient", "needs_review"}
+                for clause in annotate_patient_text(answer))
+            if not uncertain:
+                self.resolved_information[key] = {"quote": answer, "question_id": question_id,
+                                                  "status": assertion_status(answer)}
+                self.information_gaps = [gap for gap in self.information_gaps
+                                         if gap not in {f"{key}：先后资料不一致，待核对", f"{key}：患者尚未确认"}]
+
+    def unanswered_question_ids(self) -> list[str]:
+        """发题历史不是回答记录；旧会话也按已有原话/采集值恢复待答集合。"""
+        issued = dict.fromkeys([*self.pending_question_ids, *self.question_texts])
+        return [qid for qid in issued if qid not in self.raw_answers and qid not in self.collected_info]
+
+    def remember_information(self, key: str, quote: str, source: str, source_id: str = "") -> None:
+        """存原话而非模型改写；重复出处不累加，未知保持未知。"""
+        from datetime import datetime, timezone
+        if not quote.strip():
+            return
+        row = {"quote": quote, "source": source, "source_id": source_id,
+               "status": "unknown" if is_unknown_answer(quote) else assertion_status(quote)}
+        rows = self.known_information.setdefault(_extract_phase_key(key), [])
+        if not any(all(old.get(k) == v for k, v in row.items()) for old in rows):
+            rows.append({**row, "recorded_at": datetime.now(timezone.utc).isoformat()})
+
+    def refresh_known_information(self) -> None:
+        """恢复旧会话；优先患者原话，不把旧模型的抽取值升级为患者确认。"""
+        for key, value in self.collected_info.items():
+            dimension = self.question_phase_keys.get(key) or _extract_phase_key(key)
+            if key.startswith("__") or any((self.question_phase_keys.get(qid) or _extract_phase_key(qid)) == dimension
+                                            for qid in self.raw_answers):
+                continue
+            if value is not None and value != "asked_by_track1":
+                text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+                self.remember_information(dimension, text, "collected_info", key)
+        for key, answer in self.raw_answers.items():
+            for text in self.raw_answer_history.get(key) or [answer]:
+                self.remember_information(self.question_phase_keys.get(key) or key, text, "answer", key)
+
+    def information_status(self, key: str) -> str:
+        key = _extract_phase_key(key)
+        resolved = self.resolved_information.get(key)
+        if resolved:
+            return resolved["status"]
+        rows = self.known_information.get(key, [])
+        if not rows:
+            return "not_recorded"
+        # 同一病史维度可以包含多种疾病/药物；原话不同本身不是矛盾。
+        if self._has_information_conflict(key, rows):
+            return "needs_review"
+        confirmed = [row for row in rows if row.get("status") != "unknown"]
+        return (confirmed or rows)[-1].get("status", "reported")
+
+    @staticmethod
+    def _has_information_conflict(key: str, rows: list[dict]) -> bool:
+        confirmed = [row for row in rows if row.get("status") != "unknown" and row.get("quote")]
+        statements = {re.sub(r"\s+", "", row["quote"]).strip("。；， ") for row in confirmed}
+        if len(statements) < 2 or any(all(text in larger for text in statements) for larger in statements):
+            return False
+        # 同一道题的修订回答仍需核对，不能静默覆盖历史。
+        by_answer: dict[str, set[str]] = {}
+        for row in confirmed:
+            if row.get("source") == "answer" and row.get("source_id"):
+                by_answer.setdefault(row["source_id"], set()).add(row["quote"].strip())
+        if any(len(values) > 1 for values in by_answer.values()):
+            return True
+        if any(row.get("status") == "denied" for row in confirmed) and any(
+                row.get("status") not in {"denied", "unknown"} for row in confirmed):
+            return True
+        if key == "med_current" and any(re.search(r"正在(?:服|用)|目前(?:服|用)", text) for text in statements) and any(
+                re.search(r"(?:已经|已|目前)?停(?:药|用|服)", text) for text in statements):
+            return True
+        # 明确否认同一事实与肯定原话才算冲突；不同疾病名称继续累积。
+        for text in statements:
+            match = re.match(r"^(?:没有|否认|未患|无)(.+)$", text)
+            if match and any(match[1] == other or other.endswith(match[1]) for other in statements - {text}):
+                return True
+        return key in {"hpi_onset", "hpi_severity", "ps_age"}
+
+    def refresh_information_gaps(self, model_gaps: list[str] | None = None) -> None:
+        gaps = list(model_gaps or [])
+        for key in self.known_information:
+            status = self.information_status(key)
+            if status in {"unknown", "needs_review"}:
+                gaps.append(f"{key}：{'患者尚未确认' if status == 'unknown' else '先后资料不一致，待核对'}")
+        self.information_gaps = list(dict.fromkeys(gaps))
+
     def get_summary(self) -> str:
         """Generate a concise medical summary from all collected info.
 
@@ -322,9 +464,25 @@ class InterviewState:
         is not silently dropped from the diagnosis input.
         """
         lines = [f"主诉: {self.chief_complaint}"]
+        unresolved_answer_keys = {
+            key
+            for key, answers in self.raw_answer_history.items()
+            if len({answer.strip() for answer in answers if answer.strip()}) > 1
+        }
+        unknown_answer_keys = {
+            key for key, value in self.collected_info.items()
+            if not key.startswith("__") and is_unknown_answer(value)
+            and _extract_phase_key(self.question_phase_keys.get(key) or key) not in self.resolved_information
+        } - unresolved_answer_keys
         # Collected structured info (exclude internal keys)
         for key, val in self.collected_info.items():
             if key.startswith("__"):
+                continue
+            if _extract_phase_key(self.question_phase_keys.get(key) or key) in self.resolved_information:
+                continue
+            if key in unresolved_answer_keys:
+                continue
+            if key in unknown_answer_keys:
                 continue
             if val and val not in ("无", "没有", "不清楚", "不记得", "asked_by_track1", "跳过"):
                 meta = {}
@@ -340,10 +498,28 @@ class InterviewState:
         for key, val in self.raw_answers.items():
             if key.startswith("__"):
                 continue
+            if _extract_phase_key(self.question_phase_keys.get(key) or key) in self.resolved_information:
+                continue
+            if key in unresolved_answer_keys:
+                continue
+            if key in unknown_answer_keys:
+                continue
             if val and val not in ("无", "没有", "不清楚", "不记得", "跳过"):
                 # Skip if already covered by collected_info
                 if key not in self.collected_info or not self.collected_info.get(key):
                     lines.append(f"  患者回答 [{key}]: {val}")
+        for key in sorted(unknown_answer_keys):
+            history = self.raw_answer_history.get(key) or []
+            original = history[-1] if history else self.raw_answers.get(key)
+            response = original or self.collected_info.get(key) or "未提供"
+            lines.append(f"  患者尚未确认 [{key}]（仍为未知）: {response}")
+        for key in sorted(unresolved_answer_keys):
+            resolved = self.resolved_information.get(_extract_phase_key(self.question_phase_keys.get(key) or key))
+            status = "均保留，已补充核对回答" if resolved else "均保留，待核对"
+            lines.append(f"  患者先后回答 [{key}]（{status}）:")
+            for answer in self.raw_answer_history[key]:
+                if answer.strip():
+                    lines.append(f"    - 患者原话: {answer}")
         # Differential diagnoses summary
         diffs = self.get_differential_diagnoses()
         if diffs:
@@ -353,6 +529,18 @@ class InterviewState:
                 lines.append(f"    {flag} {d.diagnosis} ({d.confidence})")
         if self.red_flags_detected:
             lines.append(f"  ⚠️ 危险信号: {', '.join(self.red_flags_detected)}")
+        if self.known_information:
+            lines.append("  已有资料原文及出处（未知和待核对不等于阴性）:")
+            for key, rows in self.known_information.items():
+                lines.append(f"    [{key}] {self.information_status(key)}")
+                if key in self.resolved_information:
+                    lines.append(f"      患者本次核对回答（仍为自报）: {self.resolved_information[key]['quote']}；下面保留历史原话")
+                for row in rows:
+                    lines.append(f"      {row['source']}: {row['quote']}")
+        if self.stop_reason:
+            lines.append(f"  采集停止原因: {self.stop_reason}；信息充分: {self.is_sufficient}")
+        if self.information_gaps:
+            lines.append("  仍需核对的信息: " + "；".join(self.information_gaps))
         # Lab reports with abnormal indicators
         import logging
         _log = logging.getLogger("debug.t3")
@@ -409,6 +597,14 @@ class BasicQuestion(BaseModel):
     allow_skip: bool = Field(default=True)
     phase: str = Field(default="", description="所属病史维度")
     reason: str = Field(default="")
+    information_key: str = Field(default="", description="对应已知信息的维度标识，改写问题也必须使用同一标识")
+    priority: str = Field(default="essential", pattern="^(essential|clarification|optional)$")
+
+
+class KnownInformation(BaseModel):
+    information_key: str = Field(min_length=1, max_length=80)
+    quote: str = Field(min_length=1, max_length=800)
+    source: str = Field(pattern="^(chief_complaint|patient_history|lab_report|collected_info|answer)$")
 
 class DifferentialEntry(BaseModel):
     diagnosis: str = Field(...)
@@ -432,6 +628,24 @@ class InterviewDecision(BaseModel):
     reasoning: str = Field(default="")
     red_flags: list[str] = Field(default_factory=list)
     covered_dimensions: list[str] = Field(default_factory=list)
+    known_information: list[KnownInformation] = Field(default_factory=list)
+
+    @field_validator("needs_more_info", mode="before")
+    @classmethod
+    def normalize_information_gaps(cls, value):
+        """兼容真实模型的带理由缺口对象，持久化仍使用旧字符串协议，不丢失缺口。"""
+        if not isinstance(value, list):
+            return value
+        normalized = []
+        for item in value:
+            if isinstance(item, dict):
+                key, reason = item.get("information_key"), item.get("reason")
+                if not isinstance(key, str) or not key.strip() or not isinstance(reason, str) or not reason.strip():
+                    raise ValueError("缺口对象必须包含非空 information_key 与 reason")
+                normalized.append(f"{key.strip()}：{reason.strip()}")
+            else:
+                normalized.append(item)
+        return normalized
 
 
 INTERVIEW_SYSTEM_PROMPT = """你是医枢 MedAxis 诊疗系统的路由Agent（Route Agent），负责编排多轨并行诊疗流程。
@@ -609,11 +823,11 @@ class DynamicInterviewEngine:
         1. Extract structured medical information from natural language
         2. Update the differential diagnosis list based on new information
         """
-        state.raw_answers[question_id] = answer
+        state.record_patient_answer(question_id, answer)
         if question_id not in state.asked_questions:
             state.asked_questions.append(question_id)
 
-        if answer.lower() in ("跳过", "skipped", "不清楚", "不记得"):
+        if is_unknown_answer(answer):
             state.collected_info[question_id] = answer
             return state
 

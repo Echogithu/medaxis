@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react';
-import { Box, TextField, IconButton, Button, Chip, Paper } from '@mui/material';
+import { Box, TextField, IconButton, Chip, Paper } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import ImageIcon from '@mui/icons-material/Image';
 import MicIcon from '@mui/icons-material/Mic';
 import StopIcon from '@mui/icons-material/Stop';
+import { carePalette } from '../theme';
 
 interface Props {
   onSend: (text: string) => void;
@@ -60,7 +61,7 @@ export default function ChatInput({ onSend, disabled = false, quickReplies, onQu
         </Box>
       )}
 
-      <Paper elevation={0} sx={{ display: 'flex', alignItems: 'flex-end', gap: { xs: 0.35, sm: 0.75 }, p: { xs: 0.75, sm: 1 }, borderRadius: '16px', border: '1px solid #dce8e2', bgcolor: '#fff', boxShadow: '0 5px 16px rgba(34,61,55,.055)', '&:focus-within': { borderColor: '#78b9a7', boxShadow: '0 0 0 3px rgba(23,143,130,.08)' } }}>
+      <Paper role="group" aria-label="问诊输入栏" elevation={0} sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.25, sm: 0.5 }, p: { xs: 0.5, sm: 0.75 }, borderRadius: '16px', border: `1px solid ${carePalette.line}`, bgcolor: '#fff', boxShadow: '0 5px 16px rgba(15,23,42,.04)', '&:focus-within': { borderColor: carePalette.primary, boxShadow: '0 0 0 3px rgba(13,148,136,.08)' } }}>
         <input
           ref={fileInputRef}
           type="file"
@@ -69,10 +70,10 @@ export default function ChatInput({ onSend, disabled = false, quickReplies, onQu
           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.txt"
           onChange={handleFileSelect}
         />
-        <IconButton size="small" aria-label="添加文件" title="添加文件" sx={{ color: '#71898a' }} disabled={disabled} onClick={() => fileInputRef.current?.click()}>
+        <IconButton size="small" aria-label="添加文件" title="添加文件" sx={{ width: 44, height: 44, flexShrink: 0, color: carePalette.muted }} disabled={disabled} onClick={() => fileInputRef.current?.click()}>
           <AttachFileIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" aria-label="添加图片" title="添加图片" sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: '#71898a' }} disabled={disabled} onClick={() => fileInputRef.current?.click()}>
+        <IconButton size="small" aria-label="添加图片" title="添加图片" sx={{ display: { xs: 'none', sm: 'inline-flex' }, width: 44, height: 44, flexShrink: 0, color: carePalette.muted }} disabled={disabled} onClick={() => fileInputRef.current?.click()}>
           <ImageIcon fontSize="small" />
         </IconButton>
 
@@ -90,20 +91,20 @@ export default function ChatInput({ onSend, disabled = false, quickReplies, onQu
           slotProps={{
             input: {
               disableUnderline: true,
-              sx: { fontSize: { xs: 13, sm: 14 }, color: '#173238', '&::placeholder': { color: '#9aa8a6', opacity: 1 } },
+              sx: { minHeight: 44, p: 0, fontSize: { xs: 13, sm: 14 }, color: carePalette.ink, '& textarea': { p: 0, lineHeight: 1.6, '&::placeholder': { color: '#94a3b8', opacity: 1 } } },
             },
           }}
         />
 
         <IconButton size="small" aria-label={isRecording ? '停止语音输入' : '语音输入'} title={isRecording ? '停止语音输入' : '语音输入'} onClick={() => setIsRecording(!isRecording)} disabled={disabled}
-          sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: isRecording ? 'error.main' : '#71898a' }}>
+          sx={{ display: { xs: 'none', sm: 'inline-flex' }, width: 44, height: 44, flexShrink: 0, color: isRecording ? 'error.main' : carePalette.muted }}>
           {isRecording ? <StopIcon fontSize="small" /> : <MicIcon fontSize="small" />}
         </IconButton>
 
-        <Button variant="contained" size="small" onClick={handleSend} disabled={disabled || !text.trim()}
-          sx={{ minWidth: 39, width: 39, height: 39, borderRadius: '12px', p: 0, bgcolor: '#178f82', '&:hover': { bgcolor: '#0c756b' }, '&.Mui-disabled': { bgcolor: '#e4eeea', color: '#91a19d' } }}>
-          <SendIcon sx={{ fontSize: 18 }} />
-        </Button>
+        <IconButton aria-label="发送消息" title="发送消息" onClick={handleSend} disabled={disabled || !text.trim()}
+          sx={{ width: 44, height: 44, flexShrink: 0, p: 0, color: '#fff', '&:hover': { bgcolor: 'transparent', '& .send-face': { bgcolor: '#115e59' } }, '&.Mui-disabled .send-face': { bgcolor: '#e2e8f0', color: '#94a3b8' } }}>
+          <Box component="span" className="send-face" sx={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: '10px', bgcolor: carePalette.primaryDark, transition: 'background-color 160ms ease' }}><SendIcon sx={{ fontSize: 16 }} /></Box>
+        </IconButton>
       </Paper>
     </Box>
   );

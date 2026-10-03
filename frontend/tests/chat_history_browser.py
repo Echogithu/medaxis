@@ -160,8 +160,6 @@ def main():
             expect(page.get_by_text('测试危险信号', exact=True)).to_be_visible()
             expect(page.get_by_text('全科/普通门诊', exact=True)).not_to_be_visible()
             page.get_by_role('button', name='准备去就诊', exact=True).click()
-            page.get_by_role('button', name='浏览科室名称（演示目录）', exact=True).click()
-            expect(page.get_by_text('全科/普通门诊', exact=True)).to_be_visible()
             page.get_by_role('button', name='整理就诊摘要', exact=True).click()
             expect(page.get_by_role('alert').filter(has_text='合成准备保存失败')).to_be_visible()
             expect(page.get_by_text(REPORT['primary_diagnosis'], exact=True).last).to_be_visible()

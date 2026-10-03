@@ -1,0 +1,8 @@
+{
+  "description":"合成数据，仅检测提问控制与已有维度复用；不评价诊断或临床充分性",
+  "cases":[
+    {"id":"profile_reuse","state":{"chief_complaint":"合成测试：头部轻微不适，希望整理就医信息","collected_info":{"hpi_onset":"昨晚开始","hpi_severity":"轻度","pmh_allergy":"明确无药物过敏","med_current":"未使用药物"}},"recorded_keys":["hpi_onset","hpi_severity","pmh_allergy","med_current"]},
+    {"id":"unknown_reuse","state":{"chief_complaint":"合成测试：头部不适","collected_info":{"hpi_onset":"昨天","pmh_allergy":"不清楚"},"raw_answers":{"pmh_allergy":"不清楚"},"asked_questions":["pmh_allergy"],"question_texts":{"pmh_allergy":"您有药物过敏吗？"},"question_phase_keys":{"pmh_allergy":"pmh_allergy"}},"recorded_keys":["hpi_onset","pmh_allergy"]},
+    {"id":"chief_reuse","state":{"chief_complaint":"合成测试：30岁，昨晚开始头部轻微不适，无外伤，未服药。药物过敏史不清楚。"},"recorded_keys":["hpi_onset","hpi_severity","hpi_treatment","pmh_allergy"]}
+  ]
+}

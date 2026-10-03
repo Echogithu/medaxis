@@ -1,4 +1,5 @@
 import type { ChatMessageItem, ChatSession, DiagnosisReport } from '../types/agent';
+import { recoverReportSources } from './reportCitations.ts';
 
 export type ChatMode = 'idle' | 'consulting' | 'diagnosed';
 
@@ -30,7 +31,7 @@ export function createChatSession(): SavedChatSession {
     created_at: now.toISOString(), updated_at: now.toISOString(), message_count: 0,
     messages: [{
       id: generateId(), role: 'agent', timestamp: now,
-      content: '您好！我是医枢 MedAxis 智能医疗助手🩺\n\n我可以帮您：\n• 分析症状并给出初步诊断\n• 解读检查报告\n• 提供健康建议\n\n请描述您的不适感受，或上传相关检查报告。',
+      content: '你好，今天哪里不舒服？你也可以上传检查报告。',
     }],
     chatMode: 'idle', reportData: null, reportCaseId: null, backendSessionId: null,
     pendingSession: null, answeredIds: [],
@@ -78,7 +79,7 @@ function restoreSession(session: SavedChatSession): SavedChatSession {
       .some(question => !session.answeredIds.includes(question.question_id)));
   // An interrupted first response must not leave the input permanently hidden.
   const chatMode = session.chatMode === 'consulting' && (!pendingSession || !hasPendingQuestions) ? 'idle' : session.chatMode;
-  return { ...session, messages, pendingSession, chatMode };
+  return { ...session, messages, pendingSession, chatMode, reportData: recoverReportSources(session.reportData, messages) };
 }
 
 export function loadChatHistory(owner: string): ChatHistory {
@@ -110,11 +111,51 @@ export function saveChatHistory(owner: string, history: ChatHistory): void {
   localStorage.setItem(storageKey(owner), JSON.stringify(history));
 }
 
+/**
+ * 将访客浏览器历史并入账户历史。只有目标副本写入成功后才删除访客副本。
+ */
+export function migrateGuestChatHistory(guestToken: string, userToken: string): void {
+  const guestOwner = historyOwner(guestToken, 'guest');
+  const userOwner = historyOwner(userToken, 'user');
+  const guestKey = storageKey(guestOwner);
+  const guestLegacyKey = legacyStorageKey(guestOwner);
+  if (!localStorage.getItem(guestKey) && !localStorage.getItem(guestLegacyKey)) return;
+
+  const guestHistory = loadChatHistory(guestOwner);
+  const userKey = storageKey(userOwner);
+  const userLegacyKey = legacyStorageKey(userOwner);
+  const hasUserHistory = Boolean(localStorage.getItem(userKey) || localStorage.getItem(userLegacyKey));
+  const userHistory = hasUserHistory ? loadChatHistory(userOwner) : null;
+
+  const sessions: SavedChatSession[] = [];
+  const seenIds = new Set<string>();
+  const seenBackendIds = new Set<string>();
+  for (const session of [...guestHistory.sessions, ...(userHistory?.sessions || [])]) {
+    if (seenIds.has(session.id)
+        || (session.backendSessionId && seenBackendIds.has(session.backendSessionId))) continue;
+    seenIds.add(session.id);
+    if (session.backendSessionId) seenBackendIds.add(session.backendSessionId);
+    sessions.push(session);
+  }
+
+  const currentSessionId = sessions.some(session => session.id === guestHistory.currentSessionId)
+    ? guestHistory.currentSessionId
+    : userHistory?.currentSessionId && sessions.some(session => session.id === userHistory.currentSessionId)
+      ? userHistory.currentSessionId
+      : sessions[0].id;
+  saveChatHistory(userOwner, { version: 1, currentSessionId, sessions });
+  localStorage.removeItem(guestKey);
+  localStorage.removeItem(guestLegacyKey);
+}
+
 /** 只移除浏览器聊天记录，服务端问诊报告和资料独立保留。 */
 export function removeChatSession(history: ChatHistory, id: string): ChatHistory {
   if (!history.sessions.some(session => session.id === id)) return history;
   const sessions = history.sessions.filter(session => session.id !== id);
   if (history.currentSessionId !== id) return { ...history, sessions };
+  if (sessions.length > 0) {
+    return { ...history, currentSessionId: sessions[0].id, sessions };
+  }
   const next = createChatSession();
   return { ...history, currentSessionId: next.id, sessions: [next, ...sessions] };
 }

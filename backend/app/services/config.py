@@ -10,12 +10,17 @@ app.core.config (environment variables).
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.config import SystemSetting
+from app.services.knowledge_citations import MAX_CITATIONS
+
+
+DEFAULT_REPORT_SOURCE_LIMIT = 10
 
 
 class DynamicConfigService:
@@ -110,7 +115,7 @@ class DynamicConfigService:
 
     @classmethod
     async def guest_max_messages(cls, db: AsyncSession) -> int:
-        return await cls.get_int(db, "guest.max_messages", default=999)
+        return await cls.get_int(db, "auth.guest_max_messages", default=10)
 
     @classmethod
     async def cors_origins(cls, db: AsyncSession) -> list[str]:
@@ -132,6 +137,32 @@ class DynamicConfigService:
     @classmethod
     async def rag_chunk_overlap(cls, db: AsyncSession) -> int:
         return await cls.get_int(db, "rag.chunk_overlap", default=200)
+
+    @classmethod
+    async def diagnosis_report_source_limit(cls, db: AsyncSession) -> int:
+        configured = await cls.get_int(
+            db, "diagnosis.report_source_limit", default=DEFAULT_REPORT_SOURCE_LIMIT
+        )
+        return min(MAX_CITATIONS, max(1, configured))
+
+    @classmethod
+    async def interview_policy(cls, db: AsyncSession) -> dict[str, int]:
+        """轮数仅为体验预算，不代表医学采集充分；会话开始后保留同一口径。"""
+        return {
+            "questions_per_round": min(2, max(1, await cls.get_int(db, "diagnosis.interview_questions_per_round", 1))),
+            "max_rounds": min(12, max(1, await cls.get_int(db, "diagnosis.interview_max_rounds", 6))),
+        }
+
+    @classmethod
+    async def knowledge_source_policy(cls, db: AsyncSession) -> dict[str, Any]:
+        threshold = await cls.get_float(db, "diagnosis.source_min_relevance", 0.25)
+        if not math.isfinite(threshold):
+            threshold = 0.25
+        return {
+            "internal_candidates": min(20, max(1, await cls.get_int(db, "diagnosis.internal_source_candidates", 10))),
+            "external_candidates": min(20, max(1, await cls.get_int(db, "diagnosis.external_source_candidates", 10))),
+            "min_relevance": min(1.0, max(0.0, threshold)),
+        }
 
     # ------------------------------------------------------------------
     # External Search (SearXNG)

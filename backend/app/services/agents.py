@@ -15,15 +15,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,8 +35,22 @@ from app.models.interview import (
     InterviewState,
     QuestionTemplate,
     _extract_json,
+    InterviewPhase, PHASE_META,
 )
 from app.services.llm import LLMResponse, LLMService
+from app.services.llm_errors import LLMInvalidResponseError, MedicalEvidenceUnavailableError
+from app.services.config import DynamicConfigService
+from app.services.knowledge_citations import (
+    KnowledgeCitation,
+    attach_knowledge_citations,
+    build_knowledge_citations,
+    format_knowledge_context,
+    KnowledgeEvidence,
+    rank_knowledge_citations,
+    apply_report_citation_bindings,
+    check_claim_evidence,
+)
+from app.models.patient_answer import is_unknown_answer
 from app.services.intent import (
     INTENT_PROMPT, INTENT_TIMEOUT_SECONDS, classification_state, classify_with_jev,
     conservative_intent, get_classifier_config, normalize_intent,
@@ -90,12 +105,63 @@ class DiagnosisReport(BaseModel):
     )
     knowledge_sources: list[str] = Field(
         default_factory=list,
-        description="Sources of medical knowledge used (e.g., clinical guidelines, research papers)",
+        description="由服务端根据本次实际检索结果填写的来源名称",
     )
+    knowledge_citations: list[KnowledgeCitation] = Field(
+        default_factory=list,
+        description="由服务端绑定的本次检索来源，正文使用对应的[S1]编号标注",
+    )
+    knowledge_retrieval_status: Literal[
+        "used", "retrieved_not_cited", "no_sources", "failed"
+    ] = Field(default="no_sources", description="本次知识检索及报告引用状态")
+    knowledge_retrieval_count: int = Field(
+        default=0, ge=0, description="提供给报告生成且可追溯的来源数量",
+    )
+    knowledge_evidence: list[KnowledgeEvidence] = Field(
+        default_factory=list, description="每条引用陈述的字段路径及完整原文句；状态/坐标由服务端重算",
+    )
+    interview_stop_reason: str = Field(default="", description="由服务端写入的病史采集停止原因")
+    interview_information_gaps: list[str] = Field(default_factory=list, description="阶段摘要仍需核对的信息")
+    interview_is_sufficient: bool | None = Field(default=None, description="未提供时保持旧报告兼容；预算耗尽不能写true")
     disclaimer: str = Field(
         default="本报告由 AI 生成，仅供参考，不能替代专业医疗诊断。",
         description="Standard medical disclaimer",
     )
+
+
+_DURATION_LABELLED_SYMPTOM = re.compile(r"(急性|亚急性|慢性)(咳嗽|腹泻|头痛|发热|咽痛|腹痛|胸痛)")
+
+
+def _patient_information_gap(gap: str) -> str:
+    """患者输出使用信息名称，保留内部状态中的维度标识便于审计。"""
+    key, separator, detail = gap.partition("：")
+    identified = re.fullmatch(r"([a-zA-Z][a-zA-Z0-9_]*)(?:\s*[:：]\s*(.*))?", gap, re.DOTALL)
+    if identified:
+        key, detail = identified[1], identified[2] or ""
+        separator = "：" if identified[2] is not None else ""
+    labels = {"hpi_onset": "症状起始时间", "hpi_quality": "症状特点", "hpi_severity": "严重程度",
+              "hpi_associated": "伴随表现", "pmh_allergy": "过敏情况", "pmh_chronic": "既往疾病",
+              "med_current": "当前用药", "ps_age": "年龄", "adv_stool_pattern": "大便的性状与次数",
+              "adv_epidemic": "近期饮食及接触情况"}
+    if key not in labels:
+        try:
+            labels[key] = PHASE_META[InterviewPhase(key)]["colloquial"]
+        except (ValueError, KeyError):
+            if re.fullmatch(r"[a-zA-Z0-9_]+", key):
+                # 无具体内容的内部键不应成为患者看到的无意义缺口。
+                return detail.strip() if separator and not re.search(r"\b(?:adv|hpi|pmh|ps|med|fh)_", detail) else ""
+            else:
+                return gap
+    return f"{labels[key]}：{detail}" if separator else f"{labels[key]}尚未确认"
+
+
+def _remove_unsupported_duration_label(report: DiagnosisReport) -> DiagnosisReport:
+    """起病时间未知时，不把症状名称误写为已确认的病程分类。"""
+    corrected = _DURATION_LABELLED_SYMPTOM.sub(r"\2", report.primary_diagnosis)
+    if corrected == report.primary_diagnosis:
+        return report
+    logger.warning("[DIAGNOSIS] removed unsupported duration label from primary diagnosis")
+    return report.model_copy(update={"primary_diagnosis": corrected})
 
 
 class TreatmentPlan(BaseModel):
@@ -241,6 +307,16 @@ CRITICAL:
 - The medical knowledge context in the user message comes from RAG + SearXNG real-time search.
 - Base your diagnosis on this evidence, not just your parametric knowledge.
 - Cite the knowledge sources in your reasoning.
+- Cite only the exact [S1], [S2], ... IDs in the retrieved-source context; place each marker beside the medical claim it supports.
+- Never invent a source name, link, excerpt, or citation ID. The server fills the reference list from actual retrieval results.
+- If no retrieved source supports a claim, do not add a marker or claim that the knowledge base supports it.
+- 可在knowledge_evidence提供claim_path（如key_findings.0）、citation_id、quote（原文完整句）。不要填写核对状态或坐标。不得为匹配原文添加不适用于本患者的内容；正确意译也可能仍待核对。
+- 已提供相关原文时，医学解释与建议必须就近使用对应[S编号]，不要只在推理过程提及来源。患者自述不能用医学资料冒充患者证据。
+- 不要把内部采集标识、停止原因或重复的“信息缺失”清单写进诊断/发现/建议。只说明影响本次建议的未知事实；不同疾病或药物属于互补病史，不因原话不同声称矛盾。
+- Keep explicit patient denial, affirmative statements, and unknown answers distinct; "不清楚" or "不记得" is not a denial.
+- If the interview summary contains multiple patient statements for one question marked as awaiting review, retain both and label them unresolved; do not silently select the latest statement as fact.
+- Never infer a specific onset date from vague or unknown timing.
+- If onset or duration is unknown, do not label the condition acute, subacute, or chronic based on an assumed time span. Use a symptom-based uncertain label and state that timing needs confirmation.
 
 SAFETY:
 - Flag emergency conditions immediately
@@ -313,7 +389,7 @@ OUTPUT (search query only):"""
             chief = lines[0].replace("主诉: ", "") if lines else symptoms_summary[:50]
             query = f"{chief} 医学鉴别诊断"
 
-        logger.info(f"[SEARXNG_DEBUG] Generated search query: {query}")
+        logger.info("[SEARXNG_DEBUG] Generated search query_chars=%d", len(query))
         return query
 
     async def analyze(
@@ -324,6 +400,7 @@ OUTPUT (search query only):"""
         test_results: str | None = None,
         session_id: str | None = None,
         knowledge_context: str | None = None,
+        onset_unknown: bool = False,
     ) -> AgentResult:
         """Run full diagnostic analysis with Tool Use.
 
@@ -338,7 +415,26 @@ OUTPUT (search query only):"""
         Returns:
             AgentResult with structured DiagnosisReport
         """
+        direct_citations: list[KnowledgeCitation] = []
+        direct_search_call = None
+        if knowledge_context is None:
+            # 直接诊断入口与问诊完成入口必须使用相同的实际证据链。
+            async with async_session_maker() as db:
+                source_limit = await DynamicConfigService.diagnosis_report_source_limit(db)
+                search_query = await self._generate_search_query(symptoms, db=db)
+            actual_result, direct_citations = await self._retrieve_report_sources(search_query, source_limit)
+            knowledge_context = format_knowledge_context(direct_citations)
+            direct_search_call = {"tool": "search_medical_knowledge", "arguments": {"query": search_query, "top_k": source_limit},
+                                  "result": {**actual_result, "sources": [c.model_dump() for c in direct_citations]}}
+
         tool_schemas = GLOBAL_REGISTRY.list_schemas()
+        if knowledge_context is not None:
+            # The final diagnosis receives one explicit retrieved-source set; do not
+            # let the model make an untracked second search with different sources.
+            tool_schemas = [
+                schema for schema in tool_schemas
+                if schema.get("function", {}).get("name") != "search_medical_knowledge"
+            ]
 
         # Build initial message
         user_msg = f"## 患者主诉及问诊信息\n{symptoms}"
@@ -351,18 +447,18 @@ OUTPUT (search query only):"""
                 f"\n\n## 医学知识库搜索结果（已通过RAG和SearXNG实时搜索获取）\n"
                 f"{knowledge_context}\n\n"
                 f"请基于以上搜索结果和患者信息生成诊断，"
-                f"并在推理中引用这些来源。"
+                f"仅在来源直接支持医学结论时，使用原样的[S1]编号就近标注；"
+                f"不得自行生成来源名称或编号。"
             )
         if patient_id:
             user_msg += f"\n\n患者ID: {patient_id} (可调用 query_patient_history 查询历史病例)"
 
         messages: list[dict[str, str]] = [{"role": "user", "content": user_msg}]
-        all_tool_calls: list[dict[str, Any]] = []
+        all_tool_calls: list[dict[str, Any]] = [direct_search_call] if direct_search_call else []
 
         # Multi-turn tool use loop (max 5 rounds, last round forces structured output)
         async with async_session_maker() as db:
             llm = LLMService(provider=self.provider, platform=self.platform, db=db)
-
             for _round in range(5):
                 if _round == 4:
                     # Final round: force JSON output, no more tools
@@ -434,7 +530,7 @@ OUTPUT (search query only):"""
                 try:
                     data = json.loads(content)
                     structured = DiagnosisReport.model_validate(data)
-                except Exception:
+                except (json.JSONDecodeError, ValidationError, TypeError):
                     pass
 
             # Attempt 2: Force structured generation via schema-constrained LLM call
@@ -446,6 +542,7 @@ OUTPUT (search query only):"""
                             "请根据以上信息，生成结构化诊断报告。"
                             "必须包含：primary_diagnosis, differential_diagnoses (2-5个), confidence, severity, "
                             "key_findings, recommended_tests, recommended_actions, red_flags, knowledge_sources。"
+                            "医学结论只可就近标注实际提供的[S1]编号；不得编造来源名称或编号。"
                             "icd11_code 为内部可选字段，没有可核验的编码时留空，不要编造。"
                             "面向患者的字段使用通俗简体中文，疾病名称使用中文全称；保留单位和数值。不得展示患者ID、工具统计或专业编码；缺少参考资料时如实说明。"
                             "输出必须是有效的JSON格式。"
@@ -457,7 +554,7 @@ OUTPUT (search query only):"""
                         system_prompt=self.SYSTEM_PROMPT,
                         max_tokens=4096,
                     )
-                except Exception:
+                except (json.JSONDecodeError, ValidationError, IndexError, KeyError, TypeError):
                     pass
 
             # Attempt 2.5: If generate_structured failed, try plain chat + manual JSON parse
@@ -471,6 +568,7 @@ OUTPUT (search query only):"""
                             "\"confidence\":\"high|medium|low\",\"severity\":\"mild|moderate|severe|emergency\","
                             "\"key_findings\":[\"...\"],\"recommended_tests\":[\"...\"],\"recommended_actions\":[\"...\"],"
                             "\"red_flags\":[\"...\"],\"knowledge_sources\":[\"...\"]}"
+                            "医学结论只可就近标注实际提供的[S1]编号；不得编造来源名称或编号。"
                             "面向患者的字段使用通俗简体中文，疾病名称使用中文全称；保留单位和数值。不得展示患者ID、工具统计或专业编码；缺少参考资料时如实说明。"
                             "只输出JSON，不要Markdown格式。"
                         ),
@@ -486,22 +584,31 @@ OUTPUT (search query only):"""
                     raw = _extract_json(resp.content)
                     if raw and isinstance(raw, dict):
                         structured = DiagnosisReport.model_validate(raw)
-                except Exception:
+                except (json.JSONDecodeError, ValidationError, IndexError, KeyError, TypeError):
                     pass
 
-            # Attempt 3: If still None, create a minimal valid report with error indication
+            # 三种输出模式都无有效报告时交给 SSE 错误契约处理，不能伪造病例成功。
             if structured is None:
-                structured = DiagnosisReport(
-                    primary_diagnosis="AI 诊断生成失败",
-                    differential_diagnoses=[],
-                    confidence="low",
-                    severity="unknown",
-                    key_findings=["系统暂时无法生成诊断报告，可能是 LLM 服务繁忙或响应异常。"],
-                    recommended_tests=[],
-                    recommended_actions=["请稍后重试，或联系管理员检查 LLM 服务状态。"],
-                    red_flags=[],
-                    knowledge_sources=[],
-                )
+                raise LLMInvalidResponseError("模型未返回有效的结构化诊断报告")
+
+            if onset_unknown:
+                structured = _remove_unsupported_duration_label(structured)
+
+            # 模型不可自报核对成功；完整工作流稍后按实际检索摘录重算。
+            structured.knowledge_citations = []
+            structured.knowledge_sources = []
+            structured.knowledge_retrieval_status = "no_sources"
+            structured.knowledge_retrieval_count = 0
+            for evidence in structured.knowledge_evidence:
+                evidence.status = "needs_review"
+                evidence.reason = "尚未按本次检索原文核对"
+                evidence.start = evidence.end = None
+
+            if direct_citations:
+                report = await self._restore_missing_citation_markers(structured.model_dump(), direct_citations)
+                report = attach_knowledge_citations(report, direct_citations, "retrieved_not_cited")
+                self._require_report_evidence(report)
+                structured = DiagnosisReport.model_validate(report)
 
             # Persist session if requested
             if session_id:
@@ -519,6 +626,30 @@ OUTPUT (search query only):"""
                 tool_calls_used=all_tool_calls,
                 session_id=session_id,
             )
+
+    async def _restore_missing_citation_markers(self, report: dict, citations: list[KnowledgeCitation]) -> dict:
+        """模型漏写全部引用时补一次绑定；不生成新医学内容，不强塞来源。"""
+        if not citations or check_claim_evidence(report, citations):
+            return report
+        fields = {key: report[key] for key in ("primary_diagnosis", "recommended_actions", "recommended_tests",
+                   "contraindications", "follow_up_timeline", "differential_diagnoses") if key in report}
+        try:
+            async with async_session_maker() as db:
+                llm = LLMService(provider=self.provider, platform=self.platform, db=db, timeout=20, max_retries=0)
+                response = await llm.chat(
+                    messages=[{"role": "user", "content": json.dumps(fields, ensure_ascii=False)
+                               + "\n\n" + format_knowledge_context(citations)}],
+                    system_prompt=("为已有报告补漏掉的引用编号。只返回JSON {\"bindings\":[{\"claim_path\":\"recommended_actions.0\","
+                                   "\"citation_id\":\"S1\",\"quote\":\"原文完整句\"}]}。只能绑定确实支持陈述的已给来源，"
+                                   "摘录必须是完整原句。不能改正文、添加新建议、引用患者事实或编造编号；不支持时bindings为空。"),
+                    max_tokens=1024)
+                if response.finish_reason == "length":
+                    raise ValueError("Truncated citation binding")
+                data = _extract_json(response.content)
+            return apply_report_citation_bindings(report, citations, data.get("bindings") if isinstance(data, dict) else None)
+        except Exception as exc:
+            logger.warning("报告引用补齐失败，保留实际检索资料：%s", type(exc).__name__)
+            return report
 
     async def _update_session(
         self,
@@ -586,6 +717,8 @@ OUTPUT (search query only):"""
                     state.asked_questions.append(key)
         async with async_session_maker() as db:
             llm = LLMService(provider=self.provider, platform=self.platform, db=db)
+            if not state.interview_policy:
+                state.interview_policy = await DynamicConfigService.interview_policy(db)
             async def _search(query: str, _state=None) -> str:
                 try:
                     import asyncio
@@ -670,6 +803,8 @@ OUTPUT (search query only):"""
             state = await engine.process_answer(state, question_id, answer)
         async with async_session_maker() as db3:
             llm2 = LLMService(provider=self.provider, platform=self.platform, db=db3)
+            if not state.interview_policy:
+                state.interview_policy = await DynamicConfigService.interview_policy(db3)
             async def _search2(query: str, _state=None) -> str:
                 try:
                     result = await asyncio.wait_for(
@@ -717,6 +852,9 @@ OUTPUT (search query only):"""
             return await self._run_full_diagnosis_workflow_impl(
                 session_id, patient_id, patient_history
             )
+        except MedicalEvidenceUnavailableError:
+            # SSE 必须收到明确错误，不能被普通工作流兜底吞成空成功结果。
+            raise
         except Exception as e:
             logger.error(f"Full diagnosis workflow failed: {e}", exc_info=True)
             return AgentResult(
@@ -727,6 +865,31 @@ OUTPUT (search query only):"""
                 tool_calls_used=[],
                 session_id=session_id,
             )
+
+    async def _retrieve_report_sources(self, search_query: str, source_limit: int) -> tuple[dict, list[KnowledgeCitation]]:
+        """统一两类诊断入口的来源筛选；没有实际证据时阻止医学报告。"""
+        try:
+            search_result = await asyncio.wait_for(GLOBAL_REGISTRY.execute(
+                "search_medical_knowledge", {"query": search_query, "top_k": source_limit}), timeout=60.0)
+        except asyncio.TimeoutError as exc:
+            raise MedicalEvidenceUnavailableError("检索超时，尚未获得可核验医学资料") from exc
+        actual_result = search_result.get("result", search_result) if isinstance(search_result, dict) else {}
+        if not isinstance(actual_result, dict):
+            actual_result = {}
+        candidates = build_knowledge_citations(actual_result.get("sources", actual_result.get("citations", [])), max_citations=source_limit * 2)
+        async with async_session_maker() as db:
+            policy = await DynamicConfigService.knowledge_source_policy(db)
+            ranked = await rank_knowledge_citations(search_query, candidates, db, min_relevance=policy["min_relevance"])
+        citations = [c.model_copy(update={"citation_id": f"S{index}"}) for index, c in enumerate(ranked[:source_limit], start=1)]
+        logger.info("报告证据：工具候选=%s 传入=%d 保留=%d", actual_result.get("candidate_count", len(candidates)), len(candidates), len(citations))
+        if not citations:
+            raise MedicalEvidenceUnavailableError("尚未获得可核验的医学参考资料，本次不能生成诊断报告")
+        return actual_result, citations
+
+    @staticmethod
+    def _require_report_evidence(report: dict) -> None:
+        if not any(c.get("used_in_report") for c in report.get("knowledge_citations", [])):
+            raise MedicalEvidenceUnavailableError("现有资料尚未与报告陈述形成可核验引用，本次不能发布医学报告")
 
     async def _run_full_diagnosis_workflow_impl(
         self,
@@ -753,62 +916,93 @@ OUTPUT (search query only):"""
                     state = InterviewState.from_dict(interview_data)
 
         # Build enriched symptoms from interview
+        state.refresh_known_information()
         enriched_symptoms = state.get_summary()
 
         # STEP 0: Generate optimized medical search query using LLM
         # Patient colloquial descriptions don't work well with search engines.
         # We need structured medical keywords for effective literature search.
         async with async_session_maker() as db:
+            source_limit = await DynamicConfigService.diagnosis_report_source_limit(db)
             search_query = await self._generate_search_query(enriched_symptoms, db=db)
-        logger.info(f"[SEARXNG_DEBUG] Generated search query: {search_query}")
+        logger.info("[SEARXNG_DEBUG] Generated search query_chars=%d", len(search_query))
 
         # STEP 1: ALWAYS search medical knowledge before diagnosis
         # This ensures evidence-based diagnosis, not just LLM parametric knowledge
-        logger.info(f"[SEARXNG_DEBUG] Starting search_medical_knowledge with query: {search_query[:100]}...")
+        logger.info("[SEARXNG_DEBUG] Starting search_medical_knowledge query_chars=%d", len(search_query))
 
-        # Guard with independent timeout — SearXNG internal engine delays must NOT block diagnosis
-        search_result: dict[str, Any] | None = None
-        try:
-            search_result = await asyncio.wait_for(
-                GLOBAL_REGISTRY.execute(
-                    "search_medical_knowledge",
-                    {"query": search_query, "top_k": 5},
-                ),
-                timeout=60.0,
-            )
-            logger.info(f"[SEARXNG_DEBUG] Search result type: {type(search_result)}, has answer: {bool(search_result) if search_result else False}")
-        except asyncio.TimeoutError:
-            logger.warning("[SEARXNG_DEBUG] Medical knowledge search timed out after 60s, proceeding without external sources")
-            search_result = None
-
-        knowledge_context = ""
-        if isinstance(search_result, dict):
-            # GLOBAL_REGISTRY.execute returns {"success": True, "result": {...}}
-            actual_result = search_result.get("result", search_result)
-            knowledge_context = actual_result.get("answer", "") if isinstance(actual_result, dict) else ""
-            logger.info(f"[SEARXNG_DEBUG] Knowledge context length: {len(knowledge_context)}")
-        else:
-            logger.warning(f"[SEARXNG_DEBUG] Unexpected search result type: {type(search_result)}, value: {str(search_result)[:200]}")
+        actual_result, citations = await self._retrieve_report_sources(search_query, source_limit)
+        retrieval_status = "retrieved_not_cited"
+        knowledge_context = format_knowledge_context(citations)
+        logger.info(
+            "[SEARXNG_DEBUG] Traceable sources: total=%d internal=%d external=%d",
+            len(citations),
+            sum(c.source_type == "internal" for c in citations),
+            sum(c.source_type == "external" for c in citations),
+        )
 
         # STEP 2: Run diagnosis analysis WITH knowledge context
         diag_result = await self.analyze(
             symptoms=enriched_symptoms,
             patient_id=patient_id,
             patient_history=patient_history,
-            session_id=session_id,
+            # 引用检查通过后由外层一次保存，避免先写入无来源的中间报告。
+            session_id=None,
             knowledge_context=knowledge_context,
+            onset_unknown=(
+                state.information_status("hpi_onset") in {"not_recorded", "unknown", "needs_review"}
+            ),
         )
+
+        if diag_result.structured_output is not None:
+            report = diag_result.structured_output.model_dump()
+            if state.stop_reason:
+                report.update(interview_stop_reason=state.stop_reason,
+                              interview_information_gaps=list(filter(None, (_patient_information_gap(gap) for gap in state.information_gaps))),
+                              interview_is_sufficient=state.is_sufficient)
+                if not state.is_sufficient:
+                    report["confidence"] = "low"
+                    diag_result.confidence = "low"
+            report = await self._restore_missing_citation_markers(report, citations)
+            report = attach_knowledge_citations(
+                report,
+                citations,
+                retrieval_status=retrieval_status,
+            )
+            self._require_report_evidence(report)
+            diag_result.structured_output = DiagnosisReport.model_validate(report)
+            diag_result.content = diag_result.structured_output.model_dump()
+            diag_result.session_id = session_id
 
         # Attach the search tool call to the result so frontend can see it
         search_tool_call = {
             "tool": "search_medical_knowledge",
-            "arguments": {"query": search_query, "top_k": 5},
-            "result": search_result if search_result else {},
+            "arguments": {"query": search_query, "top_k": source_limit},
+            "result": {
+                "retrieved_chunks": actual_result.get("retrieved_chunks", len(citations)),
+                "internal_sources": actual_result.get(
+                    "internal_sources",
+                    sum(c.source_type == "internal" for c in citations),
+                ),
+                "external_sources": actual_result.get(
+                    "external_sources",
+                    sum(c.source_type == "external" for c in citations),
+                ),
+                "sources": [citation.model_dump() for citation in citations],
+            },
         }
         if diag_result.tool_calls_used is None:
             diag_result.tool_calls_used = []
         # Insert search at the beginning so it appears first
         diag_result.tool_calls_used.insert(0, search_tool_call)
+
+        if session_id and diag_result.structured_output is not None:
+            await self._update_session(
+                session_id=session_id,
+                messages=[],
+                tool_calls=diag_result.tool_calls_used,
+                structured=diag_result.structured_output.model_dump(),
+            )
 
         return diag_result
 

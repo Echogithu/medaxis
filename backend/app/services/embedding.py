@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.encryption import decrypt_value
 from app.models.config import LLMProviderConfig
+from app.services.text_privacy import redact_for_provider
 
 
 class EmbeddingService:
@@ -70,7 +71,7 @@ class EmbeddingService:
         client = await self._get_client()
         response = await client.embeddings.create(
             model=self._model,
-            input=texts,
+            input=redact_for_provider(texts),
         )
         return [item.embedding for item in response.data]
 

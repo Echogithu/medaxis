@@ -4,9 +4,9 @@
  * 支持 REST + SSE 流式输出
  */
 
-import type { ApiResponse, ChatSession, GuestStatus, RouteResponse, SSEEvent, SSEEventType } from '../types/agent';
+import type { ApiResponse, ChatSession, GuestStatus, RouteResponse, SSEEvent } from '../types/agent';
 
-import { API_BASE, getToken } from './client';
+import { API_BASE, getToken } from './client.ts';
 
 function getGuestToken(): string | null {
   return localStorage.getItem('guest_token');
@@ -29,6 +29,16 @@ function authHeaders(): Record<string, string> {
   if (token) return { Authorization: `Bearer ${token}` };
   if (guest) return { 'X-Guest-Token': guest };
   return {};
+}
+
+async function fetchWithSubmissionRetry(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    // The key and body stay unchanged so a lost response replays the same submission.
+    return fetch(input, init);
+  }
 }
 
 /** 获取本地存储的访客状态 */
@@ -100,14 +110,15 @@ export async function routeIntent(
   message: string,
   sessionId?: string
 ): Promise<RouteResponse> {
-  const res = await fetch(`${API_BASE}/agents/route`, {
+  const idempotencyKey = crypto.randomUUID();
+  const res = await fetchWithSubmissionRetry(`${API_BASE}/agents/route`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey, ...authHeaders() },
     body: JSON.stringify({ message, session_id: sessionId }),
   });
-  const json: ApiResponse<RouteResponse> = await res.json();
-  if (json.code !== 200) throw new Error(json.message);
-  return json.data;
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+  return json as RouteResponse;
 }
 
 /**
@@ -115,25 +126,20 @@ export async function routeIntent(
  * POST /api/v1/agents/diagnose
  */
 export async function chat(
-  message: string,
-  sessionId?: string
+  message: string
 ): Promise<{ session_id: string; response_text: string; structured_report?: unknown }> {
-  const res = await fetch(`${API_BASE}/agents/diagnose`, {
+  const idempotencyKey = crypto.randomUUID();
+  const res = await fetchWithSubmissionRetry(`${API_BASE}/agents/diagnose`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ message, session_id: sessionId, patient_id: 'guest' }),
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey, ...authHeaders() },
+    body: JSON.stringify({ symptoms: message }),
   });
-  const json: ApiResponse<{
-    session_id: string;
-    response_text: string;
-    structured_report?: unknown;
-    requires_followup: boolean;
-  }> = await res.json();
-  if (json.code !== 200 && json.code !== 202) throw new Error(json.message);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
   return {
-    session_id: json.data.session_id,
-    response_text: json.data.response_text,
-    structured_report: json.data.structured_report,
+    session_id: json.session_id || '',
+    response_text: json.content || '',
+    structured_report: json.structured,
   };
 }
 
@@ -200,70 +206,69 @@ async function parseSSEStream(
 
 /**
  * 流式对话 (SSE)
- * GET /api/v1/agents/route/stream
+ * POST /api/v1/agents/route/stream
  * 事件类型: intent / agent_switch / thinking / tool_call / tool_result / text / error / complete
  */
-export function streamDiagnose(
-  payload: { message: string; session_id?: string; patient_history?: string },
+export async function streamDiagnose(
+  payload: { message: string; session_id?: string; patient_history?: string; submission_id?: string },
   onEvent: (event: SSEEvent) => void
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const params = new URLSearchParams();
-    params.set('message', payload.message);
-    if (payload.session_id) params.set('session_id', payload.session_id);
-    if (payload.patient_history) params.set('patient_history', payload.patient_history);
-
-    // EventSource 不支持自定义 headers，将 token 通过 URL query 传递
-    const token = getToken();
-    const guestToken = getGuestToken();
-    if (token) params.set('token', token);
-    else if (guestToken) params.set('guest_token', guestToken);
-
-    const url = `${API_BASE}/agents/route/stream?${params.toString()}`;
-    const eventSource = new EventSource(url);
-
-    // 处理命名事件
-    const namedEvents: SSEEventType[] = ['intent', 'agent_switch', 'thinking', 'tool_call', 'tool_result', 'structured', 'text', 'question', 'interview_progress', 'complete', 'error'];
-    namedEvents.forEach(eventName => {
-      eventSource.addEventListener(eventName, (e) => {
-        try {
-          const parsed = JSON.parse((e as MessageEvent).data);
-          onEvent({ event: eventName, data: parsed });
-          if (eventName === 'complete') {
-            eventSource.close();
-            resolve();
-          }
-          if (eventName === 'error') {
-            eventSource.close();
-            reject(new Error(parsed.message || parsed.error || parsed.detail || 'SSE error'));
-          }
-        } catch {
-          onEvent({ event: eventName, data: { raw: (e as MessageEvent).data } });
-        }
-      });
-    });
-
-    // 默认消息处理（无事件名的数据，作为安全回退）
-    eventSource.onmessage = (e) => {
-      // 所有命名事件已通过 addEventListener 处理，这里只处理未知格式的数据
-      onEvent({ event: 'text', data: { text: e.data } });
-    };
-
-    eventSource.onerror = () => {
-      eventSource.close();
-      reject(new Error('SSE connection failed'));
-    };
+  if (!getToken() && !getGuestToken()) await ensureGuestSession();
+  const submissionId = payload.submission_id || crypto.randomUUID();
+  const url = `${API_BASE}/agents/route/stream`;
+  const body = JSON.stringify({
+    message: payload.message,
+    session_id: payload.session_id,
+    patient_history: payload.patient_history,
   });
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+    'Idempotency-Key': submissionId,
+    ...authHeaders(),
+  };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(url, { method: 'POST', headers, body });
+    } catch (error) {
+      if (attempt === 0 && error instanceof TypeError) continue;
+      throw error;
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No response body');
+    try {
+      await new Promise<void>((resolve, reject) => {
+        void parseSSEStream(reader, event => {
+          if (event.event === 'guest_token' && typeof event.data.guest_token === 'string' && event.data.guest_token.trim()) {
+            localStorage.setItem('guest_token', event.data.guest_token);
+          }
+          onEvent(event);
+        }, resolve, reject);
+      });
+      return;
+    } catch (error) {
+      if (attempt === 0 && error instanceof TypeError) continue;
+      throw error;
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
+  }
 }
 
 /**
- * 续传流式对话 (GET + fetch + Headers + ReadableStream SSE)
- * 避免 POST+HTTP2 协议错误，避免 URL 过长
- * GET /api/v1/agents/route/stream/continue?session_id=...&question_id=...
- * Headers: X-Answer (base64), Authorization / X-Guest-Token
+ * 续传流式对话 (POST + fetch + ReadableStream SSE)
+ * 答案放入请求体，凭证放入请求头，不写入 URL。
  */
 export async function streamDiagnoseContinue(
-  payload: { session_id: string; question_id: string; answer: string },
+  payload: { session_id: string; question_id: string; answer: string; submission_id?: string },
   onEvent: (event: SSEEvent) => void
 ): Promise<void> {
   const params = new URLSearchParams();
@@ -273,14 +278,14 @@ export async function streamDiagnoseContinue(
   const url = `${API_BASE}/agents/route/stream/continue?${params.toString()}`;
 
   const headers: Record<string, string> = {
-    'X-Answer': btoa(unescape(encodeURIComponent(payload.answer))),
+    'Idempotency-Key': payload.submission_id || crypto.randomUUID(),
   };
   const token = getToken();
   const guestToken = getGuestToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   else if (guestToken) headers['X-Guest-Token'] = guestToken;
 
-  const response = await fetch(url, {
+  const response = await fetchWithSubmissionRetry(url, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({ answer: payload.answer }),
@@ -319,10 +324,9 @@ export function clearGuestToken(): void {
   localStorage.removeItem('guest_status');
 }
 
-export async function migrateGuestData(): Promise<number> {
-  const guestToken = getGuestToken();
+export async function migrateGuestData(guestToken = getGuestToken()): Promise<number> {
   if (!guestToken) return 0;
-  const res = await fetch('/api/v1/auth/guest/migrate', {
+  const res = await fetch(`${API_BASE}/auth/guest/migrate`, {
     method: 'POST',
     headers: { ...authHeaders(), 'X-Guest-Token': guestToken, 'Content-Type': 'application/json' },
   });
@@ -338,7 +342,8 @@ export async function migrateGuestData(): Promise<number> {
 export function streamChat(
   sessionId: string,
   message: string,
-  onEvent: (event: SSEEvent) => void
+  onEvent: (event: SSEEvent) => void,
+  submissionId = crypto.randomUUID(),
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = `${API_BASE}/agents/sessions/${encodeURIComponent(sessionId)}/chat`;
@@ -349,11 +354,12 @@ export function streamChat(
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
+      'Idempotency-Key': submissionId,
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     else if (guestToken) headers['X-Guest-Token'] = guestToken;
 
-    fetch(url, { method: 'POST', headers, body })
+    fetchWithSubmissionRetry(url, { method: 'POST', headers, body })
       .then(async (response) => {
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));

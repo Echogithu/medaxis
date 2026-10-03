@@ -24,6 +24,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.config import DynamicConfigService
+from app.services.text_privacy import redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +225,7 @@ class ExternalSearchAgent:
         """
         url = f"{self.base_url}/search"
         params: dict[str, str | int] = {
-            "q": query,
+            "q": redact_text(query).text,
             "format": "json",
             "language": lang,
             "safesearch": "0",
@@ -236,11 +237,12 @@ class ExternalSearchAgent:
                 resp.raise_for_status()
                 data = resp.json()
                 results = data.get("results", [])
-                logger.info(f"[SEARXNG_DEBUG] SearXNG returned {len(results)} results for query: {query[:60]}")
+                logger.info("[SEARXNG] query_chars=%d results=%d", len(query), len(results))
                 return results
         except Exception as exc:
             # Fail gracefully — external search is supplementary, not critical
-            logger.warning(f"[SEARXNG_DEBUG] SearXNG search failed: {type(exc).__name__}: {str(exc)[:200]}")
+            # 异常字符串可能携带完整URL/query，日志仅记录错误类型。
+            logger.warning("[SEARXNG] search failed: %s", type(exc).__name__)
             return []
 
     # ------------------------------------------------------------------
@@ -270,7 +272,11 @@ class ExternalSearchAgent:
 
             # 1. Domain trust
             hostname = urlparse(url).hostname or ""
-            if any(hostname.endswith(d) or hostname == d.lstrip(".") for d in self.TRUSTED_DOMAINS):
+            if any(
+                hostname == domain.lstrip(".")
+                or hostname.endswith(f".{domain.lstrip('.')}")
+                for domain in self.TRUSTED_DOMAINS
+            ):
                 score += 50
 
             # 2. Engine trust

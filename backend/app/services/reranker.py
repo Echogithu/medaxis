@@ -71,14 +71,10 @@ class RerankerService:
     ) -> list[tuple[int, float]]:
         """Rerank documents by relevance to query.
 
-        Returns list of (original_index, score) sorted by score desc.
-        Falls back to identity pass-through if no provider.
+        返回按相关度排序的 (原始序号, 分数)。无供应商时抛出 ValueError，
+        由调用方保留向量检索的顺序与分数。
         """
-        try:
-            client = await self._get_client()
-        except ValueError:
-            # No reranker configured — return identity ordering
-            return [(i, 1.0) for i in range(len(documents))]
+        client = await self._get_client()
 
         response = await client.post(
             "/rerank",

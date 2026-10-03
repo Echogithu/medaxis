@@ -83,6 +83,7 @@ class SearchMedicalKnowledgeTool(Tool):
         # Deferred import to avoid circular deps at module load time
         from app.services.rag import RAGService
         from app.services.external_search import ExternalSearchAgent
+        from app.services.config import DynamicConfigService
         from sqlalchemy.ext.asyncio import AsyncSession
         from app.db.session import async_session_maker
         import logging
@@ -90,30 +91,43 @@ class SearchMedicalKnowledgeTool(Tool):
         logger = logging.getLogger(__name__)
 
         async with async_session_maker() as db:
+            source_policy = await DynamicConfigService.knowledge_source_policy(db)
+            internal_limit = source_policy["internal_candidates"]
+            external_limit = min(source_policy["external_candidates"],
+                                 max(0, await DynamicConfigService.external_search_max_results(db)))
             # 1. Search internal knowledge base
             rag = RAGService(db)
             from app.models.rag import DocType
             dt = DocType(doc_type) if doc_type else None
             try:
-                rag_result = await rag.query(query=query, doc_type=dt, top_k=top_k)
+                chunks = await rag.search(query=query, doc_type=dt, top_k=internal_limit)
+                # 报告稍后统一生成；这里只取原文，避免生成随后被丢弃的内部摘要。
+                rag_result = {"sources": [{
+                    "source_type": "internal", "title": c["document_title"],
+                    "document_type": c["document_type"], "document_id": c["document_id"],
+                    "chunk_id": c["chunk_id"], "chunk_index": c["chunk_index"],
+                    "source_url": c.get("source_url"), "excerpt": c["content"], "relevance": c["rank"],
+                } for c in chunks], "retrieved_chunks": len(chunks)}
                 logger.info(f"[SEARXNG_DEBUG] RAG returned {len(rag_result.get('sources', []))} sources")
             except Exception as exc:
                 logger.warning(f"[SEARXNG_DEBUG] RAG query failed: {type(exc).__name__}: {str(exc)[:200]}")
                 rag_result = {"answer": "", "sources": [], "retrieved_chunks": 0}
 
             # 2. Search external SearXNG for real-time medical knowledge
-            external = await ExternalSearchAgent.from_config(db)
-
-            # 2a. Guidelines search
-            external_results = await external.search_guidelines(query, lang="zh-CN")
-            logger.info(f"[SEARXNG_DEBUG] Guidelines search returned {len(external_results)} results")
-
-            # 2b. General search for broader coverage
-            general_raw = await external._searxng_search(query, lang="zh-CN")
-            logger.info(f"[SEARXNG_DEBUG] General search raw returned {len(general_raw)} results")
-
-            general_results = external._filter_trusted(general_raw)
+            external_results, general_results = [], []
+            if external_limit and await DynamicConfigService.external_search_enabled(db):
+                external = await ExternalSearchAgent.from_config(db)
+                external_results = await external.search_guidelines(query, lang="zh-CN")
+                general_raw = await external._searxng_search(query, lang="zh-CN")
+                general_results = external._filter_trusted(general_raw)
             logger.info(f"[SEARXNG_DEBUG] After filter: {len(general_results)} results")
+            if await DynamicConfigService.external_search_trusted_only(db):
+                external_results = [result for result in external_results if result.is_trusted]
+                general_results = [result for result in general_results if result.is_trusted]
+                logger.info(
+                    "[SEARXNG_DEBUG] Trusted-only setting retained %d guideline and %d general results",
+                    len(external_results), len(general_results),
+                )
             if general_results:
                 for i, r in enumerate(general_results[:3]):
                     logger.info(f"[SEARXNG_DEBUG]   Result {i+1}: score={r.trust_score}, title={r.title[:50]}")
@@ -131,38 +145,44 @@ class SearchMedicalKnowledgeTool(Tool):
             # Format external results for LLM consumption
             external_chunks = [
                 {
+                    "source_type": "external",
                     "document_title": r.title or "External Source",
                     "content": f"{r.snippet}\nURL: {r.url}",
                     "document_type": "external_search",
-                    "relevance": r.trust_score / 100.0,
+                    "url": r.url,
+                    "excerpt": r.snippet,
+                    "source_engine": r.source_engine,
+                    "trust_score": r.trust_score,
+                    "relevance": None,
                     "is_trusted": r.is_trusted,
                 }
-                for r in unique_external[:top_k]
+                for r in unique_external[:external_limit]
             ]
             logger.info(f"[SEARXNG_DEBUG] Formatted {len(external_chunks)} external chunks")
 
             # Merge internal + external sources
             combined_sources = rag_result.get("sources", []) + [
-                {"title": c["document_title"], "type": c["document_type"], "relevance": c.get("relevance", 0.5)}
+                {
+                    "source_type": c["source_type"],
+                    "title": c["document_title"],
+                    "type": c["document_type"],
+                    "document_type": c["document_type"],
+                    "url": c["url"],
+                    "excerpt": c["excerpt"],
+                    "source_engine": c["source_engine"],
+                    "trust_score": c["trust_score"],
+                    "is_trusted": c["is_trusted"],
+                    "relevance": None,
+                }
                 for c in external_chunks
             ]
 
-            # Build combined answer
-            internal_answer = rag_result.get("answer", "")
-            if external_chunks:
-                external_summary = "\n\n".join(
-                    f"[来源: {c['document_title']}]\n{c['content']}"
-                    for c in external_chunks
-                )
-                if internal_answer and "未找到" not in internal_answer:
-                    combined_answer = (
-                        f"{internal_answer}\n\n---\n\n"
-                        f"其他参考资料（来自实时搜索）：\n{external_summary}"
-                    )
-                else:
-                    combined_answer = external_summary
-            else:
-                combined_answer = internal_answer
+            # 两类来源按同一主题排序；被筛掉的资料也不能通过旧摘要绕过筛选。
+            from app.services.knowledge_citations import build_knowledge_citations, rank_knowledge_citations
+            candidates = build_knowledge_citations(combined_sources, max_citations=internal_limit + external_limit)
+            ranked = (await rank_knowledge_citations(query, candidates, db, min_relevance=source_policy["min_relevance"]))[:top_k]
+            combined_sources = [citation.model_dump() for citation in ranked]
+            combined_answer = "\n\n".join(f"[来源: {citation.title}]\n{citation.excerpt}" for citation in ranked)
 
             logger.info(f"[SEARXNG_DEBUG] Final answer length: {len(combined_answer)} chars")
 
@@ -172,6 +192,8 @@ class SearchMedicalKnowledgeTool(Tool):
                 "retrieved_chunks": rag_result.get("retrieved_chunks", 0) + len(external_chunks),
                 "internal_sources": len(rag_result.get("sources", [])),
                 "external_sources": len(external_chunks),
+                "candidate_count": len(candidates),
+                "selected_count": len(ranked),
             }
 
 
@@ -336,13 +358,16 @@ REQUIRED JSON STRUCTURE:
   "follow_up_required": true|false,
   "follow_up_timeline": "string (e.g., '3 days')",
   "red_flags": ["string (symptoms requiring immediate care)"],
-  "knowledge_sources": ["string"]
+  "knowledge_sources": ["string"],
+  "knowledge_evidence": [{"claim_path":"key_findings.0","citation_id":"S1","quote":"原文完整句"}]
 }
 
 RULES:
 - Be specific and evidence-based.
+- 引用仅可使用提供的[S1]等编号。knowledge_evidence只提供对应字段路径和完整原文句，不填核对状态或坐标；意译允许保留但须专业核对。不要为匹配摘录增加与本患者无关的内容。
 - Always include the disclaimer that this is AI-assisted, not definitive.
 - If information is insufficient, state so explicitly in key_findings.
+- When onset or duration is unknown, do not classify symptoms as acute, subacute, or chronic from an assumed time span; use an uncertain symptom-based label and note the missing timing.
 - For differential_diagnoses, always provide at least 2-5 alternatives with reasoning.
 - For each diagnosis in primary_diagnosis and differential_diagnoses, provide the correct
   ICD-11 code in icd11_code (e.g., "J05.0" for acute laryngitis, "J00" for acute nasopharyngitis).

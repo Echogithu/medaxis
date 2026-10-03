@@ -28,6 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import decrypt_value
 from app.models.config import LLMProviderConfig
+from app.services.llm_errors import LLMConfigurationError, supports_structured_output_fallback
+from app.services.text_privacy import redact_for_provider, redact_messages_for_provider
 
 
 @dataclass
@@ -52,7 +54,7 @@ async def _get_provider_config(
 ) -> dict:
     """Get provider config from database with platform and model_type resolution."""
     if db is None:
-        raise ValueError(
+        raise LLMConfigurationError(
             f"Provider '{provider}' is not configured. "
             f"Please add it via /api/v1/admin/llm-providers."
         )
@@ -95,7 +97,7 @@ async def _get_provider_config(
         }
 
     if model_type == "classify":
-        raise ValueError(f"No classification config for provider '{provider}'")
+        raise LLMConfigurationError(f"No classification config for provider '{provider}'")
 
     # Fallback: platform match without model_type filter (compat)
     if platform:
@@ -132,7 +134,7 @@ async def _get_provider_config(
             "default_model": config.default_model,
         }
 
-    raise ValueError(
+    raise LLMConfigurationError(
         f"Provider '{provider}' is not configured for platform '{platform or 'global'}' "
         f"with model_type '{model_type}'. "
         f"Please add it via /api/v1/admin/llm-providers."
@@ -146,7 +148,7 @@ async def _get_default_provider(
 ) -> str:
     """Return the provider marked as default in the database."""
     if db is None:
-        raise ValueError(
+        raise LLMConfigurationError(
             "No database session available. "
             "Please configure a provider via /api/v1/admin/llm-providers."
         )
@@ -186,7 +188,7 @@ async def _get_default_provider(
     if config:
         return config.provider
 
-    raise ValueError(
+    raise LLMConfigurationError(
         f"No active provider configured for model_type '{model_type}'. "
         "Please add one via /api/v1/admin/llm-providers."
     )
@@ -219,7 +221,7 @@ class LLMService:
 
         config = await _get_provider_config(self._db, self.provider, self.platform, self.model_type)
         if not config.get("api_key"):
-            raise ValueError(
+            raise LLMConfigurationError(
                 f"API key for provider '{self.provider}' is not configured. "
                 f"Please add it via /api/v1/admin/llm-providers."
             )
@@ -260,13 +262,13 @@ class LLMService:
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
-            raise ValueError(
+            raise LLMConfigurationError(
                 f"No model specified and provider '{self.provider}' has no default model configured."
             )
 
-        msgs = list(messages)
+        msgs = redact_messages_for_provider(messages)
         if system_prompt:
-            msgs.insert(0, {"role": "system", "content": system_prompt})
+            msgs.insert(0, {"role": "system", "content": redact_for_provider(system_prompt)})
 
         _model = model or default_model
         logger.info("[LLM_PRE] provider=%s model=%s msgs=%d max_tokens=%d",
@@ -281,7 +283,7 @@ class LLMService:
         if disable_thinking:
             merged_extra["thinking"] = {"type": "disabled"}
         if extra_body:
-            merged_extra.update(extra_body)
+            merged_extra.update(redact_for_provider(extra_body))
         if merged_extra:
             kwargs["extra_body"] = merged_extra
         response = await client.chat.completions.create(**kwargs)
@@ -329,13 +331,13 @@ class LLMService:
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
-            raise ValueError(
+            raise LLMConfigurationError(
                 f"No model specified and provider '{self.provider}' has no default model configured."
             )
 
-        msgs = list(messages)
+        msgs = redact_messages_for_provider(messages)
         if system_prompt:
-            msgs.insert(0, {"role": "system", "content": system_prompt})
+            msgs.insert(0, {"role": "system", "content": redact_for_provider(system_prompt)})
 
         _model = model or default_model
         logger.info("[LLM_STREAM] provider=%s model=%s msgs=%d max_tokens=%d system_prompt_len=%d",
@@ -380,19 +382,19 @@ class LLMService:
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
-            raise ValueError(
+            raise LLMConfigurationError(
                 f"No model specified and provider '{self.provider}' has no default model configured."
             )
 
-        msgs = list(messages)
+        msgs = redact_messages_for_provider(messages)
         if system_prompt:
-            msgs.insert(0, {"role": "system", "content": system_prompt})
+            msgs.insert(0, {"role": "system", "content": redact_for_provider(system_prompt)})
 
         response = await client.chat.completions.create(
             model=model or default_model,
             messages=msgs,  # type: ignore[arg-type]
             max_tokens=max_tokens,
-            tools=tools,  # type: ignore[arg-type]
+            tools=redact_for_provider(tools),  # type: ignore[arg-type]
             tool_choice=tool_choice,  # type: ignore[arg-type]
             stream=False,
             extra_body={"thinking": {"type": "disabled"}},
@@ -445,16 +447,16 @@ class LLMService:
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
-            raise ValueError(
+            raise LLMConfigurationError(
                 f"No model specified and provider '{self.provider}' has no default model configured."
             )
 
         schema = output_schema.model_json_schema()
         schema_name = output_schema.__name__
 
-        msgs = list(messages)
+        msgs = redact_messages_for_provider(messages)
         if system_prompt:
-            msgs.insert(0, {"role": "system", "content": system_prompt})
+            msgs.insert(0, {"role": "system", "content": redact_for_provider(system_prompt)})
 
         # Add schema instruction to system prompt
         schema_instruction = (
@@ -483,7 +485,9 @@ class LLMService:
                 },
                 stream=False,
             )
-        except Exception:
+        except Exception as exc:
+            if not supports_structured_output_fallback(exc):
+                raise
             # Fallback: standard chat + manual parsing, thinking disabled
             response = await client.chat.completions.create(
                 model=model or default_model,
@@ -542,12 +546,12 @@ class LLMService:
 
         msgs: list[dict[str, Any]] = []
         if system_prompt:
-            msgs.append({"role": "system", "content": system_prompt})
+            msgs.append({"role": "system", "content": redact_for_provider(system_prompt)})
         msgs.append({
             "role": "user",
             "content": [
                 {"type": "image_url", "image_url": {"url": image_url}},
-                {"type": "text", "text": text_prompt},
+                {"type": "text", "text": redact_for_provider(text_prompt)},
             ],
         })
 

@@ -14,6 +14,7 @@ export type SSEEventType =
   | 'text'
   | 'question'
   | 'interview_progress'
+  | 'guest_token'
   | 'error'
   | 'complete';
 
@@ -37,6 +38,38 @@ export interface WorkflowStep {
   toolResult?: unknown;
 }
 
+export interface KnowledgeCitation {
+  citation_id: string;
+  source_type: 'internal' | 'external';
+  title: string;
+  excerpt: string;
+  used_in_report?: boolean | null;
+  document_id?: string | null;
+  chunk_id?: string | null;
+  chunk_index?: number | null;
+  document_type?: string | null;
+  url?: string | null;
+  source_engine?: string | null;
+  trust_score?: number | null;
+  is_trusted?: boolean | null;
+  relevance?: number | null;
+  relevance_method?: 'reranker' | 'keyword' | 'unassessed';
+  relevance_level?: 'matched' | 'unassessed';
+  relevance_reason?: string;
+  relevance_query_fingerprint?: string;
+}
+
+export interface KnowledgeEvidence {
+  claim_path: string;
+  citation_id: string;
+  claim: string;
+  quote: string;
+  status: 'excerpt_matched' | 'needs_review';
+  reason: string;
+  start: number | null;
+  end: number | null;
+}
+
 /** 诊断报告 Schema */
 export interface DiagnosisReport {
   primary_diagnosis: string;
@@ -55,6 +88,13 @@ export interface DiagnosisReport {
   follow_up_required?: boolean;
   follow_up_timeline?: string;
   knowledge_sources?: string[];
+  knowledge_citations?: KnowledgeCitation[];
+  knowledge_evidence?: KnowledgeEvidence[];
+  knowledge_retrieval_status?: 'used' | 'retrieved_not_cited' | 'no_sources' | 'failed';
+  knowledge_retrieval_count?: number;
+  interview_stop_reason?: string;
+  interview_information_gaps?: string[];
+  interview_is_sufficient?: boolean | null;
   disclaimer?: string;
   /** Older clients may still provide these aliases. */
   recommended_exams?: string[];
@@ -88,6 +128,7 @@ export interface InterviewQuestion {
   allow_skip?: boolean;
   phase?: string;           // 标准医学阶段 ID（如 hpi_onset, pmh_chronic）
   colloquial_phase?: string; // 口语化阶段名称（如 '症状情况', '用药情况'）
+  reason?: string;
 }
 
 /** 用户消息 */

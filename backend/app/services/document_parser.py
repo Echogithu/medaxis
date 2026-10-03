@@ -89,13 +89,8 @@ def _parse_docx(file_bytes: bytes) -> str:
 
 
 def _parse_txt(file_bytes: bytes) -> str:
-    """Extract text from plain text bytes (UTF-8 with BOM fallback)."""
-    # Try UTF-8 first
-    try:
-        return file_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        pass
-    # Try UTF-8 with BOM
+    """Extract text from plain text bytes, stripping a UTF-8 BOM when present."""
+    # utf-8-sig also accepts ordinary UTF-8 and removes a leading BOM.
     try:
         return file_bytes.decode("utf-8-sig")
     except UnicodeDecodeError:

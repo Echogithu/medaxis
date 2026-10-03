@@ -6,11 +6,12 @@ Phase 2: upgrade to pgvector for semantic search.
 SearXNG integration planned for real-time external knowledge retrieval.
 """
 
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -24,6 +25,32 @@ settings = get_settings()
 # Simple chunking strategy: split by paragraphs, configurable via env
 _CHUNK_SIZE = settings.rag_chunk_size
 _CHUNK_OVERLAP = settings.rag_chunk_overlap
+_MAX_COARSE_TERMS = 32
+
+
+def _coarse_search_terms(query: str, term_len: int) -> list[str]:
+    """覆盖整句中的中文症状词，避免只按开头词筛选片段。"""
+    short_terms: list[str] = []
+    long_terms: list[str] = []
+    width = min(max(term_len, 2), 4)
+    for part in re.findall(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+", query):
+        if "\u4e00" <= part[0] <= "\u9fff":
+            short_terms.extend(part[i:i + 2] for i in range(len(part) - 1))
+            if len(part) >= width and width > 2:
+                long_terms.extend(part[i:i + width] for i in range(len(part) - width + 1))
+        elif len(part) >= 2:
+            short_terms.append(part)
+
+    short_terms = list(dict.fromkeys(short_terms))
+    if not short_terms:
+        return [query.strip()] if query.strip() else []
+    if len(short_terms) >= _MAX_COARSE_TERMS:
+        last = len(short_terms) - 1
+        return [
+            short_terms[round(i * last / (_MAX_COARSE_TERMS - 1))]
+            for i in range(_MAX_COARSE_TERMS)
+        ]
+    return list(dict.fromkeys(short_terms + long_terms))[:_MAX_COARSE_TERMS]
 
 
 class RAGService:
@@ -147,11 +174,11 @@ class RAGService:
         """
         # Phase 1: coarse keyword retrieval (expand to configurable multiplier for re-ranking)
         coarse_k = max(top_k * settings.rag_coarse_multiplier, settings.rag_coarse_min)
-        term_len = settings.rag_query_term_length
-        search_terms = [query[i:i+term_len] for i in range(len(query) - term_len + 1)]
+        search_terms = _coarse_search_terms(query, settings.rag_query_term_length)
         if not search_terms:
-            search_terms = [query]
-        primary_term = max(search_terms, key=len)
+            return []
+        matches = [DocumentChunk.content.ilike(f"%{term}%") for term in search_terms]
+        overlap_score = sum(case((match, 1), else_=0) for match in matches)
 
         stmt = select(
             DocumentChunk.id,
@@ -161,15 +188,16 @@ class RAGService:
             Document.id.label("doc_id"),
             Document.title,
             Document.doc_type,
+            Document.source_url,
         ).join(Document).where(
-            DocumentChunk.content.ilike(f"%{primary_term}%"),
+            or_(*matches),
             Document.is_active == True,
         )
 
         if doc_type:
             stmt = stmt.where(Document.doc_type == doc_type)
 
-        stmt = stmt.limit(coarse_k)
+        stmt = stmt.order_by(overlap_score.desc(), DocumentChunk.id).limit(coarse_k)
         result = await self.db.execute(stmt)
         rows = result.all()
 
@@ -204,8 +232,16 @@ class RAGService:
             reranker = RerankerService(self.db)
             docs_for_rerank = [r.content for _, r in vector_top]
             reranked = await reranker.rerank(query, docs_for_rerank, top_n=top_k)
+            # 空、重复或越界响应不能把已召回原文变成“未检索到资料”。
+            import math
+            if len(reranked) != min(top_k, len(vector_top)) or len({idx for idx, _ in reranked}) != len(reranked):
+                raise ValueError("Incomplete reranking response")
+            if any(type(idx) is not int or not 0 <= idx < len(vector_top)
+                   or not isinstance(score, (int, float)) or not math.isfinite(score)
+                   for idx, score in reranked):
+                raise ValueError("Invalid reranking response")
             final = []
-            for idx, score in reranked:
+            for idx, score in reranked[:top_k]:
                 _, row = vector_top[idx]
                 final.append({
                     "chunk_id": str(row.id),
@@ -214,11 +250,14 @@ class RAGService:
                     "document_id": str(row.doc_id),
                     "document_title": row.title,
                     "document_type": row.doc_type.value,
+                    "source_url": row.source_url,
                     "rank": round(score, 4),
                 })
             return final
-        except ValueError:
-            # Reranker not configured — return vector-similarity results
+        except Exception as exc:
+            # 供应商不可用或响应损坏时保留已召回片段，后续统一相关性评估仍照常执行。
+            import logging
+            logging.getLogger(__name__).warning("RAG 重排不可用，保留候选原文：%s", type(exc).__name__)
             return [
                 {
                     "chunk_id": str(row.id),
@@ -227,6 +266,7 @@ class RAGService:
                     "document_id": str(row.doc_id),
                     "document_title": row.title,
                     "document_type": row.doc_type.value,
+                    "source_url": row.source_url,
                     "rank": round(score, 4),
                 }
                 for score, row in vector_top[:top_k]
@@ -294,9 +334,16 @@ class RAGService:
             "answer": answer,
             "sources": [
                 {
+                    "source_type": "internal",
                     "title": c["document_title"],
                     "type": c["document_type"],
-                    "relevance": 1.0,
+                    "document_type": c["document_type"],
+                    "document_id": c["document_id"],
+                    "chunk_id": c["chunk_id"],
+                    "chunk_index": c["chunk_index"],
+                    "source_url": c.get("source_url"),
+                    "excerpt": c["content"],
+                    "relevance": c["rank"],
                 }
                 for c in chunks
             ],

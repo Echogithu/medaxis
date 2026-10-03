@@ -116,6 +116,7 @@ export default function InterviewQuestion({ question, onAnswer, disabled = false
             💡 {question.hint}
           </Typography>
         )}
+        {question.reason && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>询问目的：{question.reason}</Typography>}
 
         {question.type === 'choice' && question.options && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>

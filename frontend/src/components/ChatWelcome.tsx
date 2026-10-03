@@ -2,25 +2,24 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import HealingOutlinedIcon from '@mui/icons-material/HealingOutlined';
-import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import { careFonts, carePalette } from '../theme';
 
 const starters = [
   {
     title: '描述症状',
-    detail: '头疼、咳嗽、腹痛等不适，用日常语言说即可',
+    detail: '头疼、咳嗽、腹痛',
     prompt: '头疼还发烧',
     icon: <HealingOutlinedIcon sx={{ fontSize: 20 }} />,
   },
   {
     title: '解读报告',
-    detail: '先上传体检或检验单，再一起看异常项',
+    detail: '体检报告、检验单',
     prompt: '近期体检报告解读',
     icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />,
   },
   {
     title: '补充情况',
-    detail: '病程超过几天时，说明开始时间和变化',
+    detail: '开始时间与症状变化',
     prompt: '咳嗽一周了',
     icon: <ChatBubbleOutlineRoundedIcon sx={{ fontSize: 20 }} />,
   },
@@ -33,7 +32,7 @@ export default function ChatWelcome({ onPick }: { onPick: (text: string) => void
         你好，我是医枢问诊助手
       </Typography>
       <Typography sx={{ mt: 1.25, maxWidth: 520, color: carePalette.muted, fontSize: 14, lineHeight: 1.75 }}>
-        用日常语言说说哪里不舒服。我会先收集情况，再整理一份可与医生讨论的参考总结。
+        说说哪里不舒服，或上传一份检查报告。
       </Typography>
 
       <Stack spacing={1.1} sx={{ mt: 3.5 }}>
@@ -48,7 +47,7 @@ export default function ChatWelcome({ onPick }: { onPick: (text: string) => void
               py: 1.4,
               minHeight: 64,
               borderRadius: '16px',
-              border: '1px solid #e2eae6',
+              boxShadow: '0 4px 18px -6px rgba(15,23,42,.08)',
               bgcolor: '#fff',
               color: carePalette.ink,
               textAlign: 'left',
@@ -69,13 +68,6 @@ export default function ChatWelcome({ onPick }: { onPick: (text: string) => void
         ))}
       </Stack>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 3, color: '#66878f', fontSize: 12, fontWeight: 650 }}>
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.6 }}>
-          <VerifiedUserOutlinedIcon sx={{ fontSize: 15, color: carePalette.primary }} />
-          对话内容仅用于本次问诊
-        </Box>
-        <Box>紧急或持续加重时，请立即就医</Box>
-      </Box>
     </Box>
   );
 }

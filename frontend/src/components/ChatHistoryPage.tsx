@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, CircularProgress } from '@mui/material';
 import { agentApi } from '../api/agent';
 import { API_BASE, getToken } from '../api/client';
@@ -60,7 +60,7 @@ export default function ChatHistoryPage() {
   }, []);
 
   if (error) return <Alert severity="error" sx={{ m: 3, borderRadius: '14px' }}>{error}</Alert>;
-  if (!identity) return <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '100dvh', bgcolor: '#f0f2ef' }}><CircularProgress aria-label="加载会话历史" /></Box>;
+  if (!identity) return <Box sx={{ display: 'grid', placeItems: 'center', height: '100%', minHeight: 240 }}><CircularProgress aria-label="加载会话历史" /></Box>;
   return <HistoryWorkspace key={identity.owner} {...identity} />;
 }
 
@@ -90,18 +90,18 @@ function HistoryWorkspace({ owner, guestStatus }: { owner: string; guestStatus: 
     updateHistory({ ...current, sessions: current.sessions.map(item => item.id === session.id ? session : item) });
   }, [updateHistory]);
 
-  const selectSession = (id: string) => {
+  const selectSession = useCallback((id: string) => {
     const current = historyRef.current;
     if (current?.sessions.some(session => session.id === id)) updateHistory({ ...current, currentSessionId: id });
-  };
-  const newSession = () => {
+  }, [updateHistory]);
+  const newSession = useCallback(() => {
     const current = historyRef.current;
     if (!current) return;
     const session = createChatSession();
     updateHistory({ ...current, currentSessionId: session.id, sessions: [session, ...current.sessions] });
-  };
+  }, [updateHistory]);
 
-  const deleteSession = (id: string) => {
+  const deleteSession = useCallback((id: string) => {
     const current = historyRef.current;
     if (!current) return;
     const next = removeChatSession(current, id);
@@ -114,7 +114,8 @@ function HistoryWorkspace({ owner, guestStatus }: { owner: string; guestStatus: 
     } catch {
       setStorageError('聊天未删除，请检查浏览器存储权限后重试。');
     }
-  };
+  }, [owner]);
+  const sessions = useMemo(() => [...(history?.sessions || [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [history]);
 
   if (!history) return <Alert severity="error">{storageError}</Alert>;
   const selected = history.sessions.find(session => session.id === history.currentSessionId)!;
@@ -123,7 +124,7 @@ function HistoryWorkspace({ owner, guestStatus }: { owner: string; guestStatus: 
     <ChatPage
       key={selected.id}
       initialSession={selected}
-      sessions={[...history.sessions].sort((a, b) => b.updated_at.localeCompare(a.updated_at))}
+      sessions={sessions}
       guestStatus={guestStatus}
       onSave={saveSession}
       onSelectSession={selectSession}

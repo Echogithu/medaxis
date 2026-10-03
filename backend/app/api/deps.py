@@ -3,6 +3,7 @@
 import hashlib
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Annotated
 
 import jwt
@@ -61,16 +62,26 @@ async def _resolve_token(
 
         if token_type == "guest":
             guest_id = payload.get("sub")
+            if not isinstance(guest_id, str):
+                return None, "unknown", False, None
+            try:
+                guest_id = str(uuid.UUID(guest_id))
+            except ValueError:
+                return None, "unknown", False, None
             platform = payload.get("platform") or "unknown"
             return None, platform, True, guest_id
 
         if token_type == "access":
             user_id: str | None = payload.get("sub")
-            if user_id is None:
+            if not isinstance(user_id, str):
+                return None, "unknown", False, None
+            try:
+                user_uuid = uuid.UUID(user_id)
+            except ValueError:
                 return None, "unknown", False, None
             platform: str = payload.get("platform") or "unknown"
 
-            result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+            result = await db.execute(select(User).where(User.id == user_uuid))
             user = result.scalar_one_or_none()
             if user is None:
                 return None, platform, False, None
@@ -121,6 +132,25 @@ async def get_current_user_or_guest(
         )
 
     return UserContext(user=user, platform=platform, is_guest=is_guest, guest_id=guest_id)
+
+
+async def get_current_user_or_active_guest(
+    ctx: Annotated[UserContext, Depends(get_current_user_or_guest)],
+    db: AsyncSession = Depends(get_db),
+) -> UserContext:
+    """Model endpoints require both a valid guest JWT and a live DB session."""
+    if not ctx.is_guest:
+        return ctx
+
+    try:
+        guest_id = uuid.UUID(ctx.guest_id or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Guest session is invalid") from exc
+
+    guest = await db.get(GuestSession, guest_id)
+    if guest is None or guest.expires_at <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Guest session is invalid or expired")
+    return ctx
 
 
 async def get_current_user(
@@ -204,6 +234,7 @@ def require_role(*roles: UserRole):
 # Convenience type aliases
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentUserContext = Annotated[UserContext, Depends(get_current_user_or_guest)]
+CurrentUserOrActiveGuest = Annotated[UserContext, Depends(get_current_user_or_active_guest)]
 
 
 async def get_current_user_or_guest_lenient(
@@ -214,19 +245,61 @@ async def get_current_user_or_guest_lenient(
 ) -> UserContext:
     """Like get_current_user_or_guest but returns empty context on auth failure.
 
-    Designed for SSE/EventSource endpoints where the client cannot
-    easily refresh tokens. Returns is_guest=False, user=None instead
-    of raising 401.
+    Anonymous requests return an empty context so SSE can provision a guest.
+    Explicit credentials must resolve successfully; stale tokens must not
+    silently become a new anonymous session.
     """
     cookie_token = request.cookies.get("auth_token")
-    query_token = request.query_params.get("token") or request.query_params.get("guest_token")
+    access_query_token = request.query_params.get("token")
+    query_guest_token = request.query_params.get("guest_token")
+    query_token = access_query_token or query_guest_token
     effective_token = token or x_guest_token or query_token or cookie_token
-    try:
-        user, platform, is_guest, guest_id = await _resolve_token(effective_token, db)
-        if user is not None or is_guest:
-            return UserContext(user=user, platform=platform, is_guest=is_guest, guest_id=guest_id)
-    except Exception:
-        pass
-    return UserContext(user=None, platform="unknown", is_guest=False, guest_id=None)
+    if not effective_token:
+        return UserContext(user=None, platform="unknown", is_guest=False, guest_id=None)
+
+    user, platform, is_guest, guest_id = await _resolve_token(effective_token, db)
+    if user is not None or is_guest:
+        return UserContext(user=user, platform=platform, is_guest=is_guest, guest_id=guest_id)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token is invalid or expired",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def get_current_user_or_guest_lenient_no_query(
+    request: Request,
+    token: Annotated[str | None, Depends(oauth2_scheme)] = None,
+    x_guest_token: Annotated[str | None, Header(alias="X-Guest-Token")] = None,
+    db: AsyncSession = Depends(get_db),
+) -> UserContext:
+    """Resolve patient SSE identity only after excluding sensitive URL fields."""
+    if any(
+        name in request.query_params
+        for name in ("token", "guest_token", "access_token")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请通过请求头传递认证凭据。",
+        )
+    if any(
+        name in request.query_params
+        for name in ("message", "patient_history", "answer")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="患者内容必须放在请求体中。",
+        )
+    return await get_current_user_or_guest_lenient(
+        request,
+        token=token,
+        x_guest_token=x_guest_token,
+        db=db,
+    )
+
 
 CurrentUserContextLenient = Annotated[UserContext, Depends(get_current_user_or_guest_lenient)]
+CurrentUserContextLenientNoQuery = Annotated[
+    UserContext, Depends(get_current_user_or_guest_lenient_no_query)
+]

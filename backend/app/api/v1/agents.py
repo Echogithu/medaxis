@@ -13,17 +13,28 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, CurrentUserContext, CurrentUserContextLenient, UserContext, require_role
+from app.api.deps import (
+    CurrentUser,
+    CurrentUserContext,
+    CurrentUserContextLenient,
+    CurrentUserContextLenientNoQuery,
+    CurrentUserOrActiveGuest,
+    UserContext,
+    require_role,
+)
 from app.db.session import async_session_maker, get_db
 from app.models.agent import AgentSession, AgentSessionStatus, AgentSessionType
 from app.models.document_parse import DocumentParseTask
@@ -31,14 +42,56 @@ from app.models.medical_case import MedicalCase
 from app.models.user import GuestSession, User, UserRole
 from app.services.agents import AgentOrchestrator, DiagnosisAgent, MonitoringAgent, PlanningAgent
 from app.services.llm import LLMService
+from app.services.knowledge_citations import evidence_matches_excerpt
+from app.services.llm_errors import patient_llm_error, safe_llm_failure_fields, MedicalEvidenceUnavailableError
 from app.services.patient_case_persistence import (
     DiagnosisCasePersistenceError,
     persist_diagnosis_case,
 )
+from app.services.guest_model_quota import run_guest_submission, stream_guest_submission
 from app.services.rag import RAGService
 from app.tools.registry import GLOBAL_REGISTRY
 
 router = APIRouter()
+
+
+def _patient_llm_error_event(
+    exc: BaseException,
+    stage: str,
+    *,
+    code: str | None = None,
+    message: str | None = None,
+) -> str:
+    """为患者 SSE 返回稳定错误码，只记录脱敏分类信息。"""
+    payload = patient_llm_error(exc)
+    if code:
+        payload["code"] = code
+    if message:
+        payload["error"] = message
+    fields = safe_llm_failure_fields(exc)
+    logging.getLogger("agents.llm").warning(
+        "患者模型请求失败 stage=%s code=%s exception_type=%s",
+        stage,
+        payload["code"],
+        fields["exception_type"],
+    )
+    return f"event: error\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _patient_error_event(code: str, message: str, stage: str) -> str:
+    logging.getLogger("agents.patient").warning(
+        "患者端请求失败 stage=%s code=%s",
+        stage,
+        code,
+    )
+    return f"event: error\ndata: {json.dumps({'code': code, 'error': message}, ensure_ascii=False)}\n\n"
+
+
+def _log_patient_llm_interruption(stage: str) -> None:
+    logging.getLogger("agents.llm").info(
+        "患者模型请求中断 stage=%s code=LLM_REQUEST_INTERRUPTED exception_type=CancelledError",
+        stage,
+    )
 
 def _inject_lab_context(messages: list[dict[str, str]], lab_reports: list[dict[str, Any]]) -> None:
     """Format lab reports and insert into the message list as a system prompt."""
@@ -127,75 +180,35 @@ async def _load_health_profile_context(
     db: AsyncSession,
     user_id: str | None,
 ) -> str:
-    """Load patient health profile for context injection.
-
-    Context Pipeline data source. Returns empty string for guests
-    (user_id=None) and patients with no health profile data.
-    Phase 2a: includes chronic_diseases (ICD-10), allergies, current_medications.
-    """
+    """按当前授权患者读取人工档案，不混入后置的 AI 画像。"""
     if not user_id:
         return ""
 
-    try:
-        import uuid as _uuid
-        from sqlalchemy import select as _sel
-        from app.models.agent import PatientHealthProfile
+    from app.models.agent import PatientHealthProfile
+    from app.services.patient_profile import format_profile_context
+    profile = await db.scalar(select(PatientHealthProfile).where(
+        PatientHealthProfile.patient_id == uuid.UUID(user_id)
+    ))
+    context = format_profile_context(profile)
+    user = await db.get(User, uuid.UUID(user_id))
+    age_parts = []
+    if user is not None:
+        age_years = getattr(user, "age_years", None)
+        age_months = getattr(user, "age_months", None)
+        if type(age_years) is int and 0 <= age_years <= 150:
+            age_parts.append(f"年龄填写值：{age_years}岁")
+        if type(age_months) is int and 0 <= age_months <= 1800:
+            age_parts.append(f"月龄填写值：{age_months}个月")
+    if age_parts:
+        context += "患者填写的一般资料（未获医护核验）：" + "；".join(age_parts) + "\n"
+    return context
 
-        result = await db.execute(
-            _sel(PatientHealthProfile).where(
-                PatientHealthProfile.patient_id == _uuid.UUID(user_id)
-            )
-        )
-        profile = result.scalar_one_or_none()
-        if not profile:
-            return ""
 
-        parts = ["### Patient Health Profile"]
-
-        if profile.chronic_diseases and isinstance(profile.chronic_diseases, list):
-            diseases = [
-                f"{d.get('name', '')} ({d.get('code', '')})"
-                for d in profile.chronic_diseases if isinstance(d, dict)
-            ]
-            if diseases:
-                parts.append(f"**Chronic Diseases (ICD-10)**: {', '.join(diseases)}")
-
-        if profile.allergies and isinstance(profile.allergies, list) and len(profile.allergies) > 0:
-            parts.append(f"**Allergies**: {', '.join(str(a) for a in profile.allergies)}")
-
-        if profile.current_medications and isinstance(profile.current_medications, list):
-            meds = [
-                f"{m.get('name', '')} {m.get('dosage', '')} ({m.get('frequency', '')})"
-                for m in profile.current_medications if isinstance(m, dict)
-            ]
-            if meds:
-                parts.append(f"**Current Medications**: {'; '.join(meds)}")
-
-        if profile.health_summary:
-            parts.append(f"**Overview**: {profile.health_summary[:300]}")
-
-        if profile.disease_patterns and isinstance(profile.disease_patterns, dict):
-            rc = profile.disease_patterns.get("recurrent_conditions", [])
-            if rc:
-                parts.append(f"**Common Issues**: {', '.join(str(c) for c in rc[:5])}")
-
-        if profile.medication_history and isinstance(profile.medication_history, dict):
-            cur = profile.medication_history.get("current", [])
-            if cur:
-                parts.append(f"**Medication History**: {', '.join(str(m) for m in cur[:5])}")
-            ar = profile.medication_history.get("adverse_reactions", [])
-            if ar:
-                parts.append(f"**Adverse Reactions**: {', '.join(str(a) for a in ar[:5])}")
-
-        if profile.risk_factors and isinstance(profile.risk_factors, dict):
-            risks = [f"{k}: {v}" for k, v in profile.risk_factors.items() if v]
-            if risks:
-                parts.append(f"**Risk Factors**: {'; '.join(risks[:5])}")
-
-        return "\n".join(parts) + "\n"
-
-    except Exception:
-        return ""
+async def _patient_history_with_profile(db, patient_id, history=None):
+    profile_context = await _load_health_profile_context(db, patient_id)
+    if not profile_context:
+        return history
+    return profile_context + ("\n本次对话病史：\n" + history if history else "")
 
 
 async def _build_conversation_context(
@@ -406,6 +419,10 @@ async def _build_chat_context(
             pass
 
     parts.append("---\nRespond based on all above context.")
+    if user_id:
+        health_context = await _load_health_profile_context(db, user_id)
+        if health_context:
+            parts.append(health_context)
     context_text = "\n".join(parts)
 
     import logging as _diag_log
@@ -447,6 +464,10 @@ def _diagnosis_report_to_markdown(report: dict[str, Any]) -> str:
         "low": "低",
     }
 
+    if report.get("interview_is_sufficient") is False:
+        lines.append("### 阶段摘要：仍有信息待核对")
+        lines.append("已整理目前提供的信息；停止补问不表示信息已充分。")
+        lines.extend(f"- {gap}" for gap in report.get("interview_information_gaps", []))
     lines.append("### \ud83c\udfe5 \u521d\u6b65\u8bca\u65ad")
     lines.append("**" + report.get("primary_diagnosis", _unknown) + "**")
     lines.append("")
@@ -504,10 +525,75 @@ def _diagnosis_report_to_markdown(report: dict[str, Any]) -> str:
         lines.append("\u9700\u8981\u968f\u8bbf\uff0c\u65f6\u95f4: " + report.get("follow_up_timeline", _pending))
         lines.append("")
 
-    if report.get("knowledge_sources"):
+    citations = report.get("knowledge_citations")
+    valid_citations = [
+        citation for citation in citations
+        if isinstance(citation, dict)
+        and isinstance(citation.get("citation_id"), str)
+        and re.fullmatch(r"S\d+", citation["citation_id"])
+        and isinstance(citation.get("title"), str)
+        and isinstance(citation.get("excerpt"), str)
+        and citation.get("source_type") in {"internal", "external"}
+    ] if isinstance(citations, list) else []
+    if valid_citations:
         lines.append("### \ud83d\udcda \u77e5\u8bc6\u6765\u6e90")
-        for s in report["knowledge_sources"]:
-            lines.append("- " + str(s))
+        lines.append("引用可追溯不等于陈述已获原文支持；原文一致也不代表医学适用性已审核。")
+        for citation in valid_citations:
+            citation_id = citation["citation_id"]
+            title = citation["title"].replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+            excerpt = citation["excerpt"].replace("\r", " ").replace("\n", " ").replace("\t", " ")
+            if citation["source_type"] == "internal":
+                lines.append(f"- [{citation_id}] **内部知识库｜{title}**")
+                document_id = citation.get("document_id")
+                chunk_id = citation.get("chunk_id")
+                chunk_index = citation.get("chunk_index")
+                locator = []
+                if isinstance(document_id, str) and document_id:
+                    locator.append(f"文档ID：{document_id}")
+                if isinstance(chunk_index, int):
+                    locator.append(f"片段序号：{chunk_index + 1}")
+                if isinstance(chunk_id, str) and chunk_id:
+                    locator.append(f"片段ID：{chunk_id}")
+                if locator:
+                    lines.append("  - " + "；".join(locator))
+            else:
+                lines.append(f"- [{citation_id}] **外部来源｜{title}**")
+                url = citation.get("url")
+                if isinstance(url, str):
+                    parsed_url = urlsplit(url.strip())
+                    if (
+                        parsed_url.scheme in {"http", "https"}
+                        and parsed_url.hostname
+                        and not any(char.isspace() or char in "<>" for char in url)
+                    ):
+                        lines.append(f"  - 链接：<{url.strip()}>")
+            if excerpt:
+                lines.append(f"  - 摘录：{excerpt}")
+            evidence = report.get("knowledge_evidence")
+            rows = [row for row in evidence if isinstance(row, dict) and row.get("citation_id") == citation_id] if isinstance(evidence, list) else []
+            for row in rows:
+                status = "原文一致（适用性待专业核对）" if evidence_matches_excerpt(row, citation) else "待核对"
+                lines.append(f"  - {status}：{row.get('claim', '')}")
+            if not rows:
+                lines.append("  - 尚无逐条原文核对记录。")
+        lines.append("")
+    elif report.get("knowledge_sources"):
+        lines.append("### \ud83d\udcda \u77e5\u8bc6\u6765\u6e90")
+        lines.append("以下为旧版来源名称，缺少逐条检索记录，暂无法核验。")
+        for source in report["knowledge_sources"]:
+            lines.append("- " + str(source))
+        lines.append("")
+    elif report.get("knowledge_retrieval_status") == "retrieved_not_cited":
+        lines.append("### \ud83d\udcda \u77e5\u8bc6\u6765\u6e90")
+        lines.append("本次检索到了资料，但报告未建立逐条引用，因此不将其列为已引用依据。")
+        lines.append("")
+    elif report.get("knowledge_retrieval_status") == "failed":
+        lines.append("### \ud83d\udcda \u77e5\u8bc6\u6765\u6e90")
+        lines.append("本次知识检索失败，报告未附可核验的知识来源。")
+        lines.append("")
+    elif report.get("knowledge_retrieval_status") == "no_sources":
+        lines.append("### \ud83d\udcda \u77e5\u8bc6\u6765\u6e90")
+        lines.append("本次没有检索到可核验的知识来源。")
         lines.append("")
 
     disclaimer = report.get("disclaimer")
@@ -533,6 +619,32 @@ class RouteRequest(BaseModel):
     patient_id: str | None = Field(None, description="Patient UUID if authenticated")
     patient_history: str | None = Field(None, max_length=5000)
     provider: str | None = None
+
+
+class RouteStreamRequest(BaseModel):
+    """流式问诊提交；病史与主诉放在请求体，避免进入访问日志 URL。"""
+
+    message: str = Field(..., min_length=1, max_length=2000)
+    session_id: str | None = Field(None, max_length=36)
+    patient_history: str | None = Field(None, max_length=3000)
+    provider: str | None = None
+
+
+def _reject_query_auth_token(request: Request) -> None:
+    """患者模型 SSE 只接受 Header/Cookie 凭证，避免令牌进入 URL 日志。"""
+    if any(name in request.query_params for name in ("token", "guest_token", "access_token")):
+        raise HTTPException(
+            status_code=400,
+            detail="请通过请求头传递认证凭据。",
+        )
+
+
+def _reject_patient_text_in_query(request: Request, *field_names: str) -> None:
+    if any(name in request.query_params for name in field_names):
+        raise HTTPException(
+            status_code=400,
+            detail="患者内容必须放在请求体中。",
+        )
 
 
 class DiagnosisRequest(BaseModel):
@@ -584,6 +696,32 @@ class SessionListResponse(BaseModel):
     updated_at: str
 
 
+def _resolve_patient_scope(ctx: UserContext, requested_patient_id: str | None) -> str | None:
+    """拒绝请求体指定他人身份；未指定时沿用当前会话身份。"""
+    if requested_patient_id is not None:
+        try:
+            requested_id = uuid.UUID(requested_patient_id)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Patient identity must come from the authenticated session",
+            ) from exc
+
+        if (
+            ctx.user is None
+            or ctx.user.role != UserRole.PATIENT
+            or requested_id != ctx.user.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Patient identity must come from the authenticated session",
+            )
+
+    if ctx.user is not None:
+        return str(ctx.user.id)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -591,94 +729,154 @@ class SessionListResponse(BaseModel):
 @router.post("/route", status_code=status.HTTP_200_OK)
 async def route_request(
     req: RouteRequest,
-    ctx: CurrentUserContext,
+    ctx: CurrentUserOrActiveGuest,
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     """MasterAgent: classify intent and route to the appropriate Agent."""
-    orchestrator = AgentOrchestrator(provider=req.provider, platform=ctx.platform)
-    patient_id = req.patient_id or (str(ctx.user.id) if ctx.user else None)
-    return await orchestrator.route(
-        user_input=req.message,
-        patient_id=patient_id,
-        patient_history=req.patient_history,
+    patient_id = _resolve_patient_scope(ctx, req.patient_id)
+    async def _run() -> dict[str, Any]:
+        orchestrator = AgentOrchestrator(provider=req.provider, platform=ctx.platform)
+        return await orchestrator.route(
+            user_input=req.message,
+            patient_id=patient_id,
+            patient_history=await _patient_history_with_profile(db, patient_id, req.patient_history),
+        )
+
+    return await run_guest_submission(
+        db,
+        ctx,
+        submission_id=idempotency_key,
+        endpoint="agents.route",
+        request_payload=req.model_dump(mode="json"),
+        operation=_run,
     )
 
 
 @router.post("/diagnose", status_code=status.HTTP_200_OK)
 async def diagnose(
     req: DiagnosisRequest,
-    ctx: CurrentUserContext,
+    ctx: CurrentUserOrActiveGuest,
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     """DiagnosisAgent: structured diagnosis with Tool Use."""
-    agent = DiagnosisAgent(provider=req.provider)
-    result = await agent.analyze(
-        symptoms=req.symptoms,
-        patient_id=req.patient_id or (str(ctx.user.id) if ctx.user else None),
-        patient_history=req.patient_history,
-        test_results=req.test_results,
+    patient_id = _resolve_patient_scope(ctx, req.patient_id)
+    async def _run() -> dict[str, Any]:
+        agent = DiagnosisAgent(provider=req.provider)
+        try:
+            result = await agent.analyze(
+                symptoms=req.symptoms,
+                patient_id=patient_id,
+                patient_history=await _patient_history_with_profile(db, patient_id, req.patient_history),
+                test_results=req.test_results,
+            )
+        except MedicalEvidenceUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=patient_llm_error(exc)) from exc
+        return {
+            "agent": "diagnosis",
+            "structured": result.structured_output.model_dump() if result.structured_output else None,
+            "content": result.content,
+            "tool_calls_used": result.tool_calls_used,
+            "session_id": result.session_id,
+        }
+
+    return await run_guest_submission(
+        db,
+        ctx,
+        submission_id=idempotency_key,
+        endpoint="agents.diagnose",
+        request_payload=req.model_dump(mode="json"),
+        operation=_run,
     )
-    return {
-        "agent": "diagnosis",
-        "structured": result.structured_output.model_dump() if result.structured_output else None,
-        "content": result.content,
-        "tool_calls_used": result.tool_calls_used,
-        "session_id": result.session_id,
-    }
 
 
 @router.post("/plan", status_code=status.HTTP_200_OK)
 async def plan_treatment(
     req: PlanningRequest,
-    ctx: CurrentUserContext,
+    ctx: CurrentUserOrActiveGuest,
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     """PlanningAgent: structured treatment plan."""
-    agent = PlanningAgent(provider=req.provider)
-    result = await agent.plan(
-        diagnosis=req.diagnosis,
-        patient_profile=req.patient_profile,
-        constraints=req.constraints,
+    async def _run() -> dict[str, Any]:
+        agent = PlanningAgent(provider=req.provider)
+        result = await agent.plan(
+            diagnosis=req.diagnosis,
+            patient_profile=req.patient_profile,
+            constraints=req.constraints,
+        )
+        return {
+            "agent": "planning",
+            "structured": result.structured_output.model_dump() if result.structured_output else None,
+            "content": result.content,
+        }
+
+    return await run_guest_submission(
+        db,
+        ctx,
+        submission_id=idempotency_key,
+        endpoint="agents.plan",
+        request_payload=req.model_dump(mode="json"),
+        operation=_run,
     )
-    return {
-        "agent": "planning",
-        "structured": result.structured_output.model_dump() if result.structured_output else None,
-        "content": result.content,
-    }
 
 
 @router.post("/monitor", status_code=status.HTTP_200_OK)
 async def monitor(
     req: MonitoringRequest,
-    ctx: CurrentUserContext,
+    ctx: CurrentUserOrActiveGuest,
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     """MonitoringAgent: structured monitoring assessment."""
-    agent = MonitoringAgent(provider=req.provider)
-    result = await agent.check(
-        patient_updates=req.patient_updates,
-        baseline_status=req.baseline_status,
-        current_plan=req.current_plan,
+    async def _run() -> dict[str, Any]:
+        agent = MonitoringAgent(provider=req.provider)
+        result = await agent.check(
+            patient_updates=req.patient_updates,
+            baseline_status=req.baseline_status,
+            current_plan=req.current_plan,
+        )
+        return {
+            "agent": "monitoring",
+            "structured": result.structured_output.model_dump() if result.structured_output else None,
+            "content": result.content,
+        }
+
+    return await run_guest_submission(
+        db,
+        ctx,
+        submission_id=idempotency_key,
+        endpoint="agents.monitor",
+        request_payload=req.model_dump(mode="json"),
+        operation=_run,
     )
-    return {
-        "agent": "monitoring",
-        "structured": result.structured_output.model_dump() if result.structured_output else None,
-        "content": result.content,
-    }
 
 
 @router.post("/consult", status_code=status.HTTP_200_OK)
 async def full_consultation(
     req: ConsultationRequest,
-    ctx: CurrentUserContext,
+    ctx: CurrentUserOrActiveGuest,
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     """Full multi-agent consultation (diagnosis + plan + monitoring)."""
-    orchestrator = AgentOrchestrator(provider=req.provider, platform=ctx.platform)
-    patient_id = req.patient_id or (str(ctx.user.id) if ctx.user else None)
-    return await orchestrator.route(
-        user_input=req.symptoms,
-        patient_id=patient_id,
-        patient_history=req.patient_history,
+    patient_id = _resolve_patient_scope(ctx, req.patient_id)
+    async def _run() -> dict[str, Any]:
+        orchestrator = AgentOrchestrator(provider=req.provider, platform=ctx.platform)
+        return await orchestrator.route(
+            user_input=req.symptoms,
+            patient_id=patient_id,
+            patient_history=req.patient_history,
+        )
+
+    return await run_guest_submission(
+        db,
+        ctx,
+        submission_id=idempotency_key,
+        endpoint="agents.consult",
+        request_payload=req.model_dump(mode="json"),
+        operation=_run,
     )
 
 
@@ -825,20 +1023,18 @@ async def store_lab_reports(
     await db.commit()
     return {"status": "stored", "session_id": session_id, "count": len(lab_reports)}
 
-@router.get("/route/stream")
+@router.post("/route/stream")
 async def route_stream(
-    message: str,
+    req: RouteStreamRequest,
     request: Request,
-    ctx: CurrentUserContextLenient,
+    ctx: CurrentUserContextLenientNoQuery,
     db: AsyncSession = Depends(get_db),
-    patient_id: str | None = None,
-    patient_history: str | None = None,
-    provider: str | None = None,
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> StreamingResponse:
     """MasterAgent intent classification + streaming multi-agent response via SSE.
 
-    Frontend connects via:
-        const es = new EventSource(`/api/v1/agents/route/stream?message=...`)
+    Frontend connects with fetch + ReadableStream SSE so credentials and patient
+    text stay out of the URL.
 
     SSE Events:
         intent          →  MasterAgent 意图分类结果
@@ -851,35 +1047,21 @@ async def route_stream(
         complete        →  流结束
         error           →  错误
     """
-    # Auto-create guest session only when no Bearer token was attempted.
-    # Registered users with expired Bearer tokens should get 401 so their
-    # frontend can trigger a token refresh — NOT silently downgrade to guest.
+    _reject_query_auth_token(request)
+    _reject_patient_text_in_query(request, "message", "patient_history")
     has_bearer = request.headers.get("Authorization", "").startswith("Bearer ")
-    if not has_bearer and ctx.user is None and not ctx.is_guest:
-        from app.models.user import GuestSession
-        from app.core.security import create_guest_token
-        import uuid as _uuid
-        session_token = _uuid.uuid4().hex
-        guest = GuestSession(
-            session_token=session_token,
-            fingerprint="sse-auto",
-            max_messages=999,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-        )
-        db.add(guest)
-        await db.commit()
-        await db.refresh(guest)
-        token = create_guest_token(str(guest.id), "sse-auto", platform="web")
-        ctx = UserContext(user=None, platform="web", is_guest=True, guest_id=str(guest.id))
-        # Send the new token to the client via SSE so frontend can update localStorage
-        # (this is a best-effort — EventSource fires onopen first, then we yield)
-
     # Registered user with expired Bearer token: return 401 so frontend refreshes
     if has_bearer and ctx.user is None and not ctx.is_guest:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired. Please refresh.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if ctx.user is None and not ctx.is_guest:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="请先创建访客会话再发起问诊。",
         )
 
     if ctx.is_guest and ctx.guest_id:
@@ -890,7 +1072,13 @@ async def route_stream(
         if guest is None or guest.expires_at <= datetime.now(timezone.utc):
             raise HTTPException(status_code=401, detail="Guest session has expired")
 
-    query_sid = request.query_params.get("session_id")
+    message = req.message
+    submission_id = idempotency_key
+    query_sid = req.session_id
+    patient_history = await _patient_history_with_profile(
+        db, str(ctx.user.id) if ctx.user else None, req.patient_history,
+    )
+    provider = req.provider
     if query_sid:
         try:
             queried_session = await db.get(AgentSession, uuid.UUID(query_sid))
@@ -902,10 +1090,6 @@ async def route_stream(
     async def event_generator():
         completed_case_id: str | None = None
         try:
-                # Emit new guest token if one was auto-created
-                if ctx.is_guest and ctx.guest_id:
-                    yield f"event: guest_token\ndata: {json.dumps({'guest_token': getattr(ctx, '_new_token', None) or ''})}\n\n"
-
                 master = AgentOrchestrator(provider=provider, platform=ctx.platform)
                 actual_patient_id = str(ctx.user.id) if ctx.user else None
 
@@ -1101,6 +1285,14 @@ async def route_stream(
                             except Exception:
                                 pass
 
+                        if not session_id:
+                            yield _patient_error_event(
+                                "DIAGNOSIS_SESSION_CREATION_FAILED",
+                                "诊断会话未能保存，本次未生成诊断报告，请稍后重试。",
+                                "initial_session_creation",
+                            )
+                            return
+
                         diag_agent = DiagnosisAgent(provider=provider, platform=ctx.platform)
 
                         if session_id:
@@ -1119,7 +1311,7 @@ async def route_stream(
                                         q_list.append({
                                             "question_id": nq.question_id, "question": nq.question, "type": nq.type,
                                             "options": nq.options, "hint": nq.hint, "allow_skip": nq.allow_skip,
-                                            "phase": nq.phase, "colloquial_phase": nq.colloquial_phase,
+                                            "phase": nq.phase, "colloquial_phase": nq.colloquial_phase, "reason": nq.reason,
                                         })
                                     yield f"event: question\ndata: {json.dumps({'questions': q_list})}\n\n"
                                     yield f"event: complete\ndata: {json.dumps({'status': 'waiting_for_answer', 'session_id': session_id})}\n\n"
@@ -1127,6 +1319,10 @@ async def route_stream(
                                 elif state.red_flags_detected:
                                     yield f"event: red_flags\ndata: {json.dumps({'red_flags': state.red_flags_detected, 'message': '检测到危险信号，建议立即就医'})}\n\n"
                                     # Do NOT return — proceed to diagnosis with red flags included
+
+                                if action == "ask":
+                                    yield f"event: complete\ndata: {json.dumps({'status': 'waiting_for_answer', 'session_id': session_id})}\n\n"
+                                    return
 
                                 # Redis lock first — prevent concurrent diagnoses
                                 from app.db.redis_client import get_redis
@@ -1137,7 +1333,8 @@ async def route_stream(
                                     yield f"event: complete\ndata: {json.dumps({'status': 'already_diagnosed', 'session_id': session_id})}\n\n"
                                     return
 
-                                yield f"event: thinking\ndata: {json.dumps({'step': 'diagnosis', 'message': '🧠 问诊信息充足，正在综合分析并搜索医学知识...'})}\n\n"
+                                stage_message = '🧠 正在整理阶段摘要，未确认的信息会保留...' if not state.is_sufficient else '🧠 正在整理问诊信息并检索参考资料...'
+                                yield f"event: thinking\ndata: {json.dumps({'step': 'diagnosis', 'message': stage_message})}\n\n"
 
                                 workflow_result = await diag_agent.run_full_diagnosis_workflow(
                                     session_id=session_id,
@@ -1162,8 +1359,12 @@ async def route_stream(
                                                 fallback_chief_complaint=message,
                                             )
                                             completed_case_id = str(saved_case.id)
-                                        except DiagnosisCasePersistenceError as exc:
-                                            yield f"event: error\ndata: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+                                        except DiagnosisCasePersistenceError:
+                                            yield _patient_error_event(
+                                                "CASE_PERSISTENCE_FAILED",
+                                                "诊断结果未能保存为病例，本次未标记为已保存，请稍后重试。",
+                                                "initial_case_persistence",
+                                            )
                                             return
                                     yield f"event: structured\ndata: {json.dumps(report)}\n\n"
                                     report_md = _diagnosis_report_to_markdown(report)
@@ -1178,70 +1379,15 @@ async def route_stream(
                             except Exception as exc:
                                 from app.services.orchestrator import InterviewGenerationError
                                 if isinstance(exc, InterviewGenerationError):
-                                    yield f"event: error\ndata: {json.dumps({'message': str(exc)})}\n\n"
+                                    yield _patient_llm_error_event(
+                                        exc,
+                                        "initial_interview",
+                                        code="INTERVIEW_GENERATION_FAILED",
+                                        message="问诊问题生成失败，请重试；本次未跳过问诊生成诊断报告。",
+                                    )
                                     return
-                                import logging as _interview_log
-                                _interview_log.getLogger("agents").exception(
-                                    "Initial interview failed; refusing to bypass question generation"
-                                )
-                                yield f"event: error\ndata: {json.dumps({'message': '问诊问题生成失败，请重试；本次未跳过问诊生成诊断报告。'}, ensure_ascii=False)}\n\n"
+                                yield _patient_llm_error_event(exc, "initial_interview")
                                 return
-
-                        _msg_start = "🧠 DiagnosisAgent 正在启动真实诊断分析..."
-                        yield f"event: thinking\ndata: {json.dumps({'step': 'diagnosis', 'message': _msg_start})}\n\n"
-
-                        try:
-                            result = await diag_agent.analyze(
-                                symptoms=message,
-                                patient_id=actual_patient_id,
-                                patient_history=patient_history,
-                                session_id=session_id,
-                            )
-
-                            # 流式展示真实工具调用记录
-                            if result.tool_calls_used:
-                                for tc in result.tool_calls_used:
-                                    tool_name = tc.get("tool", "unknown")
-                                    args = tc.get("arguments", {})
-                                    _tc_msg = "\ud83d\udd0d \u6b63\u5728\u6267\u884c " + tool_name + "..."
-                                    yield f"event: tool_call\ndata: {json.dumps({'tool': tool_name, 'params': args, 'message': _tc_msg})}\n\n"
-                                    await asyncio.sleep(0.2)
-                                    result_data = tc.get("result", {})
-                                    _tr_msg = "\u2705 " + tool_name + " \u6267\u884c\u5b8c\u6210"
-                                    yield f"event: tool_result\ndata: {json.dumps({'tool': tool_name, 'result': result_data, 'message': _tr_msg})}\n\n"
-
-                            _msg_analyze = "\ud83e\udde0 DiagnosisAgent \u6b63\u5728\u7efc\u5408\u5206\u6790\u5e76\u751f\u6210\u7ed3\u6784\u5316\u62a5\u544a..."
-                            yield f"event: thinking\ndata: {json.dumps({'step': 'diagnosis', 'message': _msg_analyze})}\n\n"
-
-                            # 输出结构化报告
-                            if result.structured_output:
-                                structured_data = result.structured_output.model_dump()
-                                if actual_patient_id and session_id:
-                                    try:
-                                        saved_case = await persist_diagnosis_case(
-                                            db,
-                                            patient_id=uuid.UUID(actual_patient_id),
-                                            source_session_id=uuid.UUID(session_id),
-                                            report=structured_data,
-                                            fallback_chief_complaint=message,
-                                        )
-                                        completed_case_id = str(saved_case.id)
-                                    except DiagnosisCasePersistenceError as exc:
-                                        yield f"event: error\ndata: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
-                                        return
-                                yield f"event: structured\ndata: {json.dumps(structured_data)}\n\n"
-
-                                report_md = _diagnosis_report_to_markdown(structured_data)
-                                for chunk in _chunk_text(report_md, chunk_size=80):
-                                    yield f"event: text\ndata: {json.dumps({'text': chunk})}\n\n"
-                            else:
-                                content = result.content if isinstance(result.content, str) else json.dumps(result.content, ensure_ascii=False)
-                                for chunk in _chunk_text(content, chunk_size=80):
-                                    yield f"event: text\ndata: {json.dumps({'text': chunk})}\n\n"
-                        except Exception as e:
-                            _err_msg = "\u8bca\u65ad\u5206\u6790\u5931\u8d25: " + str(e)
-                            yield f"event: error\ndata: {json.dumps({'error': _err_msg})}\n\n"
-                            return
 
                     else:
                         # 其他意图走通用 LLM 流
@@ -1253,25 +1399,28 @@ async def route_stream(
                             ):
                                 yield f"event: text\ndata: {json.dumps({'text': chunk})}\n\n"
                         except Exception as e:
-                            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                            yield _patient_llm_error_event(e, "general_chat")
                             return
 
                 yield f"event: complete\ndata: {json.dumps({'message': '✅ 响应完成', 'case_id': completed_case_id})}\n\n"
 
-        except BaseException as e:
-            if isinstance(e, (KeyboardInterrupt, SystemExit)):
-                raise
-            import traceback
-            import logging as _logmod
-            _log = _logmod.getLogger("agents")
-            _log.error("[STREAM-FATAL] error=%s type=%s\n%s", e, type(e).__name__, traceback.format_exc())
-            try:
-                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
-            except BaseException:
-                pass
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
+        except asyncio.CancelledError:
+            _log_patient_llm_interruption("initial_stream")
+            raise
+        except Exception as e:
+            yield _patient_llm_error_event(e, "initial_stream")
+    return await stream_guest_submission(
+        db,
+        ctx,
+        submission_id=submission_id,
+        endpoint="agents.route.stream",
+        request_payload={
+            "message": message,
+            "session_id": query_sid,
+            "patient_history": patient_history,
+            "provider": provider,
+        },
+        event_generator=event_generator,
         headers={
             "X-Accel-Buffering": "no",
             "Cache-Control": "no-cache",
@@ -1280,33 +1429,31 @@ async def route_stream(
     )
 
 
-@router.api_route("/route/stream/continue", methods=["GET", "POST"])
+@router.post("/route/stream/continue")
 async def route_stream_continue(
     request: Request,
-    ctx: CurrentUserContextLenient,
+    ctx: CurrentUserContextLenientNoQuery,
     session_id: str = Query(...),
     question_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> StreamingResponse:
-    """Continue an interrupted interview/diagnosis stream after user answers.
-
-    Gets answer from X-Answer header (base64) to avoid URL length + HTTP/2 issues."""
-    _answer = ""
-    x_answer = request.headers.get("X-Answer") or request.headers.get("x-answer")
-    if x_answer:
-        try:
-            import base64
-            _answer = base64.b64decode(x_answer).decode("utf-8")
-        except Exception:
-            _answer = ""
-    if not _answer and request.method == "POST":
+    """Continue an interrupted interview/diagnosis stream after user answers."""
+    _reject_query_auth_token(request)
+    _reject_patient_text_in_query(request, "answer")
+    if request.method == "POST":
         try:
             body = await request.json()
-            _answer = body.get("answer") or ""
-        except Exception:
-            _answer = ""
-    if not _answer:
-        _answer = request.query_params.get("answer") or "无"
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="续答内容格式无效。") from exc
+    else:
+        # 路由只注册 POST；保留直接调用时的空答案默认值。
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="续答内容格式无效。")
+    _answer = body.get("answer") or "无"
+    if not isinstance(_answer, str):
+        raise HTTPException(status_code=400, detail="续答内容格式无效。")
 
     try:
         session = await db.get(AgentSession, uuid.UUID(session_id))
@@ -1315,6 +1462,10 @@ async def route_stream_continue(
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     await _require_session_access(db, session, ctx)
+
+    patient_history = await _patient_history_with_profile(
+        db, str(session.user_id) if session.user_id else None,
+    )
 
     async def event_generator():
         completed_case_id: str | None = None
@@ -1339,17 +1490,16 @@ async def route_stream_continue(
                         session_id=session_id,
                         question_id=question_id,
                         answer=_answer,
+                        patient_history=patient_history,
                     )
                     _lmod2.getLogger("debug.continue").info("[DEBUG-CONT] action=%s questions=%d is_sufficient=%s phase=%s red_flags=%d",
                                action, len(questions), state.is_sufficient, state.phase, len(state.red_flags_detected))
                 except Exception as e:
-                    import logging as _lmod
-                    _lmod.getLogger("debug.continue").error("[DEBUG-CONT] interview_answer failed: %s", e)
-                    yield f"event: error\ndata: {json.dumps({'error': f'Interview error: {e}'})}\n\n"
+                    yield _patient_llm_error_event(e, "followup_interview")
                     return
 
                 # Interview already completed (phase=completed, regeneration exhausted)
-                if action == "completed":
+                if action == "completed" and (session.structured_output or {}).get("knowledge_citations"):
                     report = session.structured_output
                     if session.user_id is not None and report:
                         try:
@@ -1361,8 +1511,12 @@ async def route_stream_continue(
                                 fallback_chief_complaint="患者问诊",
                             )
                             completed_case_id = str(saved_case.id)
-                        except DiagnosisCasePersistenceError as exc:
-                            yield f"event: error\ndata: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+                        except DiagnosisCasePersistenceError:
+                            yield _patient_error_event(
+                                "CASE_PERSISTENCE_FAILED",
+                                "诊断结果未能保存为病例，本次未标记为已保存，请稍后重试。",
+                                "followup_case_persistence",
+                            )
                             return
                     elif session.user_id is not None:
                         yield f"event: error\ndata: {json.dumps({'error': '诊断报告尚未保存，暂不能确认病例状态'}, ensure_ascii=False)}\n\n"
@@ -1370,12 +1524,16 @@ async def route_stream_continue(
                     yield f"event: complete\ndata: {json.dumps({'status': 'already_diagnosed', 'session_id': session_id, 'case_id': completed_case_id})}\n\n"
                     return
 
+                if action == "completed":
+                    # 前一次检索失败或旧报告无来源，允许重试证据链，不能永久卡在空报告。
+                    action = "synthesize"
+
                 if searches:
                     yield f"event: thinking\ndata: {json.dumps({'step': 'search', 'message': '🔍 后台搜索中...'})}\n\n"
 
                 if questions:
                     yield f"event: interview_progress\ndata: {json.dumps({'asked_count': len(state.asked_questions)})}\n\n"
-                    q_list = [{"question_id": nq.question_id, "question": nq.question, "type": nq.type, "options": nq.options, "hint": nq.hint, "allow_skip": nq.allow_skip, "phase": nq.phase, "colloquial_phase": nq.colloquial_phase} for nq in questions]
+                    q_list = [{"question_id": nq.question_id, "question": nq.question, "type": nq.type, "options": nq.options, "hint": nq.hint, "allow_skip": nq.allow_skip, "phase": nq.phase, "colloquial_phase": nq.colloquial_phase, "reason": nq.reason} for nq in questions]
                     yield f"event: question\ndata: {json.dumps({'questions': q_list})}\n\n"
                     yield f"event: complete\ndata: {json.dumps({'status': 'waiting_for_answer', 'session_id': session_id})}\n\n"
                     return
@@ -1384,7 +1542,7 @@ async def route_stream_continue(
                 if state.red_flags_detected:
                     yield f"event: red_flags\ndata: {json.dumps({'red_flags': state.red_flags_detected, 'message': '检测到危险信号，建议立即就医'})}\n\n"
 
-                if not state.is_sufficient:
+                if not state.is_sufficient and action != "synthesize":
                     import logging as _lmod3
                     _lmod3.getLogger("debug.continue").warning("[DEBUG-CONT] EMPTY CARDS — is_sufficient=False, no questions to show (DEADLOCK)")
                     yield f"event: complete\ndata: {json.dumps({'status': 'waiting_for_answer', 'session_id': session_id})}\n\n"
@@ -1392,7 +1550,7 @@ async def route_stream_continue(
                     return
 
                 # Interview complete — proceed to diagnosis using structured summary
-                _msg_start = "🧠 问诊完成，正在整理问诊信息..."
+                _msg_start = "🧠 正在整理阶段摘要，未确认的信息会保留..." if not state.is_sufficient else "🧠 正在整理问诊信息..."
                 yield f"event: thinking\ndata: {json.dumps({'step': 'diagnosis', 'message': _msg_start})}\n\n"
 
                 # Redis lock to prevent concurrent diagnoses
@@ -1414,6 +1572,7 @@ async def route_stream_continue(
                     result = await diag_agent.run_full_diagnosis_workflow(
                         session_id=session_id,
                         patient_id=str(session.user_id) if session.user_id else None,
+                        patient_history=patient_history,
                     )
 
                     if result.tool_calls_used:
@@ -1442,8 +1601,12 @@ async def route_stream_continue(
                                     fallback_chief_complaint="患者问诊",
                                 )
                                 completed_case_id = str(saved_case.id)
-                            except DiagnosisCasePersistenceError as exc:
-                                yield f"event: error\ndata: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+                            except DiagnosisCasePersistenceError:
+                                yield _patient_error_event(
+                                    "CASE_PERSISTENCE_FAILED",
+                                    "诊断结果未能保存为病例，本次未标记为已保存，请稍后重试。",
+                                    "followup_case_persistence",
+                                )
                                 return
                         yield f"event: structured\ndata: {json.dumps(structured_data)}\n\n"
 
@@ -1455,30 +1618,28 @@ async def route_stream_continue(
                         for chunk in _chunk_text(content, chunk_size=80):
                             yield f"event: text\ndata: {json.dumps({'text': chunk})}\n\n"
                 except Exception as e:
-                    import traceback, logging as _logmod
-                    _log = _logmod.getLogger("agents")
-                    _log.error("CONTINUE_DIAG_ERROR: %s\n%s", e, traceback.format_exc())
-                    _err_msg = f"诊断分析失败: {e}"
-                    yield f"event: error\ndata: {json.dumps({'error': _err_msg})}\n\n"
+                    yield _patient_llm_error_event(e, "followup_diagnosis")
                     return
 
                 yield f"event: complete\ndata: {json.dumps({'message': '✅ 响应完成', 'session_id': session_id, 'case_id': completed_case_id})}\n\n"
 
-        except BaseException as e:
-            if isinstance(e, (KeyboardInterrupt, SystemExit)):
-                raise
-            import traceback
-            import logging as _logmod
-            _log = _logmod.getLogger("agents")
-            _log.error("[CONTINUE-FATAL] error=%s type=%s\n%s", e, type(e).__name__, traceback.format_exc())
-            try:
-                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
-            except BaseException:
-                pass
+        except asyncio.CancelledError:
+            _log_patient_llm_interruption("followup_stream")
+            raise
+        except Exception as e:
+            yield _patient_llm_error_event(e, "followup_stream")
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
+    return await stream_guest_submission(
+        db,
+        ctx,
+        submission_id=idempotency_key,
+        endpoint="agents.route.stream.continue",
+        request_payload={
+            "session_id": session_id,
+            "question_id": question_id,
+            "answer": _answer,
+        },
+        event_generator=event_generator,
         headers={
             "X-Accel-Buffering": "no",
             "Cache-Control": "no-cache",
@@ -1501,9 +1662,12 @@ async def chat_session(
     session_id: str,
     req: ChatRequest,
     request: Request,
-    ctx: CurrentUserContextLenient,
+    ctx: CurrentUserContextLenientNoQuery,
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> StreamingResponse:
+    _reject_query_auth_token(request)
+    _reject_patient_text_in_query(request, "message", "patient_history")
     import uuid as _uuid
 
     try:
@@ -1532,20 +1696,21 @@ async def chat_session(
 
     actual_patient_id = str(ctx.user.id) if ctx.user and ctx.user.id else None
 
-    child = AgentSession(
-        user_id=parent.user_id,
-        guest_session_id=parent.guest_session_id,
-        session_type=AgentSessionType.CONVERSATION,
-        status=AgentSessionStatus.ACTIVE,
-        parent_session_id=parent.id,
-        context={"user_message": req.message},
-    )
-    db.add(child)
-    await db.commit()
-    await db.refresh(child)
-
     async def event_generator():
+        child: AgentSession | None = None
         try:
+            child = AgentSession(
+                user_id=parent.user_id,
+                guest_session_id=parent.guest_session_id,
+                session_type=AgentSessionType.CONVERSATION,
+                status=AgentSessionStatus.ACTIVE,
+                parent_session_id=parent.id,
+                context={"user_message": req.message},
+            )
+            db.add(child)
+            await db.commit()
+            await db.refresh(child)
+
             system_prompt = await _build_chat_context(db, parent, user_id=actual_patient_id)
 
             import logging as _llm_log_mod
@@ -1574,7 +1739,11 @@ async def chat_session(
                 )
                 child.status = AgentSessionStatus.FAILED
                 await db.commit()
-                yield f"event: error\ndata: {json.dumps({'error': 'AI 服务暂时繁忙，无法生成回复。请稍后重试。如急需解读报告，建议立即携带原始报告就医，由医生直接解读。'})}\n\n"
+                yield _patient_error_event(
+                    "LLM_EMPTY_RESPONSE",
+                    "AI 暂未生成有效回复，请保留当前内容后重试；如需解读报告，请携带原始报告咨询医生。",
+                    "post_diagnosis_chat",
+                )
                 return
 
             _llm_log.info("[CHAT-OK] session=%s response_chars=%d", session_id, len(full_response))
@@ -1589,12 +1758,25 @@ async def chat_session(
 
             yield f"event: complete\ndata: {json.dumps({'session_id': str(child.id), 'parent_session_id': str(parent.id)})}\n\n"
 
+        except asyncio.CancelledError:
+            if child is not None:
+                child.status = AgentSessionStatus.FAILED
+                await db.commit()
+            _log_patient_llm_interruption("post_diagnosis_chat")
+            raise
         except Exception as e:
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            if child is not None:
+                child.status = AgentSessionStatus.FAILED
+                await db.commit()
+            yield _patient_llm_error_event(e, "post_diagnosis_chat")
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
+    return await stream_guest_submission(
+        db,
+        ctx,
+        submission_id=idempotency_key,
+        endpoint="agents.sessions.chat",
+        request_payload={"session_id": session_id, "request": req.model_dump(mode="json")},
+        event_generator=event_generator,
         headers={
             "X-Accel-Buffering": "no",
             "Cache-Control": "no-cache",

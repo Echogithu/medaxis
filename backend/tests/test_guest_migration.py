@@ -242,6 +242,9 @@ async def test_failed_commit_rolls_back_all_guest_session_changes(
     guest, sessions = await _create_guest_with_sessions(db_session)
     guest_id = guest.id
     session_ids = [item.id for item in sessions]
+    user_id = user.id
+    migration_headers = _migration_headers(user, guest_id)
+    original_commit = db_session.commit
 
     async def fail_commit() -> None:
         raise RuntimeError("injected commit failure")
@@ -249,7 +252,7 @@ async def test_failed_commit_rolls_back_all_guest_session_changes(
     monkeypatch.setattr(db_session, "commit", fail_commit)
     response = await client.post(
         "/api/v1/auth/guest/migrate",
-        headers=_migration_headers(user, guest.id),
+        headers=migration_headers,
     )
 
     assert response.status_code == 500
@@ -259,6 +262,21 @@ async def test_failed_commit_rolls_back_all_guest_session_changes(
     unchanged = result.scalars().all()
     assert all(item.user_id is None for item in unchanged)
     assert all(item.guest_session_id == guest_id for item in unchanged)
+
+    monkeypatch.setattr(db_session, "commit", original_commit)
+    retry = await client.post(
+        "/api/v1/auth/guest/migrate",
+        headers=migration_headers,
+    )
+
+    assert retry.status_code == 200
+    assert retry.json() == {"migrated": len(sessions)}
+    result = await db_session.execute(
+        select(AgentSession).where(AgentSession.id.in_(session_ids))
+    )
+    migrated = result.scalars().all()
+    assert all(item.user_id == user_id for item in migrated)
+    assert all(item.guest_session_id is None for item in migrated)
 
 
 @pytest.mark.asyncio

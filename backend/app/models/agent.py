@@ -228,6 +228,8 @@ class PatientHealthProfile(Base):
     allergies: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=list)
     chronic_diseases: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=list)
     current_medications: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=list)
+    # 人工档案的状态、来源、更新时间和修订号；与 AI 画像独立保存。
+    record_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
 
     __table_args__ = (
         Index("ix_patient_health_profiles_patient_id", "patient_id"),

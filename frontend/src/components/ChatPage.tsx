@@ -1,22 +1,20 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
-  CssBaseline,
-  AppBar,
-  Toolbar,
-  IconButton,
   Typography,
   Fab,
   Paper,
   Avatar,
-  Chip,
+  Button,
+  Drawer,
+  useMediaQuery,
 } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import MonitorHeartRoundedIcon from '@mui/icons-material/MonitorHeartRounded';
-import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import Tooltip from '@mui/material/Tooltip';
 import type { ChatMessageItem, ChatSession, GuestStatus, SSEEvent, DiagnosisReport, WorkflowStep, InterviewQuestion } from '../types/agent';
@@ -25,7 +23,6 @@ import { uploadDocument, getParseResult } from '../api/documents';
 import { getToken } from '../api/client';
 import { generateId } from '../state/chatHistory';
 import type { ChatMode, SavedChatSession } from '../state/chatHistory';
-import Sidebar from './Sidebar';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import GuestBanner from './GuestBanner';
@@ -33,6 +30,9 @@ import PendingCardsPanel from './PendingCardsPanel';
 import FullScreenReport from './FullScreenReport';
 import UploadStatusBanner from './UploadStatusBanner';
 import ChatWelcome from './ChatWelcome';
+import ConsultationSidebar from './ConsultationSidebar';
+import DoctorHandoffDialog from './DoctorHandoffDialog';
+import { useRegisterChatNavigation } from '../patient/layout/chatNavigation';
 
 interface UploadItem {
   fileId: string;
@@ -64,15 +64,29 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
   const [session] = useState(initialSession);
   const currentSessionId = session.id;
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const requestedConsultationId = params.get('consultation_id');
+  const closeHandoff = () => { setHelpOpen(false); const next = new URLSearchParams(params); next.delete('consultation_id'); setParams(next, { replace: true }); };
+  const createdHandoff = (id: string) => { const next = new URLSearchParams(params); next.set('consultation_id', id); setParams(next, { replace: true }); };
+  const registerNavigation = useRegisterChatNavigation();
+  const [contextOpen, setContextOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const isDesktop = useMediaQuery('(min-width:1200px)');
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const [messages, setMessages] = useState<ChatMessageItem[]>(session.messages);
   const [isStreaming, setIsStreaming] = useState(false);
+  useEffect(() => {
+    registerNavigation({ sessions, currentSessionId, onSelectSession, onDeleteSession, busy: isStreaming });
+    return () => registerNavigation(null);
+  }, [registerNavigation, sessions, currentSessionId, onSelectSession, onDeleteSession, isStreaming]);
   const [showScrollDown, setShowScrollDown] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(() => new Set(session.answeredIds));
   const [reportData, setReportData] = useState<DiagnosisReport | null>(session.reportData);
   const [reportCaseId, setReportCaseId] = useState<string | null>(session.reportCaseId || null);
   const [showReport, setShowReport] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>(session.chatMode);
+  const [currentGuestStatus, setCurrentGuestStatus] = useState(guestStatus);
   const backendSessionIdRef = useRef<string | null>(session.backendSessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -85,6 +99,17 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
       status: message.uploadStatus === 'processing' ? 'parsing' : message.uploadStatus as 'completed' | 'failed' })));
   const uploadBannerDismissed = useRef(false);
   const failedFileAttempts = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => setCurrentGuestStatus(guestStatus), [guestStatus]);
+
+  const refreshGuestStatus = useCallback(async () => {
+    if (!localStorage.getItem('guest_token')) return;
+    try {
+      setCurrentGuestStatus(await agentApi.fetchGuestStatus());
+    } catch {
+      // Keep the last server-confirmed value if the status refresh is unavailable.
+    }
+  }, []);
 
   useEffect(() => {
     const firstMessage = messages.find(message => message.role === 'user');
@@ -116,6 +141,7 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     setShowScrollDown(!nearBottom);
+    setShowScrollTop(el.scrollTop > 240);
   }, []);
 
   const handleSend = useCallback(
@@ -135,6 +161,7 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
       setMessages((prev) => [...prev, userMsg]);
 
       setIsStreaming(true);
+      const submissionId = crypto.randomUUID();
       const agentMsgId = generateId();
       let content = '';
       let structured: DiagnosisReport | undefined;
@@ -190,12 +217,15 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
                   setIsStreaming(false);
                   break;
               }
-            }
+            },
+            submissionId,
           );
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : '连接失败，请检查网络后重试';
           setMessages((prev) => [...prev, { id: generateId(), role: 'agent', content: `❌ ${errorMessage}`, timestamp: new Date() }]);
           setIsStreaming(false);
+        } finally {
+          await refreshGuestStatus();
         }
         return;
       }
@@ -211,7 +241,12 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
 
       try {
         await agentApi.streamDiagnose(
-          { message: text, session_id: currentSessionId, patient_history: patientHistory },
+          {
+            message: text,
+            session_id: currentSessionId,
+            patient_history: patientHistory,
+            submission_id: submissionId,
+          },
           (event: SSEEvent) => {
             switch (event.event) {
               case 'intent': {
@@ -395,9 +430,10 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
         if (!pendingSessionRef.current?.sessionId) setChatMode('idle');
       } finally {
         setIsStreaming(false);
+        await refreshGuestStatus();
       }
     },
-    [isStreaming, currentSessionId, chatMode, messages]
+    [isStreaming, currentSessionId, chatMode, messages, refreshGuestStatus]
   );
 
   const handleInterviewAnswer = useCallback(
@@ -421,18 +457,19 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
       setMessages((prev) => [...prev, userAnswerMsg]);
 
       const processAnswer = async () => {
-        const activePending = pendingSessionRef.current;
-        if (!activePending?.sessionId) {
+      const activePending = pendingSessionRef.current;
+      if (!activePending?.sessionId) {
           setAnsweredIds((prev) => {
             const next = new Set(prev);
             next.delete(questionId);
             return next;
           });
           return;
-        }
+      }
 
-        setIsStreaming(true);
-        const agentMsgId = generateId();
+      setIsStreaming(true);
+      const submissionId = crypto.randomUUID();
+      const agentMsgId = generateId();
         let content = '';
         let structured: DiagnosisReport | undefined;
         const workflowSteps: WorkflowStep[] = [];
@@ -453,7 +490,12 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
 
         try {
           await agentApi.streamDiagnoseContinue(
-          { session_id: activePending.sessionId, question_id: questionId, answer },
+          {
+            session_id: activePending.sessionId,
+            question_id: questionId,
+            answer,
+            submission_id: submissionId,
+          },
           (event: SSEEvent) => {
             switch (event.event) {
               case 'thinking': {
@@ -554,7 +596,13 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
                 break;
               }
               case 'error': {
-                const errorMsg = (event.data?.message as string) || (event.data?.error as string) || '服务异常';
+                  const errorMsg = (event.data?.message as string) || (event.data?.error as string) || '服务异常';
+                  // 请求未生成报告，保留会话并重新开放当前卡片，允许重试检索。
+                  setAnsweredIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(questionId);
+                    return next;
+                  });
                 addStep({
                   type: 'thinking',
                   status: 'error',
@@ -636,6 +684,7 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
           if (!pendingSessionRef.current?.sessionId) setChatMode('idle');
         } finally {
           setIsStreaming(false);
+          await refreshGuestStatus();
         }
       };
 
@@ -644,7 +693,7 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
         .then(processAnswer)
         .finally(() => { queuedAnswerIdsRef.current.delete(questionId); });
     },
-    [chatMode]
+    [chatMode, refreshGuestStatus]
   );
 
   const handleQuickReply = useCallback(
@@ -724,65 +773,38 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
   }, [currentSessionId]);
 
   return (
-    <Box sx={{ display: 'flex', height: '100dvh', minHeight: 0, bgcolor: '#f3f6f4' }}>
-      <CssBaseline />
-      <Sidebar
-        sessions={sessions}
-        currentSessionId={currentSessionId}
-        onSelectSession={onSelectSession}
-        onNewSession={onNewSession}
-        onDeleteSession={onDeleteSession}
-        busy={isStreaming}
-        mobileOpen={mobileOpen}
-        onMobileClose={() => setMobileOpen(false)}
-        isGuest={!getToken()}
-      />
+    <Box sx={{ display: 'flex', height: '100%', minHeight: 0, bgcolor: '#f8fafc' }}>
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <AppBar position="static" elevation={0} sx={{ bgcolor: '#fff', borderBottom: '1px solid #e6ebe8' }}>
-          <Toolbar sx={{ minHeight: { xs: 58, sm: 64 }, px: { xs: 1.5, sm: 2.5 } }}>
-            <IconButton edge="start" onClick={() => setMobileOpen(true)} aria-label="打开导航菜单" sx={{ mr: 1.25, display: { md: 'none' }, color: '#456267' }}>
-              <MenuIcon />
-            </IconButton>
-            <Box sx={{ width: 34, height: 34, mr: 1.1, display: 'grid', placeItems: 'center', borderRadius: '11px', color: '#fff', bgcolor: '#178f82' }}>
-              <MonitorHeartRoundedIcon sx={{ fontSize: 20 }} />
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ color: '#173238', fontSize: 15, fontWeight: 800, lineHeight: 1.2 }}>医枢 MedAxis</Typography>
-              <Typography sx={{ display: { xs: 'none', sm: 'block' }, color: '#94a1a0', fontSize: 10, lineHeight: 1.2, mt: 0.25 }}>患者健康工作区</Typography>
-            </Box>
-            <Chip icon={<VerifiedUserOutlinedIcon sx={{ fontSize: '15px !important' }} />} label="隐私保护" size="small"
-              sx={{ mr: { xs: 0, sm: 1.5 }, display: { xs: 'none', sm: 'inline-flex' }, height: 28, color: '#52736f', bgcolor: '#edf7f3', border: '1px solid #dceee6', fontSize: 11, fontWeight: 650 }} />
-          </Toolbar>
-        </AppBar>
 
-        {guestStatus && (
+        {currentGuestStatus && (
           <GuestBanner
-            status={guestStatus}
-            onRegister={() => { window.location.href = '/register'; }}
-            onLogin={() => { window.location.href = '/login'; }}
+            status={currentGuestStatus}
+            onRegister={() => navigate('/register')}
+            onLogin={() => navigate('/login')}
           />
         )}
 
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', p: { xs: 1, sm: 1.75, lg: 2.5 }, bgcolor: '#f3f6f4' }}>
-          <Paper component="main" elevation={0} sx={{ width: '100%', maxWidth: 1320, height: '100%', minHeight: 0, mx: 'auto', display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid #e2eae6', borderRadius: { xs: '16px', sm: '21px' }, bgcolor: '#fff', boxShadow: '0 14px 38px rgba(34,61,55,.055)' }}>
-            <Box sx={{ minHeight: 64, px: { xs: 1.75, sm: 2.5 }, py: 1, display: 'flex', alignItems: 'center', gap: 1.25, borderBottom: '1px solid #edf1ee', bgcolor: '#fff' }}>
-              <Avatar variant="rounded" sx={{ width: 38, height: 38, borderRadius: '12px', bgcolor: '#178f82', color: '#fff' }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', p: { xs: 1, sm: 1.75, lg: 2.5 }, bgcolor: '#f8fafc' }}>
+          <Box sx={{ width: '100%', maxWidth: 1680, height: '100%', minHeight: 0, mx: 'auto', display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) minmax(300px, 0.45fr)' }, gap: 1.75 }}>
+          <Paper component="main" elevation={0} sx={{ position: 'relative', width: '100%', height: '100%', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '24px', bgcolor: '#fff', boxShadow: '0 10px 40px -10px rgba(15,23,42,.08)' }}>
+            <Box sx={{ minHeight: 64, px: { xs: 1.75, sm: 2.5 }, py: 1, display: 'flex', alignItems: 'center', gap: 1.25, borderBottom: '1px solid #f1f5f9', bgcolor: '#fff' }}>
+              <Avatar variant="rounded" sx={{ display: { xs: 'none', sm: 'flex' }, width: 38, height: 38, borderRadius: '12px', bgcolor: '#0d9488', color: '#fff' }}>
                 <MonitorHeartRoundedIcon sx={{ fontSize: 21 }} />
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ color: '#173238', fontSize: 14, fontWeight: 750, lineHeight: 1.25 }}>AI 问诊</Typography>
-                <Typography sx={{ mt: 0.3, color: '#8d9b9a', fontSize: 10.5, lineHeight: 1.2 }}>医疗健康助手</Typography>
+                <Typography sx={{ color: '#1e293b', fontSize: 14, fontWeight: 750, lineHeight: 1.25 }}>AI 问诊</Typography>
               </Box>
-              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.7, px: 1.1, py: 0.6, borderRadius: '999px', bgcolor: '#edf7f3', color: '#278174', fontSize: 10.5, fontWeight: 650, whiteSpace: 'nowrap' }}>
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#2c9a83' }} />服务在线
-              </Box>
+              <Button variant="contained" size="small" startIcon={<AddRoundedIcon />} onClick={onNewSession} disabled={isStreaming}
+                sx={{ flexShrink: 0, px: 1.5, minWidth: 0, minHeight: 44, borderRadius: '14px', fontSize: { xs: 12, sm: 13 }, bgcolor: 'primary.dark', '&:hover': { bgcolor: '#115e59' }, '& .MuiButton-startIcon': { mr: 0.75, '& svg': { fontSize: 18 } } }}>新建会话</Button>
+              {!isDesktop && <Button size="small" variant="outlined" onClick={() => setContextOpen(true)} aria-haspopup="dialog" sx={{ flexShrink: 0, px: 1, minWidth: 0, fontSize: 12, minHeight: 44 }}>问诊摘要</Button>}
             </Box>
 
             <Box
               ref={scrollRef}
               onScroll={handleScroll}
               aria-label="问诊消息"
-              sx={{ position: 'relative', flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 0.75, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2.5 }, display: 'flex', flexDirection: 'column', gap: 0.5, bgcolor: '#fbfcfb' }}
+              tabIndex={-1}
+              sx={{ position: 'relative', flex: 1, minHeight: 0, overflowY: 'auto', px: { xs: 0.75, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2.5 }, display: 'flex', flexDirection: 'column', gap: 0.5, bgcolor: '#f8fafc' }}
             >
               {session.interrupted && <Alert severity="info" sx={{ maxWidth: 1000, width: '100%', mx: 'auto', mb: 1, borderRadius: '12px' }}>上次回复被中断，已保留收到的内容；您可以继续回答问诊卡或重新发送问题。</Alert>}
               {messages.length === 0 && !session.interrupted && (
@@ -807,7 +829,7 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
               />
             )}
 
-            <Box sx={{ position: 'relative', px: { xs: 1.25, sm: 2.5 }, pt: { xs: 1.25, sm: 1.75 }, pb: { xs: 1.1, sm: 1.5 }, borderTop: '1px solid #edf1ee', bgcolor: '#fff' }}>
+            <Box sx={{ position: 'relative', px: { xs: 1.25, sm: 2.5 }, pt: { xs: 1.25, sm: 1.75 }, pb: { xs: 1.1, sm: 1.5 }, borderTop: '1px solid #f1f5f9', bgcolor: '#fff' }}>
               {(activeUploads.length > 0 || (chatMode === 'diagnosed' && !uploadBannerDismissed.current)) && (
                 <UploadStatusBanner
                   uploads={activeUploads}
@@ -832,27 +854,36 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
                   onFileUpload={handleFileUpload}
                   placeholder={
                     activeUploads.some((u) => u.status === 'parsing')
-                      ? '报告解读完成后提问效果更好哦～'
+                      ? '报告解析中，可继续描述症状…'
                       : undefined
                   }
                 />
               )}
-              <Typography sx={{ mt: 0.9, color: '#a0abaa', fontSize: 9.5, textAlign: 'center', lineHeight: 1.4 }}>
-                AI 建议供健康参考；紧急情况请及时就医
+              <Typography sx={{ mt: 0.9, color: '#64748b', fontSize: 12, textAlign: 'center', lineHeight: 1.4 }}>
+                AI 建议不能替代医生诊断；紧急情况请及时就医
               </Typography>
             </Box>
-          </Paper>
-        </Box>
-
         {showScrollDown && (
+          <Tooltip title="回到最新消息">
           <Fab
             size="small"
-            onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
-            sx={{ position: 'absolute', bottom: { xs: 94, sm: 116 }, right: { xs: reportData ? 74 : 18, sm: reportData ? 88 : 32 }, bgcolor: '#fff', color: '#178f82', border: '1px solid #e0e9e5', boxShadow: '0 6px 16px rgba(34,61,55,.12)' }}
+            aria-label="回到最新消息"
+            onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reduceMotion ? 'instant' : 'smooth' })}
+            sx={{ position: 'absolute', bottom: { xs: 94, sm: 116 }, right: { xs: reportData ? 74 : 18, sm: reportData ? 88 : 32 }, bgcolor: '#fff', color: '#0d9488', border: '1px solid #e0e9e5', boxShadow: '0 6px 16px rgba(34,61,55,.12)' }}
           >
             <KeyboardArrowDownIcon />
           </Fab>
+          </Tooltip>
         )}
+
+        {showScrollTop && <Tooltip title="回到问诊顶部">
+          <Fab size="small" aria-label="回到问诊顶部" onClick={() => {
+            scrollRef.current?.scrollTo({ top: 0, behavior: reduceMotion ? 'instant' : 'smooth' });
+            scrollRef.current?.focus({ preventScroll: true });
+          }} sx={{ position: 'absolute', bottom: { xs: showScrollDown ? 142 : 94, sm: showScrollDown ? 164 : 116 }, right: { xs: reportData ? 74 : 18, sm: reportData ? 88 : 32 }, bgcolor: '#fff', color: '#0d9488', border: '1px solid #e0e9e5', boxShadow: '0 6px 16px rgba(34,61,55,.12)', '&:hover': { bgcolor: '#eef7f3' } }}>
+            <KeyboardArrowUpRoundedIcon />
+          </Fab>
+        </Tooltip>}
 
         {reportData && (
           <Tooltip title="查看问诊总结">
@@ -860,19 +891,41 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
               size="small"
               aria-label="查看问诊总结"
               onClick={() => setShowReport(true)}
-              sx={{ position: 'absolute', bottom: { xs: 94, sm: 116 }, right: { xs: 18, sm: 32 }, bgcolor: '#178f82', color: '#fff', boxShadow: '0 8px 20px rgba(23,143,130,.24)', zIndex: 1200, '&:hover': { bgcolor: '#0c756b' } }}
+              sx={{ position: 'absolute', bottom: { xs: 94, sm: 116 }, right: { xs: 18, sm: 32 }, bgcolor: '#0d9488', color: '#fff', boxShadow: '0 8px 20px rgba(23,143,130,.24)', zIndex: 1200, '&:hover': { bgcolor: '#0f766e' } }}
             >
               <DescriptionOutlinedIcon />
             </Fab>
           </Tooltip>
         )}
 
+          </Paper>
+          {isDesktop && <Box sx={{ minHeight: 0, overflowY: 'auto', pb: 1 }}>
+            <ConsultationSidebar messages={messages} report={reportData} onOpenReport={() => setShowReport(true)} onRequestHelp={() => setHelpOpen(true)} />
+          </Box>}
+          </Box>
+        </Box>
+
       </Box>
+
+      <Drawer anchor="right" open={!isDesktop && contextOpen} onClose={() => setContextOpen(false)} slotProps={{ paper: { sx: { width: { xs: '100%', sm: 400 }, p: 2, bgcolor: '#f8fafc' }, role: 'dialog', 'aria-label': '问诊辅助信息' } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+          <Typography sx={{ fontWeight: 750, color: '#1e293b' }}>本次问诊</Typography>
+          <Button onClick={() => setContextOpen(false)} aria-label="关闭问诊摘要">关闭</Button>
+        </Box>
+        <ConsultationSidebar messages={messages} report={reportData} onOpenReport={() => { setContextOpen(false); setShowReport(true); }} onRequestHelp={() => { setContextOpen(false); setHelpOpen(true); }} />
+      </Drawer>
+
+      {(helpOpen || requestedConsultationId) && <DoctorHandoffDialog key={`${currentSessionId}-${requestedConsultationId || ''}`} caseId={reportCaseId} requestedId={requestedConsultationId} onClose={closeHandoff} onCreated={createdHandoff} />}
 
       <FullScreenReport
         report={reportData!}
         visible={!!reportData && showReport}
         onClose={() => setShowReport(false)}
+        onSupplement={() => {
+          setShowReport(false);
+          // 等待全屏总结关闭并释放焦点，再进入现有追问输入框。
+          setTimeout(() => scrollRef.current?.closest('main')?.querySelector<HTMLTextAreaElement>('textarea')?.focus(), 350);
+        }}
         caseId={reportCaseId}
         canOpenCase={Boolean(reportCaseId && getToken())}
         onOpenCase={() => {

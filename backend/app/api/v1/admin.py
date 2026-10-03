@@ -39,7 +39,9 @@ from app.schemas.config import (
     UserListItem,
 )
 from app.services.audit import AuditService
+from app.services.config import DEFAULT_REPORT_SOURCE_LIMIT
 from app.services.external_search import ExternalSearchAgent
+from app.services.knowledge_citations import MAX_CITATIONS
 from app.services.llm import LLMService
 
 router = APIRouter(dependencies=[Depends(require_role(UserRole.ADMIN))])
@@ -91,7 +93,7 @@ DEFAULT_SETTINGS: list[SystemSettingCreate] = [
     SystemSettingCreate(
         key="auth.guest_max_messages",
         value="10",
-        description="访客模式允许的最大对话轮数",
+        description="每个访客会话允许的患者模型请求次数",
         category="auth",
         value_type="number",
     ),
@@ -124,6 +126,25 @@ DEFAULT_SETTINGS: list[SystemSettingCreate] = [
         category="diagnosis",
         value_type="number",
     ),
+    SystemSettingCreate(
+        key="diagnosis.report_source_limit",
+        value=str(DEFAULT_REPORT_SOURCE_LIMIT),
+        description="最终问诊报告最多提供的可核验来源数（内部与外部合计）",
+        category="diagnosis",
+        value_type="select",
+        options=",".join(str(value) for value in range(1, MAX_CITATIONS + 1)),
+    ),
+    SystemSettingCreate(key="diagnosis.interview_questions_per_round", value="1",
+        description="每轮最多展示的问题数", category="diagnosis", value_type="select", options="1,2"),
+    SystemSettingCreate(key="diagnosis.interview_max_rounds", value="6",
+        description="问诊建议轮数；不截断未问的必要问题，已答未知不重复追问", category="diagnosis", value_type="select",
+        options="1,2,3,4,5,6,7,8,9,10,11,12"),
+    SystemSettingCreate(key="diagnosis.internal_source_candidates", value="10",
+        description="内部知识库候选召回上限；筛选后与外部共享最终来源额度", category="diagnosis", value_type="int"),
+    SystemSettingCreate(key="diagnosis.external_source_candidates", value="10",
+        description="外部来源候选召回上限；与内部共享最终报告来源额度", category="diagnosis", value_type="int"),
+    SystemSettingCreate(key="diagnosis.source_min_relevance", value="0.25",
+        description="语义重排筛选阈值（0至1）；词匹配降级不套用该阈值，不是临床支持概率", category="diagnosis", value_type="float"),
     # ── Agent ──
     SystemSettingCreate(
         key="agent.max_tool_calls",

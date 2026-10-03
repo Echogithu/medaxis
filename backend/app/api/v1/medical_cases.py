@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user
 from app.db.session import get_db
+from app.models.agent import AgentSession
 from app.models.medical_case import CaseStatus, DocumentType, MedicalCase, MedicalDocument
 from app.models.user import UserRole
 from app.schemas.medical_case import (
@@ -129,6 +130,22 @@ async def create_case(
     db: AsyncSession = Depends(get_db),
 ) -> MedicalCaseResponse:
     """Create a new medical case (patient creates for themselves)."""
+    if current_user.role != UserRole.PATIENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only patients can create their own cases",
+        )
+
+    if data.source_session_id is not None:
+        source_session = await db.scalar(
+            select(AgentSession).where(AgentSession.id == data.source_session_id)
+        )
+        if source_session is None or source_session.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Source session not found",
+            )
+
     case = MedicalCase(
         patient_id=current_user.id,
         title=data.title,

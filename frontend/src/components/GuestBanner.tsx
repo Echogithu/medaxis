@@ -24,11 +24,11 @@ export default function GuestBanner({ status, onRegister, onLogin }: Props) {
           <Chip label="访客模式" size="small"
             sx={{ height: 24, bgcolor: isNearLimit ? '#fae7d8' : '#e4f1eb', color: isNearLimit ? '#a95e37' : '#3d766d', fontWeight: 650, fontSize: 10.5 }} />
           <Typography variant="body2" color={isNearLimit ? 'error' : 'text.secondary'}>
-            已使用 {status.interaction_count} / {status.max_interactions} 轮对话
+            已使用 {status.interaction_count} / {status.max_interactions} 次模型请求
           </Typography>
           {isNearLimit && (
             <Typography variant="caption" color="error" sx={{ fontWeight: 500 }}>
-              ⚠️ 即将达到上限，请注册以继续
+              ⚠️ 模型请求次数即将用完，请注册以继续
             </Typography>
           )}
         </Box>

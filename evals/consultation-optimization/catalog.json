@@ -1,0 +1,431 @@
+{
+  "version": 1,
+  "description": "合成控制层回归，不包含患者数据；期望由产品约束定义，不读取实现结果生成期望",
+  "cases": [
+    {
+      "id": "known_reuse",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "collected_info": {
+          "pmh_allergy": "明确无"
+        }
+      },
+      "questions": [
+        [
+          "pmh_allergy",
+          "您有过敏史吗？"
+        ],
+        [
+          "hpi_onset",
+          "您什么时候开始不舒服？"
+        ]
+      ],
+      "expected": {
+        "question_ids": [
+          "hpi_onset"
+        ],
+        "action": "ask",
+        "sufficient": false
+      }
+    },
+    {
+      "id": "unknown_alias",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "collected_info": {
+          "pmh_allergy": "不清楚"
+        },
+        "raw_answers": {
+          "pmh_allergy": "不清楚"
+        },
+        "asked_questions": [
+          "pmh_allergy"
+        ]
+      },
+      "questions": [
+        [
+          "pmh_allergy_002",
+          "您是否对药物过敏？"
+        ]
+      ],
+      "expected": {
+        "question_ids": [],
+        "action": "synthesize",
+        "sufficient": false,
+        "summary_contains": "不清楚"
+      }
+    },
+    {
+      "id": "pending_guard",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "asked_questions": [
+          "hpi_onset"
+        ],
+        "question_texts": {
+          "hpi_onset": "您什么时候开始？"
+        },
+        "pending_question_ids": [
+          "hpi_onset"
+        ]
+      },
+      "questions": [],
+      "expected": {
+        "question_ids": [],
+        "action": "ask",
+        "sufficient": false,
+        "model_calls": 0
+      }
+    },
+    {
+      "id": "optional_only",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "collected_info": {
+          "hpi_onset": "昨天"
+        }
+      },
+      "questions": [
+        [
+          "ps_occupation",
+          "您的工作是什么？",
+          "optional"
+        ]
+      ],
+      "expected": {
+        "question_ids": [],
+        "action": "synthesize",
+        "sufficient": false
+      }
+    },
+    {
+      "id": "round_size",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉"
+      },
+      "questions": [
+        [
+          "hpi_onset",
+          "您什么时候开始？"
+        ],
+        [
+          "hpi_severity",
+          "严重程度如何？"
+        ]
+      ],
+      "expected": {
+        "question_ids": [
+          "hpi_onset"
+        ],
+        "action": "ask",
+        "sufficient": false
+      }
+    },
+    {
+      "id": "soft_budget",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "collected_info": {
+          "hpi_onset": "昨天"
+        },
+        "interview_rounds": 6
+      },
+      "questions": [
+        [
+          "hpi_severity",
+          "严重程度如何？"
+        ]
+      ],
+      "expected": {
+        "question_ids": [
+          "hpi_severity"
+        ],
+        "action": "ask",
+        "sufficient": false
+      }
+    },
+    {
+      "id": "generation_failure",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "collected_info": {
+          "hpi_onset": "昨天"
+        }
+      },
+      "model_failure": true,
+      "questions": [],
+      "expected": {
+        "error": true,
+        "sufficient": false
+      }
+    },
+    {
+      "id": "grounded_chief",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "昨天开始发热"
+      },
+      "questions": [
+        [
+          "hpi_onset",
+          "您什么时候开始？"
+        ]
+      ],
+      "facts": [
+        {
+          "information_key": "hpi_onset",
+          "quote": "昨天开始发热",
+          "source": "chief_complaint"
+        }
+      ],
+      "expected": {
+        "question_ids": [],
+        "sufficient": false
+      }
+    },
+    {
+      "id": "fabricated_fact_holdout",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "昨天开始头痛"
+      },
+      "questions": [
+        [
+          "pmh_allergy",
+          "您是否有药物过敏？"
+        ]
+      ],
+      "facts": [
+        {
+          "information_key": "pmh_allergy",
+          "quote": "青霉素过敏",
+          "source": "chief_complaint"
+        }
+      ],
+      "expected": {
+        "question_ids": [
+          "pmh_allergy"
+        ],
+        "action": "ask",
+        "sufficient": false
+      }
+    },
+    {
+      "id": "family_fact_holdout",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "母亲患高血压，我今天头痛"
+      },
+      "questions": [
+        [
+          "pmh_chronic",
+          "您是否有慢性疾病？"
+        ]
+      ],
+      "facts": [
+        {
+          "information_key": "pmh_chronic",
+          "quote": "高血压",
+          "source": "chief_complaint"
+        }
+      ],
+      "expected": {
+        "question_ids": [
+          "pmh_chronic"
+        ],
+        "action": "ask",
+        "sufficient": false
+      }
+    },
+    {
+      "id": "empty_not_ready",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "collected_info": {
+          "hpi_onset": "昨天"
+        }
+      },
+      "questions": [],
+      "expected": {
+        "question_ids": [],
+        "action": "synthesize",
+        "sufficient": false
+      }
+    },
+    {
+      "id": "explicit_ready",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成主诉",
+        "collected_info": {
+          "hpi_onset": "昨天"
+        }
+      },
+      "model_action": "synthesize",
+      "questions": [],
+      "expected": {
+        "question_ids": [],
+        "action": "synthesize",
+        "sufficient": true
+      }
+    },
+    {
+      "id": "trusted_irrelevant",
+      "kind": "sources",
+      "query": "发热",
+      "limit": 1,
+      "sources": [
+        {
+          "source_type": "internal",
+          "title": "发热资料",
+          "excerpt": "发热主题的合成原文。",
+          "document_id": "doc-fever",
+          "chunk_id": "chunk-fever",
+          "relevance": 0.1
+        },
+        {
+          "source_type": "external",
+          "title": "牙齿资料",
+          "excerpt": "牙齿主题的合成原文。",
+          "url": "https://www.who.int/synthetic-dental",
+          "is_trusted": true,
+          "trust_score": 91,
+          "relevance": 0.91
+        }
+      ],
+      "expected": {
+        "source_keys": [
+          "chunk-fever"
+        ]
+      }
+    },
+    {
+      "id": "external_relevant",
+      "kind": "sources",
+      "query": "发热",
+      "limit": 3,
+      "sources": [
+        {
+          "source_type": "internal",
+          "title": "牙齿资料",
+          "excerpt": "牙齿主题的合成原文。",
+          "document_id": "doc-dental",
+          "chunk_id": "chunk-dental",
+          "relevance": 0.99
+        },
+        {
+          "source_type": "external",
+          "title": "发热资料",
+          "excerpt": "发热主题的合成原文。",
+          "url": "https://www.who.int/synthetic-fever",
+          "is_trusted": true,
+          "trust_score": 60,
+          "relevance": 0.6
+        }
+      ],
+      "expected": {
+        "source_keys": [
+          "https://www.who.int/synthetic-fever"
+        ]
+      }
+    },
+    {
+      "id": "shared_reranking",
+      "kind": "sources",
+      "query": "合成主题",
+      "limit": 3,
+      "rerank_scores": [
+        [
+          1,
+          0.9
+        ],
+        [
+          0,
+          0.4
+        ]
+      ],
+      "sources": [
+        {
+          "source_type": "internal",
+          "title": "内部资料",
+          "excerpt": "合成原文。",
+          "document_id": "doc-a",
+          "chunk_id": "chunk-a",
+          "relevance": 0.99
+        },
+        {
+          "source_type": "external",
+          "title": "外部资料",
+          "excerpt": "合成原文。",
+          "url": "https://www.who.int/synthetic-b",
+          "is_trusted": true,
+          "trust_score": 60,
+          "relevance": 0.6
+        }
+      ],
+      "expected": {
+        "source_keys": [
+          "https://www.who.int/synthetic-b",
+          "chunk-a"
+        ]
+      }
+    },
+    {
+      "id": "unasked_gap_blocks_summary",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成腹泻主诉",
+        "collected_info": {
+          "hpi_onset": "昨天"
+        }
+      },
+      "model_action": "synthesize",
+      "questions": [],
+      "needs_more_info": [
+        "adv_stool_pattern"
+      ],
+      "expected": {
+        "error": true,
+        "sufficient": false,
+        "model_calls": 2
+      }
+    },
+    {
+      "id": "unasked_gap_recovery",
+      "kind": "interview",
+      "state": {
+        "chief_complaint": "合成腹泻主诉",
+        "collected_info": {
+          "hpi_onset": "昨天"
+        }
+      },
+      "model_action": "synthesize",
+      "questions": [],
+      "needs_more_info": [
+        "adv_stool_pattern"
+      ],
+      "repair_questions": [
+        [
+          "adv_stool_pattern",
+          "您这次大便的性状是什么样的？"
+        ]
+      ],
+      "expected": {
+        "question_ids": [
+          "adv_stool_pattern"
+        ],
+        "action": "ask",
+        "sufficient": false,
+        "model_calls": 2
+      }
+    }
+  ]
+}

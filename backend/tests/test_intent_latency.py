@@ -53,6 +53,19 @@ async def fake_db():
     yield Mock()
 
 
+def empty_profile_db():
+    # 路由回归默认患者尚未建档；档案传递另由专门测试验证。
+    return AsyncMock(scalar=AsyncMock(return_value=None))
+
+
+def profile_chain_db():
+    profile = SimpleNamespace(allergies=[], chronic_diseases=[{
+        "name": "档案链路合成特殊疾病", "category": "special", "severity": "severe",
+        "diagnosed_date": "2020-01-02", "notes": "链路自报说明",
+    }], current_medications=[{"name": "链路停用药", "status": "stopped"}], record_metadata={})
+    return AsyncMock(scalar=AsyncMock(return_value=profile))
+
+
 @pytest.mark.asyncio
 async def test_jev_uses_decision_protocol_and_bounded_context(monkeypatch):
     captured = []
@@ -292,10 +305,20 @@ async def test_stream_reports_generation_failure_instead_of_direct_diagnosis(mon
     monkeypatch.setattr(api, "async_session_maker", fake_db)
     request = Request({"type": "http", "query_string": b"", "headers": [(b"authorization", b"Bearer test")]})
     ctx = SimpleNamespace(user=SimpleNamespace(id=uuid.uuid4()), is_guest=False, platform="web")
-    stream = await api.route_stream(message="头疼还发烧", request=request, ctx=ctx, db=AsyncMock())
+    stream = await api.route_stream(req=api.RouteStreamRequest(message="头疼还发烧"), request=request, ctx=ctx, db=empty_profile_db())
     events = "".join([chunk async for chunk in stream.body_iterator])
     assert "event: error" in events
     assert "event: structured" not in events
+    error_data = events.rsplit("event: error\n", 1)[1].split("data: ", 1)[1].split("\n", 1)[0]
+    error_payload = json.loads(error_data)
+    expected_code = (
+        "INTERVIEW_GENERATION_FAILED"
+        if isinstance(failure, InterviewGenerationError)
+        else "LLM_INTERNAL_ERROR"
+    )
+    assert error_payload["code"] == expected_code
+    if str(failure):
+        assert str(failure) not in error_payload["error"]
     diagnostic.run_full_diagnosis_workflow.assert_not_awaited()
     assert api.DiagnosisAgent.call_args.kwargs["platform"] == "web"
 
@@ -337,7 +360,7 @@ async def test_stream_saves_case_before_report_and_returns_case_id(monkeypatch):
 
     request = Request({"type": "http", "query_string": b"", "headers": []})
     ctx = SimpleNamespace(user=SimpleNamespace(id=patient_id), is_guest=False, platform="web")
-    stream = await api.route_stream(message="合成主诉", request=request, ctx=ctx, db=AsyncMock())
+    stream = await api.route_stream(req=api.RouteStreamRequest(message="合成主诉"), request=request, ctx=ctx, db=profile_chain_db())
     events = "".join([chunk async for chunk in stream.body_iterator])
 
     assert save_case.await_count == 1
@@ -345,3 +368,272 @@ async def test_stream_saves_case_before_report_and_returns_case_id(monkeypatch):
     complete = json.loads(events.split("event: complete")[-1].split("data: ", 1)[1])
     assert complete["case_id"] == str(case_id)
     assert save_case.await_args.kwargs["source_session_id"] == session_id
+    for call in [diagnostic.interview.await_args, diagnostic.run_full_diagnosis_workflow.await_args]:
+        assert "档案链路合成特殊疾病" in call.kwargs["patient_history"]
+        assert "已停用药物" in call.kwargs["patient_history"]
+        assert "2020-01-02" in call.kwargs["patient_history"]
+
+
+@pytest.mark.asyncio
+async def test_stream_does_not_publish_report_when_case_persistence_fails(monkeypatch):
+    from app.api.v1 import agents as api
+    from app.db import redis_client
+
+    session_id = uuid.uuid4()
+    patient_id = uuid.uuid4()
+    report = {"primary_diagnosis": "合成演示报告", "confidence": "low"}
+    state = SimpleNamespace(red_flags_detected=[], is_sufficient=True, asked_questions=[])
+    master = SimpleNamespace(
+        master=SimpleNamespace(classify_intent=AsyncMock(return_value={"intent": "diagnosis"})),
+        _create_session=AsyncMock(return_value=SimpleNamespace(id=session_id, context={})),
+    )
+    diagnostic = SimpleNamespace(
+        interview=AsyncMock(return_value=([], state, [], "diagnosis", "")),
+        run_full_diagnosis_workflow=AsyncMock(return_value=SimpleNamespace(
+            structured_output=SimpleNamespace(model_dump=lambda: report),
+            tool_calls_used=[],
+        )),
+    )
+    save_case = AsyncMock(side_effect=api.DiagnosisCasePersistenceError("synthetic database detail"))
+    monkeypatch.setattr(api, "AgentOrchestrator", Mock(return_value=master))
+    monkeypatch.setattr(api, "DiagnosisAgent", Mock(return_value=diagnostic))
+    monkeypatch.setattr(api, "persist_diagnosis_case", save_case)
+    monkeypatch.setattr(api, "async_session_maker", fake_db)
+    monkeypatch.setattr(redis_client, "get_redis", lambda: SimpleNamespace(set=AsyncMock(return_value=True)))
+
+    request = Request({"type": "http", "query_string": b"", "headers": []})
+    ctx = SimpleNamespace(user=SimpleNamespace(id=patient_id), is_guest=False, platform="web")
+    stream = await api.route_stream(req=api.RouteStreamRequest(message="合成主诉"), request=request, ctx=ctx, db=empty_profile_db())
+    events = "".join([chunk async for chunk in stream.body_iterator])
+
+    save_case.assert_awaited_once()
+    assert save_case.await_args.kwargs["patient_id"] == patient_id
+    assert save_case.await_args.kwargs["source_session_id"] == session_id
+    assert "event: structured" not in events
+    assert "event: complete" not in events
+    error_payload = json.loads(events.split("event: error\ndata: ", 1)[1].split("\n\n", 1)[0])
+    assert error_payload["code"] == "CASE_PERSISTENCE_FAILED"
+    assert "synthetic database detail" not in error_payload["error"]
+
+
+@pytest.mark.asyncio
+async def test_stream_stops_when_diagnosis_session_cannot_be_created(monkeypatch):
+    from app.api.v1 import agents as api
+
+    patient_id = uuid.uuid4()
+    report = {"primary_diagnosis": "合成演示报告", "confidence": "low"}
+    master = SimpleNamespace(
+        master=SimpleNamespace(classify_intent=AsyncMock(return_value={"intent": "diagnosis"})),
+        _create_session=AsyncMock(return_value=None),
+    )
+    diagnostic = SimpleNamespace(
+        interview=AsyncMock(),
+        run_full_diagnosis_workflow=AsyncMock(),
+        analyze=AsyncMock(return_value=SimpleNamespace(
+            structured_output=SimpleNamespace(model_dump=lambda: report),
+            tool_calls_used=[],
+            content="合成诊断文本",
+        )),
+    )
+    monkeypatch.setattr(api, "AgentOrchestrator", Mock(return_value=master))
+    monkeypatch.setattr(api, "DiagnosisAgent", Mock(return_value=diagnostic))
+    monkeypatch.setattr(api, "async_session_maker", fake_db)
+
+    request = Request({"type": "http", "query_string": b"", "headers": []})
+    ctx = SimpleNamespace(user=SimpleNamespace(id=patient_id), is_guest=False, platform="web")
+    stream = await api.route_stream(req=api.RouteStreamRequest(message="合成主诉"), request=request, ctx=ctx, db=empty_profile_db())
+    events = "".join([chunk async for chunk in stream.body_iterator])
+
+    diagnostic.analyze.assert_not_awaited()
+    assert "event: structured" not in events
+    assert "event: complete" not in events
+    error_payload = json.loads(events.split("event: error\ndata: ", 1)[1].split("\n\n", 1)[0])
+    assert error_payload["code"] == "DIAGNOSIS_SESSION_CREATION_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_continue_completed_session_does_not_confirm_unsaved_case(monkeypatch):
+    from app.api.v1 import agents as api
+    from app.db import redis_client
+
+    session_id = uuid.uuid4()
+    patient_id = uuid.uuid4()
+    session = SimpleNamespace(
+        id=session_id,
+        user_id=patient_id,
+        structured_output={"primary_diagnosis": "合成演示报告", "confidence": "low", "knowledge_citations": [{"citation_id": "S1"}]},
+    )
+    db = empty_profile_db()
+    db.get = AsyncMock(return_value=session)
+    diagnostic = SimpleNamespace(
+        interview_answer=AsyncMock(return_value=([], SimpleNamespace(
+            asked_questions=[], is_sufficient=True, phase="completed", red_flags_detected=[]
+        ), [], "completed", "")),
+        run_full_diagnosis_workflow=AsyncMock(),
+    )
+    save_case = AsyncMock(side_effect=api.DiagnosisCasePersistenceError("synthetic database detail"))
+    monkeypatch.setattr(api, "_require_session_access", AsyncMock())
+    monkeypatch.setattr(api, "DiagnosisAgent", Mock(return_value=diagnostic))
+    monkeypatch.setattr(api, "persist_diagnosis_case", save_case)
+    monkeypatch.setattr(redis_client, "get_redis", lambda: SimpleNamespace(exists=AsyncMock(return_value=False)))
+
+    request = Request({"type": "http", "method": "GET", "query_string": b"", "headers": []})
+    ctx = SimpleNamespace(user=SimpleNamespace(id=patient_id), is_guest=False, platform="web")
+    stream = await api.route_stream_continue(
+        request=request,
+        ctx=ctx,
+        session_id=str(session_id),
+        question_id="hpi_onset",
+        db=db,
+    )
+    events = "".join([chunk async for chunk in stream.body_iterator])
+
+    save_case.assert_awaited_once()
+    assert "event: structured" not in events
+    assert "event: complete" not in events
+    error_payload = json.loads(events.split("event: error\ndata: ", 1)[1].split("\n\n", 1)[0])
+    assert error_payload["code"] == "CASE_PERSISTENCE_FAILED"
+    assert "synthetic database detail" not in error_payload["error"]
+    diagnostic.run_full_diagnosis_workflow.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_continue_diagnosis_does_not_publish_report_when_case_persistence_fails(monkeypatch):
+    from app.api.v1 import agents as api
+    from app.db import redis_client
+
+    session_id = uuid.uuid4()
+    patient_id = uuid.uuid4()
+    session = SimpleNamespace(id=session_id, user_id=patient_id, structured_output=None)
+    state = SimpleNamespace(is_sufficient=True, phase="completed", red_flags_detected=[], asked_questions=[])
+    diagnostic = SimpleNamespace(
+        interview_answer=AsyncMock(return_value=([], state, [], "diagnosis", "")),
+        run_full_diagnosis_workflow=AsyncMock(return_value=SimpleNamespace(
+            structured_output=SimpleNamespace(model_dump=lambda: {"primary_diagnosis": "合成演示报告"}),
+            tool_calls_used=[],
+        )),
+    )
+    db = profile_chain_db()
+    db.get = AsyncMock(return_value=session)
+    save_case = AsyncMock(side_effect=api.DiagnosisCasePersistenceError("synthetic database detail"))
+    monkeypatch.setattr(api, "_require_session_access", AsyncMock())
+    monkeypatch.setattr(api, "DiagnosisAgent", Mock(return_value=diagnostic))
+    monkeypatch.setattr(api, "persist_diagnosis_case", save_case)
+    monkeypatch.setattr(redis_client, "get_redis", lambda: SimpleNamespace(
+        exists=AsyncMock(return_value=False), set=AsyncMock(return_value=True)
+    ))
+
+    request = Request({"type": "http", "method": "GET", "query_string": b"", "headers": []})
+    ctx = SimpleNamespace(user=SimpleNamespace(id=patient_id), is_guest=False, platform="web")
+    stream = await api.route_stream_continue(
+        request=request,
+        ctx=ctx,
+        session_id=str(session_id),
+        question_id="hpi_onset",
+        db=db,
+    )
+    events = "".join([chunk async for chunk in stream.body_iterator])
+
+    save_case.assert_awaited_once()
+    assert save_case.await_args.kwargs["patient_id"] == patient_id
+    assert save_case.await_args.kwargs["source_session_id"] == session_id
+    for call in [diagnostic.interview_answer.await_args, diagnostic.run_full_diagnosis_workflow.await_args]:
+        assert "档案链路合成特殊疾病" in call.kwargs["patient_history"]
+        assert "链路自报说明" in call.kwargs["patient_history"]
+    assert "event: structured" not in events
+    assert "event: complete" not in events
+    error_payload = json.loads(events.split("event: error\ndata: ", 1)[1].split("\n\n", 1)[0])
+    assert error_payload["code"] == "CASE_PERSISTENCE_FAILED"
+    assert "synthetic database detail" not in error_payload["error"]
+
+
+async def _post_diagnosis_chat_stream(monkeypatch, llm):
+    from app.api.v1 import agents as api
+
+    parent_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    parent = SimpleNamespace(
+        id=parent_id,
+        user_id=user_id,
+        guest_session_id=None,
+        context={"interview": {"phase": "completed"}},
+    )
+    db = empty_profile_db()
+    db.get = AsyncMock(return_value=parent)
+    db.add = Mock()
+    monkeypatch.setattr(api, "async_session_maker", fake_db)
+    monkeypatch.setattr(api, "_build_chat_context", AsyncMock(return_value="合成测试上下文"))
+    monkeypatch.setattr(api, "LLMService", Mock(return_value=llm))
+    request = Request({"type": "http", "query_string": b"", "headers": []})
+    ctx = SimpleNamespace(
+        user=SimpleNamespace(id=user_id),
+        is_guest=False,
+        guest_id=None,
+        platform="web",
+    )
+    stream = await api.chat_session(
+        session_id=str(parent_id),
+        req=api.ChatRequest(message="请解释刚才的报告"),
+        request=request,
+        ctx=ctx,
+        db=db,
+    )
+    return api, stream, db
+
+
+@pytest.mark.asyncio
+async def test_post_diagnosis_empty_response_has_stable_error_and_failed_child(monkeypatch):
+    llm = SimpleNamespace(chat=AsyncMock(return_value=LLMResponse(
+        content="", model="test", provider="test", usage_prompt_tokens=1,
+        usage_completion_tokens=0, finish_reason="stop",
+    )))
+    api, stream, db = await _post_diagnosis_chat_stream(monkeypatch, llm)
+
+    events = "".join([chunk async for chunk in stream.body_iterator])
+    payload = json.loads(events.rsplit("event: error\n", 1)[1].split("data: ", 1)[1].split("\n", 1)[0])
+    child = db.add.call_args.args[0]
+
+    assert payload["code"] == "LLM_EMPTY_RESPONSE"
+    assert "complete" not in events
+    assert child.status == api.AgentSessionStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_post_diagnosis_cancellation_marks_child_failed_and_propagates(monkeypatch):
+    llm = SimpleNamespace(chat=AsyncMock(side_effect=asyncio.CancelledError()))
+    api, stream, db = await _post_diagnosis_chat_stream(monkeypatch, llm)
+
+    with pytest.raises(asyncio.CancelledError):
+        _ = [chunk async for chunk in stream.body_iterator]
+
+    child = db.add.call_args.args[0]
+    assert child.status == api.AgentSessionStatus.FAILED
+    assert 2 <= db.commit.await_count
+
+
+@pytest.mark.asyncio
+async def test_track1_does_not_promote_explicitly_denied_symptoms_to_red_flags():
+    data = questions()
+    data["red_flags"] = [
+        "目前无发热", "无外伤", "无呕吐", "无视力改变", "无肢体无力", "无言语问题",
+    ]
+    llm = SimpleNamespace(chat=AsyncMock(return_value=response(data)))
+
+    _, _, flags, _ = await Track1Agent(llm).generate(
+        InterviewState(chief_complaint="synthetic mild headache")
+    )
+
+    assert flags == []
+
+
+@pytest.mark.asyncio
+async def test_track1_keeps_explicit_positive_emergency_signs():
+    data = questions()
+    data["red_flags"] = ["突然意识丧失", "频繁呕吐无法进食", "无呼吸"]
+    llm = SimpleNamespace(chat=AsyncMock(return_value=response(data)))
+
+    _, _, flags, _ = await Track1Agent(llm).generate(
+        InterviewState(chief_complaint="synthetic emergency scenario")
+    )
+
+    assert flags == data["red_flags"]
