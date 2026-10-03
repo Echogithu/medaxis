@@ -1,0 +1,1245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f4f2ec" />
+  <title>医枢 MedAxis · 患者工作台 · 交互原型</title>
+  <style>
+    :root {
+      --canvas: #f0f1ef;
+      --paper: #fbfbf9;
+      --paper-strong: #ffffff;
+      --ink: #173238;
+      --muted: #708083;
+      --line: #dce5e2;
+      --line-warm: #efe3d9;
+      --brand: #df845f;
+      --brand-dark: #bc6343;
+      --brand-soft: #f8e0d2;
+      --teal: #178f82;
+      --teal-dark: #0b6f67;
+      --teal-soft: #dff2ed;
+      --blue-soft: #e7f2f5;
+      --danger: #d95858;
+      --amber: #d89635;
+      --shadow: 0 18px 50px rgba(38, 52, 52, 0.08);
+      --shadow-soft: 0 7px 20px rgba(38, 52, 52, 0.055);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --sidebar: 218px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-width: 320px; background: var(--canvas); }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      font-family: "MiSans", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+      background: var(--canvas);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    svg { display: block; }
+
+    .app-shell {
+      width: min(1540px, calc(100% - 36px));
+      min-height: calc(100vh - 36px);
+      margin: 18px auto;
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+      overflow: hidden;
+      border: 1px solid #e1e5e2;
+      border-radius: 32px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      position: relative;
+      display: flex;
+      min-height: calc(100vh - 36px);
+      flex-direction: column;
+      padding: 25px 17px 18px;
+      border-right: 1px solid #e5e9e6;
+      background: #fff;
+    }
+
+    .brand {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 2px 5px 25px;
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 14px 14px 18px 14px;
+      color: #fff;
+      background: var(--teal);
+      box-shadow: 0 9px 18px rgba(23, 143, 130, .22);
+      transform: rotate(-5deg);
+    }
+
+    .brand-mark svg { width: 26px; height: 26px; transform: rotate(5deg); }
+    .brand-copy { min-width: 0; }
+    .brand-copy strong { display: block; font-size: 16px; letter-spacing: -.025em; white-space: nowrap; }
+
+    .nav-list { display: grid; gap: 5px; }
+
+    .nav-item {
+      position: relative;
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border: 0;
+      border-radius: 13px;
+      color: #62777b;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 650;
+      text-align: left;
+      cursor: pointer;
+      transition: .22s ease;
+    }
+
+    .nav-item:hover { color: var(--ink); background: rgba(23, 143, 130, .055); transform: translateX(2px); }
+    .nav-item.active { color: var(--teal-dark); background: var(--teal-soft); box-shadow: inset 0 0 0 1px rgba(23, 143, 130, .07); }
+    .nav-item.active::before {
+      position: absolute;
+      left: -17px;
+      width: 4px;
+      height: 21px;
+      border-radius: 0 5px 5px 0;
+      background: var(--teal);
+      content: "";
+    }
+
+    .nav-item .icon { width: 19px; height: 19px; flex: 0 0 auto; }
+    .nav-item .nav-badge {
+      min-width: 20px;
+      margin-left: auto;
+      padding: 3px 6px;
+      border-radius: 999px;
+      color: var(--brand-dark);
+      background: #fbe6dc;
+      font-size: 9px;
+      text-align: center;
+    }
+
+    .sidebar-spacer { flex: 1; min-height: 24px; }
+
+    .profile-area {
+      position: relative;
+      z-index: 5;
+      padding-top: 8px;
+      border-top: 1px solid rgba(23, 50, 56, .08);
+    }
+
+    .sidebar-user {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 10px;
+      padding: 9px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      transition: background .18s ease;
+    }
+
+    .sidebar-user:hover,
+    .sidebar-user[aria-expanded="true"] { background: #f2f5f3; }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border: 1px solid #dfe5e2;
+      border-radius: 10px;
+      color: #587074;
+      background: #f4f6f5;
+    }
+
+    .avatar svg { width: 17px; height: 17px; }
+
+    .sidebar-user strong { display: block; font-size: 11px; }
+    .sidebar-user .chevron { width: 15px; height: 15px; margin-left: auto; color: #8a9899; transition: transform .18s ease; }
+    .sidebar-user[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+
+    .profile-menu {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 10px);
+      left: 0;
+      display: grid;
+      gap: 3px;
+      padding: 7px;
+      border: 1px solid #dfe5e2;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 15px 35px rgba(38, 52, 52, .14);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(7px) scale(.98);
+      transform-origin: bottom center;
+      transition: opacity .18s ease, transform .18s ease, visibility .18s ease;
+    }
+
+    .profile-menu.open { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+
+    .profile-action {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 11px;
+      border: 0;
+      border-radius: 9px;
+      color: #53686b;
+      background: transparent;
+      font-size: 11px;
+      font-weight: 650;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .profile-action:hover,
+    .profile-action:focus-visible { color: var(--teal-dark); background: #edf5f2; outline: none; }
+    .profile-action svg { width: 17px; height: 17px; }
+
+    .workspace { min-width: 0; background: #f8f8f6; }
+
+    .topbar {
+      height: 76px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 0 28px;
+      border-bottom: 1px solid rgba(23, 50, 56, .075);
+      background: #fff;
+    }
+
+    .icon-button.mobile-menu { display: none; }
+
+    .search {
+      width: min(460px, 48vw);
+      height: 41px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: rgba(255,255,255,.78);
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .search:focus-within { border-color: rgba(23, 143, 130, .48); box-shadow: 0 0 0 4px rgba(23, 143, 130, .08); }
+    .search svg { width: 17px; height: 17px; color: #829193; }
+    .search input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 12px; }
+    .search input::placeholder { color: #9eaaa9; }
+
+    .topbar-spacer { flex: 1; }
+
+    .icon-button {
+      position: relative;
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: #617578;
+      background: rgba(255,255,255,.84);
+      cursor: pointer;
+      transition: .2s ease;
+    }
+
+    .icon-button:hover { color: var(--teal); border-color: rgba(23,143,130,.35); transform: translateY(-1px); }
+    .icon-button svg { width: 18px; height: 18px; }
+    .icon-button .dot { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border: 2px solid #fff; border-radius: 50%; background: var(--danger); }
+
+    .page {
+      display: none;
+      padding: 24px 28px 30px;
+      animation: pageIn .45s ease both;
+    }
+
+    .page.active { display: block; }
+
+    @keyframes pageIn { from { transform: translateY(8px); } to { transform: translateY(0); } }
+
+    .page-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    .page-heading h1 { margin: 0; font-family: "Source Han Serif SC", "Noto Serif SC", serif; font-size: clamp(24px, 2.3vw, 36px); font-weight: 700; letter-spacing: -.04em; }
+    .page-heading p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+
+    .date-card { text-align: right; }
+    .date-card strong { display: block; color: #455f63; font-family: "Source Han Serif SC", serif; font-size: 13px; }
+    .date-card span { display: block; margin-top: 4px; color: #98a3a3; font-size: 9px; letter-spacing: .07em; }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(23, 50, 56, .08);
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,.88);
+      box-shadow: var(--shadow-soft);
+      animation: cardRise .6s cubic-bezier(.2,.7,.2,1) both;
+    }
+
+    .card:nth-child(2) { animation-delay: .05s; }
+    .card:nth-child(3) { animation-delay: .10s; }
+    .card:nth-child(4) { animation-delay: .15s; }
+    .card:nth-child(5) { animation-delay: .20s; }
+
+    @keyframes cardRise { from { transform: translateY(13px); } to { transform: translateY(0); } }
+
+    .hero-card {
+      grid-column: span 8;
+      min-height: 235px;
+      padding: 28px 31px;
+      border: 1px solid #e0e5e2;
+      background: #fff;
+    }
+
+    .hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+    .hero-greeting { margin: 0; font-family: "Source Han Serif SC", "Noto Serif SC", serif; font-size: clamp(23px, 2vw, 31px); line-height: 1.2; letter-spacing: -.035em; }
+    .hero-meta { flex: 0 0 auto; padding-top: 3px; color: #64797c; text-align: right; }
+    .hero-meta strong { display: block; font-family: "Source Han Serif SC", serif; font-size: 11px; font-weight: 650; }
+    .hero-meta span { display: block; margin-top: 4px; color: #899797; font-size: 9px; }
+    .hero-copy { min-width: 0; }
+    .hero-copy h2 { max-width: 560px; margin: 0 0 7px; font-family: "Source Han Serif SC", "Noto Serif SC", serif; font-size: clamp(20px, 1.7vw, 26px); line-height: 1.2; letter-spacing: -.03em; }
+    .hero-copy p { max-width: 465px; margin: 0; color: #6e7f7f; font-size: 11px; line-height: 1.75; }
+
+    .hero-actions { display: flex; align-items: center; gap: 10px; margin-top: 24px; }
+    .hero-trust { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 20px; color: #66878f; font-size: 9px; font-weight: 650; }
+    .hero-trust span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .hero-trust svg { width: 14px; height: 14px; color: var(--teal); }
+    .primary-button,
+    .secondary-button {
+      display: inline-flex;
+      min-height: 42px;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      padding: 0 17px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: .22s ease;
+    }
+
+    .primary-button { border: 1px solid var(--brand); color: #fff; background: var(--brand); box-shadow: 0 10px 20px rgba(223,132,95,.22); }
+    .primary-button:hover { border-color: var(--brand-dark); background: var(--brand-dark); transform: translateY(-2px); box-shadow: 0 13px 24px rgba(188,99,67,.24); }
+    .secondary-button { border: 1px solid rgba(23, 50, 56, .12); color: #4c6467; background: rgba(255,255,255,.7); }
+    .secondary-button:hover { border-color: rgba(23, 143, 130, .35); color: var(--teal-dark); background: #fff; }
+    .primary-button svg, .secondary-button svg { width: 16px; height: 16px; }
+
+    .plan-card { grid-column: span 4; min-height: 235px; padding: 24px; border: 1px solid #dce7ed; color: var(--ink); background: #fff; }
+    .plan-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .plan-card h3 { margin: 0; font-family: "Source Han Serif SC", serif; font-size: 16px; }
+    .plan-score { color: var(--brand-dark); font-family: "Source Han Serif SC", serif; font-size: 22px; font-weight: 700; }
+    .plan-progress { margin: 23px 0 17px; }
+    .progress-track { height: 5px; overflow: hidden; border-radius: 999px; background: #dcdedb; }
+    .progress-track span { display: block; width: 72%; height: 100%; border-radius: inherit; background: #f0a27f; }
+    .progress-meta { display: flex; justify-content: space-between; margin-top: 8px; color: #879092; font-size: 8px; }
+    .plan-list { display: grid; gap: 9px; }
+    .plan-item { display: flex; align-items: center; gap: 9px; color: #4f6265; font-size: 10px; }
+    .plan-item .check { width: 18px; height: 18px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 6px; color: #7d9092; background: #e1e5e3; }
+    .plan-item.done .check { color: #0c635b; background: #bce3d6; }
+    .plan-item .check svg { width: 11px; height: 11px; }
+
+    .metric-row { grid-column: span 12; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .metric-card { min-width: 0; display: flex; align-items: center; gap: 13px; padding: 15px; box-shadow: none; }
+    .metric-icon { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 13px; }
+    .metric-icon svg { width: 19px; height: 19px; }
+    .metric-card.blood .metric-icon { color: #c85858; background: #fbe6e4; }
+    .metric-card.heart .metric-icon { color: #168d78; background: #dff2ea; }
+    .metric-card.sleep .metric-icon { color: #5577aa; background: #e7eef8; }
+    .metric-card.weight .metric-icon { color: #b87525; background: #f7ebd9; }
+    .metric-copy { min-width: 0; }
+    .metric-copy span { display: block; color: #889596; font-size: 9px; }
+    .metric-copy strong { display: inline-block; margin-top: 3px; color: #263f43; font-family: "Source Han Serif SC", serif; font-size: 17px; }
+    .metric-copy small { margin-left: 4px; color: #889596; font-size: 8px; }
+    .metric-trend { margin-left: auto; padding: 4px 7px; border-radius: 999px; color: #168d78; background: #e9f6f0; font-size: 8px; white-space: nowrap; }
+
+    .trend-card { grid-column: span 7; min-height: 255px; padding: 20px; }
+    .schedule-card { grid-column: span 5; min-height: 255px; padding: 20px; }
+    .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+    .card-header h3 { margin: 0; font-family: "Source Han Serif SC", serif; font-size: 15px; }
+    .card-header p { margin: 5px 0 0; color: #94a0a0; font-size: 9px; }
+    .text-button { padding: 5px 0; border: 0; color: var(--teal); background: transparent; font-size: 9px; font-weight: 800; cursor: pointer; }
+    .period-tabs { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: #f3f5f1; }
+    .period-tabs button { padding: 5px 8px; border: 0; border-radius: 7px; color: #849091; background: transparent; font-size: 8px; cursor: pointer; }
+    .period-tabs button.active { color: var(--ink); background: #fff; box-shadow: 0 3px 8px rgba(48,75,76,.08); }
+
+    .chart-wrap { position: relative; height: 164px; }
+    .chart-wrap svg { width: 100%; height: 100%; overflow: visible; }
+    .chart-grid { stroke: #e8eeeb; stroke-width: 1; stroke-dasharray: 3 5; }
+    .chart-line { fill: none; stroke: var(--brand); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .chart-area { fill: url(#areaFade); }
+    .chart-point { fill: #fff; stroke: var(--brand); stroke-width: 3; }
+    .chart-label { fill: #96a2a2; font-size: 8px; }
+    .chart-tooltip { position: absolute; left: 60%; top: 14px; padding: 7px 9px; border-radius: 9px; color: #fff; background: var(--ink); font-size: 8px; box-shadow: 0 8px 18px rgba(23,50,56,.18); }
+    .chart-tooltip::after { position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; background: var(--ink); content: ""; transform: translateX(-50%) rotate(45deg); }
+
+    .timeline { position: relative; display: grid; gap: 0; }
+    .timeline::before { position: absolute; left: 12px; top: 13px; bottom: 13px; width: 1px; background: #dbe7e3; content: ""; }
+    .timeline-item { position: relative; display: grid; grid-template-columns: 26px 58px 1fr auto; align-items: center; gap: 8px; padding: 9px 0; }
+    .timeline-dot { z-index: 1; width: 9px; height: 9px; margin-left: 8px; border: 2px solid var(--paper-strong); border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 2px rgba(23,143,130,.2); }
+    .timeline-dot.warm { background: var(--brand); box-shadow: 0 0 0 2px rgba(223,132,95,.18); }
+    .timeline-time { color: #829192; font-size: 9px; }
+    .timeline-copy strong { display: block; font-size: 10px; }
+    .timeline-copy small { display: block; margin-top: 3px; color: #97a2a2; font-size: 8px; }
+    .state-pill { padding: 4px 7px; border-radius: 999px; color: #0c7267; background: #e3f4ee; font-size: 7px; white-space: nowrap; }
+    .state-pill.later { color: #8f6a30; background: #f6ecd9; }
+
+    /* Consultation view */
+    .consult-layout { display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(275px, .78fr); gap: 14px; min-height: calc(100vh - 125px); }
+    .consult-card { display: flex; min-height: 680px; flex-direction: column; }
+    .consult-top { display: flex; align-items: center; gap: 12px; padding: 17px 19px; border-bottom: 1px solid var(--line); }
+    .agent-mark { width: 39px; height: 39px; display: grid; place-items: center; border-radius: 13px; color: #fff; background: var(--teal); box-shadow: 0 8px 18px rgba(23,143,130,.18); }
+    .agent-mark svg { width: 21px; height: 21px; }
+    .consult-top strong { display: block; font-size: 13px; }
+    .consult-top small { display: block; margin-top: 3px; color: #8a9899; font-size: 9px; }
+    .chat-stream { flex: 1; padding: 18px 20px 10px; overflow: auto; background: #fbfcfb; }
+    .message-row { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 16px; }
+    .message-row.user { justify-content: flex-end; }
+    .message-avatar { width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: #fff; background: var(--teal); }
+    .message-avatar svg { width: 15px; height: 15px; }
+    .message-avatar.person { order: 2; border-radius: 50%; background: #526e73; font-size: 8px; font-weight: 800; }
+    .bubble { max-width: 74%; padding: 11px 13px; border-radius: 6px 15px 15px 15px; color: #42595d; background: #edf5f2; font-size: 10px; line-height: 1.7; }
+    .user .bubble { border-radius: 15px 6px 15px 15px; background: #f6e8df; }
+    .bubble ul { margin: 7px 0 0; padding-left: 17px; }
+    .bubble time { display: block; margin-top: 6px; color: #9ba6a6; font-size: 7px; }
+    .quick-actions { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 20px 10px; }
+    .quick-actions button { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; color: #5d7376; background: #fff; font-size: 8px; cursor: pointer; }
+    .quick-actions button:hover { color: var(--teal); border-color: rgba(23,143,130,.38); }
+    .quick-actions svg { width: 13px; height: 13px; }
+    .chat-composer { margin: 0 19px 18px; display: grid; grid-template-columns: 36px 1fr 39px; align-items: center; gap: 8px; padding: 7px; border: 1px solid rgba(23,143,130,.30); border-radius: 15px; background: #fff; box-shadow: 0 8px 22px rgba(48,75,76,.08); }
+    .chat-composer button { border: 0; cursor: pointer; }
+    .attach-button { width: 33px; height: 33px; display: grid; place-items: center; border-radius: 10px; color: #667c7f; background: #f1f5f2; }
+    .attach-button svg { width: 16px; height: 16px; }
+    .chat-composer input { min-width: 0; height: 33px; border: 0; outline: 0; color: var(--ink); font-size: 10px; }
+    .chat-composer input::placeholder { color: #a3adac; }
+    .send-button { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: #fff; background: var(--teal); transition: .2s ease; }
+    .send-button:hover { background: var(--teal-dark); transform: translateY(-1px); }
+    .send-button svg { width: 17px; height: 17px; }
+    .disclaimer { margin: -9px 20px 14px; color: #a0aaaa; font-size: 7px; text-align: center; }
+
+    .context-rail { display: grid; align-content: start; gap: 12px; }
+    .context-card { padding: 17px; }
+    .context-card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 13px; font-family: "Source Han Serif SC", serif; font-size: 13px; }
+    .context-card h3 svg { width: 17px; height: 17px; color: var(--teal); }
+    .summary-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .summary-list li { display: flex; align-items: flex-start; gap: 8px; color: #5f7477; font-size: 9px; line-height: 1.45; }
+    .summary-list li::before { width: 5px; height: 5px; flex: 0 0 auto; margin-top: 4px; border-radius: 50%; background: var(--teal); content: ""; }
+    .risk-card { border-color: rgba(217,88,88,.16); background: #fffafa; }
+    .risk-card h3 svg { color: var(--danger); }
+    .risk-card .summary-list li::before { background: var(--danger); }
+    .risk-tag { margin-left: auto; padding: 4px 7px; border-radius: 999px; color: #b14c4c; background: #fbe4e4; font-family: "MiSans", sans-serif; font-size: 7px; }
+    .doctor-call { display: flex; align-items: center; gap: 10px; padding: 13px; border-radius: 14px; background: #eef6f3; }
+    .doctor-call .avatar { width: 36px; height: 36px; }
+    .doctor-call strong { display: block; font-size: 10px; }
+    .doctor-call small { display: block; margin-top: 3px; color: #7e8f90; font-size: 8px; }
+    .doctor-call button { margin-left: auto; padding: 7px 9px; border: 1px solid rgba(23,143,130,.24); border-radius: 9px; color: var(--teal-dark); background: #fff; font-size: 8px; cursor: pointer; }
+
+    .toast {
+      position: fixed;
+      z-index: 60;
+      left: 50%;
+      bottom: 30px;
+      padding: 11px 15px;
+      border-radius: 12px;
+      color: #fff;
+      background: var(--ink);
+      box-shadow: 0 18px 35px rgba(23,50,56,.26);
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 18px);
+      transition: .3s ease;
+    }
+
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 1120px) {
+      :root { --sidebar: 190px; }
+      .app-shell { width: calc(100% - 20px); margin: 10px auto; min-height: calc(100vh - 20px); }
+      .sidebar { min-height: calc(100vh - 20px); }
+      .topbar, .page { padding-left: 20px; padding-right: 20px; }
+      .metric-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .trend-card, .schedule-card { grid-column: span 6; }
+    }
+
+    @media (max-width: 850px) {
+      .app-shell { display: block; overflow: visible; border-radius: 22px; }
+      .sidebar { display: none; }
+      .workspace { border-radius: 22px; }
+      .icon-button.mobile-menu { display: grid; }
+      .page-heading { align-items: flex-start; }
+      .date-card { display: none; }
+      .hero-card, .plan-card { grid-column: span 12; }
+      .trend-card, .schedule-card { grid-column: span 12; }
+      .consult-layout { grid-template-columns: 1fr; }
+      .context-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .consult-card { min-height: 600px; }
+    }
+
+    @media (max-width: 590px) {
+      .app-shell { width: 100%; min-height: 100vh; margin: 0; border: 0; border-radius: 0; }
+      .workspace { border-radius: 0; }
+      .topbar { height: 65px; padding: 0 14px; gap: 9px; }
+      .search { width: auto; flex: 1; }
+      .page { padding: 18px 14px 24px; }
+      .page-heading h1 { font-size: 26px; }
+      .hero-card { min-height: auto; padding: 24px 22px; }
+      .hero-top { display: block; margin-bottom: 20px; }
+      .hero-meta { margin-top: 14px; text-align: left; }
+      .hero-actions { flex-direction: column; align-items: stretch; }
+      .hero-trust { gap: 12px 16px; }
+      .metric-row { grid-template-columns: 1fr; }
+      .metric-card { grid-column: auto; }
+      .context-rail { grid-template-columns: 1fr; }
+      .bubble { max-width: 88%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+  <style>
+    /* 补全患者任务页面，复用原有视觉变量。 */
+    [hidden] { display: none !important; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #178f8270; outline-offset: 3px; }
+    button:disabled { cursor: default; opacity: .65; transform: none; }
+    select, textarea { font: inherit; color: inherit; }
+    .eyebrow { color: var(--teal); font-size: 10px; font-weight: 750; letter-spacing: .16em; margin-bottom: 8px; }
+    .heading-actions, .inline-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .demo-label { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 10px; background: white; }
+    .section-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+    .stack { display: grid; gap: 16px; min-width: 0; }
+    .panel { padding: 23px; }
+    .panel h2, .panel h3 { margin: 0; font-size: 16px; }
+    .panel p, .fineprint { color: var(--muted); font-size: 11px; line-height: 1.8; }
+    .panel .card-header { align-items: center; }
+    .panel .card-header > svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--teal); }
+    .profile-banner { display: flex; align-items: center; gap: 18px; padding: 24px; background: linear-gradient(110deg, #e5f2ed, #f8faf7); }
+    .profile-monogram { width: 66px; height: 66px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 22px; color: var(--teal-dark); background: #fff; font-family: serif; font-size: 28px; }
+    .profile-banner h2 { margin: 0 0 7px; font-family: serif; font-size: 23px; }
+    .profile-banner p { margin: 0; font-size: 11px; color: #617b78; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; border-radius: 7px; padding: 5px 8px; background: var(--teal-soft); color: var(--teal-dark); font-size: 11px; }
+    .tag.warn { background: #f9ece0; color: #936329; }
+    .tag.danger { background: #fae9e6; color: #ad5046; }
+    .tag.neutral { background: #f0f3f2; color: #718180; }
+    .data-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 16px; margin: 20px 0 0; }
+    .data-grid dt { font-size: 10px; color: var(--muted); margin-bottom: 7px; }
+    .data-grid dd { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+    .divider { height: 1px; margin: 20px 0; background: var(--line); }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .stat-tile { padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+    .stat-tile span { font-size: 11px; color: var(--muted); }
+    .stat-tile strong { display: block; margin: 9px 0 5px; font-family: serif; font-size: 27px; }
+    .stat-tile small { font-size: 10px; color: var(--muted); }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .filter-tabs { display: flex; flex-wrap: wrap; gap: 5px; }
+    .filter-tabs button { border: 1px solid transparent; border-radius: 10px; background: transparent; padding: 9px 13px; font-size: 11px; cursor: pointer; color: var(--muted); }
+    .filter-tabs button.active { background: #fff; border-color: var(--line); color: var(--teal-dark); box-shadow: var(--shadow-soft); }
+    .compact-input { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: white; font-size: 11px; max-width: 100%; }
+    .care-plan { padding: 23px; }
+    .care-plan-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .care-plan h2 { margin: 0 0 8px; font-family: serif; font-size: 20px; }
+    .care-plan p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+    .care-plan .progress-track { margin: 16px 0 8px; background: #eaf0ec; }
+    .care-plan .progress-track span { background: var(--teal); }
+    .task-row { display: flex; align-items: center; gap: 12px; padding: 15px 0; border-bottom: 1px solid #edf1ee; }
+    .task-row:last-child { border-bottom: 0; }
+    .task-check { width: 25px; height: 25px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--teal); cursor: pointer; }
+    .task-check.done { background: var(--teal-soft); border-color: transparent; opacity: 1; }
+    .task-check svg { width: 15px; height: 15px; }
+    .row-copy { flex: 1; min-width: 0; }
+    .row-copy strong { display: block; font-size: 12px; }
+    .row-copy small { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+    .calendar-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 17px 0; }
+    .calendar-day { padding: 10px 1px; text-align: center; border-radius: 12px; color: var(--muted); font-size: 9px; }
+    .calendar-day strong { display: block; font-size: 15px; margin: 6px 0; color: var(--ink); }
+    .calendar-day.today { background: var(--teal); color: white; }
+    .calendar-day.today strong { color: white; }
+    .appointment { border-left: 3px solid var(--brand); padding: 5px 0 5px 13px; margin: 17px 0; }
+    .appointment strong { display: block; font-size: 12px; }
+    .appointment small { display: block; color: var(--muted); font-size: 10px; margin-top: 7px; }
+    .med-row { display: flex; align-items: center; gap: 16px; padding: 20px; margin-bottom: 12px; }
+    .med-time { width: 64px; flex: 0 0 auto; font-family: serif; font-size: 22px; }
+    .med-time small { display: block; margin-top: 5px; font: 10px sans-serif; color: var(--muted); }
+    .med-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto; border-radius: 14px; background: var(--brand-soft); color: var(--brand-dark); }
+    .med-icon svg { width: 22px; height: 22px; }
+    .med-row.recorded { background: #f4faf6; box-shadow: none; }
+    .med-row .primary-button { background: var(--teal); border-color: var(--teal); box-shadow: none; }
+    .table-scroll { overflow-x: auto; }
+    .records-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
+    .records-table th { padding: 11px 8px; font-weight: 500; color: var(--muted); background: #f6f8f5; white-space: nowrap; }
+    .records-table td { padding: 14px 8px; border-bottom: 1px solid #edf1ee; line-height: 1.6; }
+    .records-table td:first-child { font-weight: 650; }
+    .report-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .report-card { display: flex; flex-direction: column; padding: 23px; min-height: 228px; }
+    .report-card h2 { font-size: 17px; font-family: serif; margin: 15px 0 8px; }
+    .report-card p { margin: 0 0 18px; font-size: 11px; color: var(--muted); line-height: 1.8; overflow-wrap: anywhere; }
+    .report-card .inline-actions { margin-top: auto; padding-top: 15px; border-top: 1px solid #edf1ee; justify-content: space-between; }
+    .report-card .text-button { font-size: 11px; }
+    .report-card svg { width: 21px; height: 21px; color: var(--teal); }
+    .empty-state { padding: 48px 20px; text-align: center; border: 1px dashed var(--line); border-radius: 18px; color: var(--muted); font-size: 12px; grid-column: 1 / -1; }
+    .empty-state strong { display: block; font-size: 16px; color: var(--ink); margin-bottom: 10px; }
+    .note-box { padding: 13px 15px; border-radius: 12px; background: #f5f0e8; color: #87704d; font-size: 11px; line-height: 1.8; }
+    .dialog { width: min(560px, calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 0; border: 1px solid var(--line); border-radius: 23px; color: var(--ink); background: var(--paper); box-shadow: var(--shadow); }
+    .dialog.wide { width: min(760px, calc(100% - 32px)); }
+    .dialog::backdrop { background: rgba(23,50,56,.35); backdrop-filter: blur(3px); }
+    .dialog-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+    .dialog-head h2 { font-family: serif; font-size: 21px; margin: 0; }
+    .dialog-body { padding: 24px; }
+    .dialog-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field { display: grid; gap: 8px; font-size: 11px; }
+    .field.full { grid-column: 1 / -1; }
+    .field input, .field select, .field textarea { width: 100%; min-width: 0; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: white; font-size: 12px; }
+    .field textarea { resize: vertical; min-height: 85px; }
+    .field input[type=file] { line-height: 1.8; }
+    .field-error { color: #b3463e; font-size: 11px; margin-top: 12px; }
+    .switch-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .switch-row small { display: block; color: var(--muted); font-size: 10px; margin-top: 5px; }
+    .switch-row input { width: 18px; height: 18px; accent-color: var(--teal); }
+    .search-results button { display: block; width: 100%; text-align: left; padding: 14px; border: 1px solid var(--line); background: white; border-radius: 12px; margin-bottom: 10px; cursor: pointer; }
+    .search-results small { display: block; margin-top: 6px; color: var(--muted); }
+    .prototype-note { color: var(--muted); font-size: 10px; text-align: center; padding: 8px 20px 18px; }
+    .mobile-shade { position: fixed; inset: 0; background: #17323866; z-index: 69; }
+    .consult-history-link { margin-left: auto; font-size: 11px; }
+    .page-heading h1:focus { outline: none; }
+    .record-card { padding: 23px; display: grid; grid-template-columns: 65px minmax(0, 1fr); gap: 20px; }
+    .record-date { padding-right: 16px; border-right: 1px solid var(--line); color: var(--muted); font-size: 10px; text-align: center; }
+    .record-date strong { display: block; margin: 3px 0 7px; color: var(--ink); font-family: serif; font-size: 27px; }
+    .record-date small { display: block; margin-top: 9px; font-size: 9px; }
+    .record-card h2 { margin: 0 0 8px; font-family: serif; font-size: 20px; overflow-wrap: anywhere; }
+    .record-card p { margin: 14px 0; color: var(--muted); font-size: 11px; line-height: 1.85; }
+    .record-meta { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 10px; }
+    .record-actions { margin-top: 18px; padding-top: 15px; border-top: 1px solid #edf1ee; justify-content: space-between; }
+    .record-actions .text-button { font-size: 11px; }
+    .record-detail-summary { padding: 18px; border-radius: 14px; background: var(--teal-soft); margin: 20px 0; }
+    .record-detail-summary h3 { margin-top: 0; font-size: 14px; }
+    .record-detail-summary p { margin-bottom: 0; color: #567575; font-size: 12px; line-height: 1.85; }
+    .record-transcript { border: 1px solid var(--line); border-radius: 14px; margin-top: 20px; }
+    .record-transcript summary { cursor: pointer; padding: 16px; font-size: 12px; font-weight: 650; }
+    .record-transcript .chat-stream { padding: 16px; border-top: 1px solid var(--line); max-height: 380px; overflow: auto; }
+    .message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+    @media (max-width: 590px) {
+      .record-card { padding: 18px; grid-template-columns: 45px minmax(0, 1fr); gap: 12px; }
+      .record-date { padding-right: 10px; } .record-date strong { font-size: 23px; }
+      .record-card h2 { font-size: 18px; } .record-card .care-plan-head { display: block; }
+      .record-card .care-plan-head > .tag { margin-top: 6px; }
+      .record-actions { align-items: stretch; } .record-actions .secondary-button { flex: 1; }
+      .consult-top { flex-wrap: wrap; gap: 8px; }
+    }
+    @media (max-width: 1100px) { .section-grid { grid-template-columns: 1fr; } .section-grid > aside.stack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 850px) {
+      .sidebar.mobile-open { display: flex; position: fixed; z-index: 70; inset: 0 auto 0 0; width: 245px; min-height: 100dvh; box-shadow: var(--shadow); overflow-y: auto; }
+      .topbar { position: sticky; top: 0; z-index: 20; }
+      .nav-item { min-height: 44px; }
+    }
+    @media (max-width: 590px) {
+      .page-heading { flex-direction: column; gap: 15px; }
+      .topbar-spacer { display: none; }
+      .search { min-width: 0; } .search input { min-width: 0; }
+      .stat-grid { gap: 7px; } .stat-tile { padding: 13px 10px; } .stat-tile strong { font-size: 23px; }
+      .stat-tile span, .stat-tile small { font-size: 9px; }
+      .section-grid > aside.stack, .report-list { grid-template-columns: 1fr; }
+      .data-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .panel, .care-plan, .report-card { padding: 19px; }
+      .med-row { flex-wrap: wrap; gap: 12px; padding: 16px; }
+      .med-icon { display: none; } .med-time { width: 58px; font-size: 20px; }
+      .med-row .inline-actions { width: 100%; justify-content: flex-end; }
+      .dialog-head, .dialog-body { padding: 18px; } .form-grid { grid-template-columns: 1fr; }
+      .task-row { flex-wrap: wrap; } .task-row .text-button { margin-left: 37px; font-size: 11px; }
+      .care-plan-head { flex-wrap: wrap; }
+      .timeline-item { grid-template-columns: 20px 55px minmax(0,1fr); } .timeline-item .state-pill { grid-column: 3; justify-self: start; }
+      .toast { max-width: calc(100% - 28px); width: max-content; text-align: center; }
+      .records-table { min-width: 390px; }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <defs>
+      <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M2.5 12h4l2.2-5.2 4.1 10.4 2.3-5.2h6.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3l8.5 7.5v9a1 1 0 0 1-1 1h-5v-6h-5v6h-5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 11.5a8.5 8.5 0 1 1-3.1-6.6 8.5 8.5 0 0 1 3.1 6.6Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 19.2 4.2 21l.7-3.5M8.2 11.5h.1m3.6 0h.1m3.6 0h.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-record" viewBox="0 0 24 24"><path d="M5 3.5h11l3 3v14H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5M15.5 3.5V7H19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 3v4M16.5 3v4M3.5 9.5h17M8 14l2.2 2.2L16 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-pill" viewBox="0 0 24 24"><path d="m7.4 17.8-1.2-1.2a5 5 0 0 1 0-7l3.4-3.4a5 5 0 0 1 7 0l1.2 1.2a5 5 0 0 1 0 7l-3.4 3.4a5 5 0 0 1-7 0Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m9 7 8 8" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M4 14v5.5h16V14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M5.5 17h13l-1.5-2V10a5 5 0 0 0-10 0v5zM10 20h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5.2c0 4.7 2.8 8 7 9.8 4.2-1.8 7-5.1 7-9.8V6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.3 5.7a5 5 0 0 0-7.1 0L12 6.9l-1.2-1.2a5 5 0 1 0-7.1 7.1L12 21l8.3-8.2a5 5 0 0 0 0-7.1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 15.6A8.5 8.5 0 0 1 8.4 3.5a8.5 8.5 0 1 0 12.1 12.1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-scale" viewBox="0 0 24 24"><path d="M5 4h14l2 17H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 10a4 4 0 0 1 8 0M12 10l2-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="13" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v3M8.5 11h.1m6.8 0h.1M9 15h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-clip" viewBox="0 0 24 24"><path d="m9 12 5-5a3.5 3.5 0 0 1 5 5l-7 7a5 5 0 0 1-7-7l7-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="m21 3-8 18-2.5-7.5L3 11zM10.5 13.5 21 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="m12 3 10 18H2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9v5m0 3h.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><svg><use href="#i-pulse"></use></svg></div>
+        <div class="brand-copy"><strong>医枢 MedAxis</strong></div>
+      </div>
+
+      <nav class="nav-list" aria-label="患者端主导航">
+        <button class="nav-item active" data-page="dashboard"><svg class="icon"><use href="#i-home"></use></svg><span>今日健康</span></button>
+        <button class="nav-item" data-page="consult"><svg class="icon"><use href="#i-chat"></use></svg><span>AI 问诊</span><span class="nav-badge">新</span></button>
+        <button class="nav-item" data-page="records"><svg class="icon"><use href="#i-clock"></use></svg><span>问诊记录</span></button>
+        <button class="nav-item" data-page="health"><svg class="icon"><use href="#i-record"></use></svg><span>健康档案</span></button>
+        <button class="nav-item" data-page="followup"><svg class="icon"><use href="#i-calendar"></use></svg><span>随访计划</span><span class="nav-badge" id="plan-count">2</span></button>
+        <button class="nav-item" data-page="medication"><svg class="icon"><use href="#i-pill"></use></svg><span>用药提醒</span></button>
+        <button class="nav-item" data-page="reports"><svg class="icon"><use href="#i-upload"></use></svg><span>检查报告</span></button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="profile-area" id="profile-area">
+        <div class="profile-menu" id="profile-menu" role="menu" aria-label="账户菜单">
+          <button class="profile-action" role="menuitem" data-profile-action="个人资料"><svg><use href="#i-user"></use></svg><span>个人资料</span></button>
+          <button class="profile-action" role="menuitem" data-profile-action="偏好设置"><svg><use href="#i-settings"></use></svg><span>偏好设置</span></button>
+        </div>
+        <button class="sidebar-user" id="profile-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu">
+          <span class="avatar"><svg><use href="#i-user"></use></svg></span>
+          <span><strong>林然</strong></span>
+          <svg class="chevron"><use href="#i-chevron"></use></svg>
+        </button>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" aria-label="展开菜单" aria-expanded="false" aria-controls="patient-sidebar"><svg><use href="#i-menu"></use></svg></button>
+        <label class="search" aria-label="搜索">
+          <svg><use href="#i-search"></use></svg>
+          <input id="global-search" placeholder="搜索档案、随访或检查报告…" aria-label="搜索档案、随访或检查报告，按回车查找" />
+        </label>
+        <div class="topbar-spacer"></div>
+        <button class="icon-button" aria-label="通知" data-do="notifications"><svg><use href="#i-bell"></use></svg><span class="dot"></span></button>
+      </header>
+
+      <main>
+        <section class="page active" id="dashboard-page">
+          <div class="dashboard-grid">
+            <article class="card hero-card">
+              <div class="hero-top">
+                <h1 class="hero-greeting">下午好，林然</h1>
+                <div class="hero-meta"><strong>10 月 1 日 · 周四</strong><span>健康照护 · 演示日</span></div>
+              </div>
+              <div class="hero-copy">
+                <h2>今天感觉怎么样？</h2>
+                <p>整理健康问题、检查资料与日常记录，让每一次就诊更有准备。</p>
+              </div>
+              <div class="hero-actions">
+                <button class="primary-button" data-go="consult">开始 AI 问诊 <svg><use href="#i-arrow"></use></svg></button>
+                <button class="secondary-button" data-do="upload"><svg><use href="#i-upload"></use></svg>上传检查报告</button>
+              </div>
+              <div class="hero-trust" aria-label="服务保障">
+                <span><svg aria-hidden="true"><use href="#i-clock"></use></svg>24小时在线</span>
+                <span><svg aria-hidden="true"><use href="#i-pulse"></use></svg>专业医疗知识</span>
+                <span><svg aria-hidden="true"><use href="#i-shield"></use></svg>隐私安全保障</span>
+              </div>
+            </article>
+
+            <article class="card plan-card">
+              <div class="plan-top"><h3>今日照护计划</h3><div class="plan-score" id="today-score">50%</div></div>
+              <div class="plan-progress"><div class="progress-track"><span id="today-progress" style="width:50%"></span></div><div class="progress-meta"><span id="today-completed">已完成 2 项</span><span id="today-remaining">还剩 2 项</span></div></div>
+              <div class="plan-list" id="today-tasks">
+                <div class="plan-item done"><span class="check"><svg><use href="#i-check"></use></svg></span><span>晨间血压记录</span></div>
+                <div class="plan-item done"><span class="check"><svg><use href="#i-check"></use></svg></span><span>早餐后服药</span></div>
+                <div class="plan-item"><span class="check"><svg><use href="#i-clock"></use></svg></span><span>20:00 · 晚间用药</span></div>
+                <div class="plan-item"><span class="check"><svg><use href="#i-calendar"></use></svg></span><span>完成睡眠质量评估</span></div>
+              </div>
+            </article>
+
+            <div class="metric-row">
+              <article class="card metric-card blood"><div class="metric-icon"><svg><use href="#i-pulse"></use></svg></div><div class="metric-copy"><span>最近血压</span><strong>128/82</strong><small>mmHg</small></div><span class="metric-trend">正常</span></article>
+              <article class="card metric-card heart"><div class="metric-icon"><svg><use href="#i-heart"></use></svg></div><div class="metric-copy"><span>静息心率</span><strong>68</strong><small>次/分</small></div><span class="metric-trend">- 2</span></article>
+              <article class="card metric-card sleep"><div class="metric-icon"><svg><use href="#i-moon"></use></svg></div><div class="metric-copy"><span>昨夜睡眠</span><strong>7.2</strong><small>小时</small></div><span class="metric-trend">良好</span></article>
+              <article class="card metric-card weight"><div class="metric-icon"><svg><use href="#i-scale"></use></svg></div><div class="metric-copy"><span>最近体重</span><strong>62.5</strong><small>kg</small></div><span class="metric-trend">- 0.3</span></article>
+            </div>
+
+            <article class="card trend-card">
+              <div class="card-header">
+                <div><h3>血压趋势</h3><p>最近 7 天 · 平均 126/80 mmHg</p></div>
+                <div class="period-tabs"><button>日</button><button class="active">周</button><button>月</button></div>
+              </div>
+              <div class="chart-wrap">
+                <svg viewBox="0 0 560 160" preserveAspectRatio="none" role="img" aria-label="最近七天血压趋势">
+                  <defs><linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#df845f" stop-opacity=".25"/><stop offset="1" stop-color="#df845f" stop-opacity="0"/></linearGradient></defs>
+                  <path class="chart-grid" d="M26 22H545M26 65H545M26 108H545"/>
+                  <path class="chart-area" d="M28 101 C75 87 95 92 132 73 S202 62 238 80 S304 105 340 68 S407 43 449 61 S504 83 542 45 V135 H28Z"/>
+                  <path class="chart-line" d="M28 101 C75 87 95 92 132 73 S202 62 238 80 S304 105 340 68 S407 43 449 61 S504 83 542 45"/>
+                  <circle class="chart-point" cx="449" cy="61" r="5"/>
+                  <g class="chart-label"><text x="25" y="151">周三</text><text x="110" y="151">周四</text><text x="195" y="151">周五</text><text x="280" y="151">周六</text><text x="365" y="151">周日</text><text x="450" y="151">周一</text><text x="525" y="151">今天</text></g>
+                </svg>
+                <div class="chart-tooltip">126 / 80</div>
+              </div>
+            </article>
+
+            <article class="card schedule-card">
+              <div class="card-header"><div><h3>接下来的照护</h3><p>提醒、随访与复诊集中管理</p></div><button class="text-button" data-go="followup">查看全部 →</button></div>
+              <div class="timeline">
+                <div class="timeline-item"><span class="timeline-dot"></span><span class="timeline-time">今天 20:00</span><div class="timeline-copy"><strong>晚间用药提醒</strong><small>阿托伐他汀 · 以原处方为准</small></div><button class="text-button" data-go="medication">查看 →</button></div>
+                <div class="timeline-item"><span class="timeline-dot warm"></span><span class="timeline-time">10月3日</span><div class="timeline-copy"><strong>心内科随访准备</strong><small>李医生 · 待确认就诊安排</small></div><button class="text-button" data-go="followup">查看 →</button></div>
+                <div class="timeline-item"><span class="timeline-dot"></span><span class="timeline-time">10月15日</span><div class="timeline-copy"><strong>血脂复查</strong><small>按医生建议安排检查</small></div><button class="text-button" data-go="reports">报告 →</button></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="consult-page">
+          <div class="consult-layout">
+            <article class="card consult-card">
+              <header class="consult-top">
+                <div class="agent-mark"><svg><use href="#i-bot"></use></svg></div>
+                <div><strong>问诊助手</strong><small id="consult-session-label">头痛与血压波动咨询</small></div>
+                <button class="text-button consult-history-link" data-go="records">问诊记录 →</button>
+                <button class="text-button" data-do="end-consultation">结束本次</button>
+              </header>
+              <div class="chat-stream">
+                <div class="message-row user"><div class="bubble">最近一周偶尔头痛，尤其下午比较明显。有时会感觉太阳穴发紧，昨天测的血压是 135/85。<time>今天 14:12</time></div><div class="message-avatar person">林</div></div>
+                <div class="message-row"><div class="message-avatar"><svg><use href="#i-bot"></use></svg></div><div class="bubble">我了解了。头痛与血压变化有时相关，但也可能来自睡眠、压力或眼疲劳。为了更安全地判断，我需要确认：<ul><li>头痛通常持续多久？</li><li>是否伴随恶心、视物模糊或肢体无力？</li><li>最近睡眠和饮水情况怎么样？</li></ul><time>今天 14:13</time></div></div>
+                <div class="message-row user"><div class="bubble">一般半小时左右，没有恶心和肢体无力。最近工作比较忙，睡眠大概只有 6 小时。<time>今天 14:15</time></div><div class="message-avatar person">林</div></div>
+                <div class="message-row"><div class="message-avatar"><svg><use href="#i-bot"></use></svg></div><div class="bubble">目前没有发现明显的紧急危险信号。初步更倾向于疲劳或紧张相关头痛，同时需要继续观察血压。建议今天补充饮水、减少长时间用眼，并在安静状态下复测血压两次。若出现突发剧烈头痛、视物不清或一侧肢体无力，请立即就医。<time>今天 14:16</time></div></div>
+              </div>
+              <div class="quick-actions">
+                <button data-go="health"><svg><use href="#i-record"></use></svg>查看相关档案</button>
+                <button data-go="medication"><svg><use href="#i-pill"></use></svg>核对用药</button>
+                <button data-go="followup"><svg><use href="#i-calendar"></use></svg>查看随访计划</button>
+                <button data-action="toast"><svg><use href="#i-user"></use></svg>转接医生</button>
+              </div>
+              <div class="chat-composer">
+                <button class="attach-button" aria-label="添加附件" data-do="upload"><svg><use href="#i-clip"></use></svg></button>
+                <input id="message-input" placeholder="继续描述症状，或补充检查报告…" />
+                <button class="send-button" aria-label="发送" id="send-message"><svg><use href="#i-send"></use></svg></button>
+              </div>
+              <p class="disclaimer">AI 建议仅供健康参考，不能替代专业医生诊断；如有紧急情况请及时就医。</p>
+            </article>
+
+            <aside class="context-rail">
+              <article class="card context-card"><h3><svg><use href="#i-chat"></use></svg>本次问诊摘要</h3><ul class="summary-list"><li>近一周间歇性头痛，下午更明显</li><li>太阳穴发紧，每次约 30 分钟</li><li>睡眠约 6 小时，近期工作压力较大</li><li>最近血压 135/85 mmHg</li></ul></article>
+              <article class="card context-card risk-card"><h3><svg><use href="#i-alert"></use></svg>安全提示 <span class="risk-tag">需关注</span></h3><ul class="summary-list"><li>持续监测血压与头痛频率</li><li>如出现剧烈头痛、视物异常、肢体无力应立即就医</li></ul></article>
+              <article class="card context-card"><h3><svg><use href="#i-check"></use></svg>建议下一步</h3><ul class="summary-list"><li>休息并补充饮水，减少连续用眼</li><li>安静状态下复测两次血压</li><li>记录未来 3 天头痛时间与诱因</li></ul></article>
+              <article class="card context-card"><h3><svg><use href="#i-user"></use></svg>需要专业帮助？</h3><div class="doctor-call"><div class="avatar"><svg><use href="#i-user"></use></svg></div><div><strong>转接真实医生</strong><small>携带完整问诊上下文</small></div><button data-action="toast">发起</button></div></article>
+            </aside>
+          </div>
+        </section>
+        <section class="page" id="health-page" aria-label="健康档案"></section>
+        <section class="page" id="followup-page" aria-label="随访计划"></section>
+        <section class="page" id="medication-page" aria-label="用药提醒"></section>
+        <section class="page" id="reports-page" aria-label="检查报告"></section>
+        <section class="page" id="records-page" aria-label="问诊记录"></section>
+      </main>
+      <footer class="prototype-note">交互原型 · 全部示例均为合成数据 · 本次修改仅保留在当前页面，刷新后重置</footer>
+    </section>
+  </div>
+
+  <div class="mobile-shade" id="mobile-shade" hidden></div>
+  <dialog class="dialog" id="workspace-dialog" aria-labelledby="dialog-title"></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite">原型交互：正式实现时将连接真实功能</div>
+
+  <script>
+// 仅在内存中保留合成数据与交互结果，不写本地存储、不发起网络请求。
+const $ = selector => document.querySelector(selector);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+const pill = (text, tone = '') => `<span class="tag ${tone}">${esc(text)}</span>`;
+const pages = Object.fromEntries(['dashboard','consult','records','health','followup','medication','reports'].map(name => [name, $(`#${name}-page`)]));
+const profile = {name:'林然', gender:'女', birthday:'1988-06-12', phone:'138 0000 0000', email:'linran@example.com', height:165, weight:62.5, allergies:['青霉素'], chronic:['高血压','血脂异常'], history:'2023 年起规律复诊，暂无手术记录。', family:'父亲有高血压史。'};
+const medications = [{name:'氨氯地平',dosage:'5 mg',frequency:'每日 1 次',start:'2026-09-10'},{name:'阿托伐他汀',dosage:'20 mg',frequency:'每晚 1 次',start:'2026-09-10'}];
+const measurements = [{date:'2026-10-01 07:30',systolic:128,diastolic:82,heart:68,weight:62.5},{date:'2026-09-30 07:40',systolic:126,diastolic:80,heart:70,weight:62.8},{date:'2026-09-29 07:35',systolic:130,diastolic:84,heart:69,weight:62.8}];
+const plans = [
+  {id:'pressure',title:'血压与血脂日常管理',status:'active',date:'09.28 — 10.15',doctor:'李医生 · 心内科',goal:'按医嘱记录血压、核对用药，并携带记录复诊。',tasks:[
+    {id:'pressure-record',name:'晨间血压记录',date:'今天 07:30',done:true,detail:'已记录 128/82 mmHg'},
+    {id:'drug-review',name:'核对当前用药清单',date:'09.30',done:true,detail:'已核对档案中的药物与处方'},
+    {id:'feedback',name:'完成本周随访反馈',date:'今天',done:false,detail:'记录症状变化、用药情况与待问问题',feedback:true},
+    {id:'lipid',name:'血脂复查准备',date:'10.15',done:false,detail:'检查时间与项目请与接诊医生确认'}]},
+  {id:'headache',title:'头痛与睡眠观察',status:'active',date:'10.01 — 10.03',doctor:'问诊后自我观察',goal:'整理症状发生时间与伴随表现，方便后续就诊说明。',tasks:[
+    {id:'sleep',name:'记录今日睡眠与头痛情况',date:'今天',done:false,detail:'记录昨夜睡眠时长、症状变化',feedback:true},
+    {id:'summary',name:'整理 3 天观察记录',date:'10.03',done:false,detail:'如症状加重或出现危险信号，及时就医'}]},
+  {id:'checkup',title:'年度体检资料整理',status:'completed',date:'09.10 — 09.20',doctor:'个人健康计划',goal:'将体检资料整理归档。',tasks:[{id:'archive',name:'归档体检报告',date:'09.20',done:true,detail:'已整理 2 份示例资料'}]},
+  {id:'old',title:'夏季健康回顾',status:'expired',date:'08.01 — 08.31',doctor:'个人健康计划',goal:'回顾阶段性健康记录。',tasks:[{id:'old-review',name:'补充阶段性记录',date:'08.31',done:false,detail:'计划已过期，请重新确认安排'}]}
+];
+const reminders = [
+  {id:'morning',name:'氨氯地平',dosage:'5 mg · 1 片',time:'08:00',status:'sent',note:'提醒已送达 · 等待本人确认'},
+  {id:'noon',name:'用药清单核对',dosage:'核对档案与原处方',time:'14:00',status:'sent',note:'确认药名、剂量与频率一致',review:true},
+  {id:'evening',name:'阿托伐他汀',dosage:'20 mg · 1 片',time:'20:00',status:'pending',note:'等待提醒发送 · 仅展示安排'},
+  {id:'yesterday',name:'阿托伐他汀',dosage:'20 mg · 1 片',time:'昨天 20:00',status:'acknowledged',note:'患者自报',recorded:'20:06',history:true}
+];
+const reports = [
+  {id:'lipid-report',title:'血脂检查报告',kind:'检验',date:'2026-09-28',hospital:'社区卫生服务中心',status:'review',summary:'1 项结果标记偏高，请对照报告原件。',metrics:[['总胆固醇','5.80','mmol/L','3.10–5.20','偏高'],['甘油三酯','1.45','mmol/L','0.45–1.70','范围内'],['高密度脂蛋白胆固醇','1.32','mmol/L','1.04–1.55','范围内'],['低密度脂蛋白胆固醇','3.10','mmol/L','0–3.40','范围内']]},
+  {id:'blood-report',title:'血常规检查报告',kind:'检验',date:'2026-09-20',hospital:'市人民医院',status:'ready',summary:'已整理 3 项示例指标，供对照原件。',metrics:[['白细胞','6.2','×10⁹/L','3.5–9.5','范围内'],['血红蛋白','132','g/L','115–150','范围内'],['血小板','225','×10⁹/L','125–350','范围内']]},
+  {id:'image-report',title:'胸部影像检查报告',kind:'影像',date:'2026-09-20',hospital:'市人民医院',status:'ready',summary:'影像报告文字已归档，无影像诊断功能。',text:'示例文字：双肺纹理清晰，未见明显实变影。此为合成演示内容，请以报告原件和接诊医生判断为准。'}
+];
+// 初始问诊与记录页共享同一段会话，继续问诊时只更新选中的记录。
+const initialMessages = [...document.querySelectorAll('#consult-page .message-row')].map(row => {
+  const bubble = row.querySelector('.bubble').cloneNode(true), time = bubble.querySelector('time');
+  const stamp = time?.textContent || '示例会话'; time?.remove();
+  return {role:row.classList.contains('user')?'user':'assistant',text:bubble.textContent.trim(),time:stamp};
+});
+const consultations = [
+  {id:'headache-session',title:'头痛与血压波动咨询',date:'2026-10-01',time:'14:16',status:'active',topic:'症状咨询',summary:'近一周间歇性头痛，下午更明显；每次约半小时，近期睡眠约 6 小时。',tags:['头痛','血压记录'],reportIds:[],planId:'headache',messages:initialMessages},
+  {id:'lipid-session',title:'血脂检查报告咨询',date:'2026-09-28',time:'10:42',status:'followup',topic:'报告咨询',summary:'已整理血脂检查中的关注项，报告结果需要对照原件，并在复诊时向医生确认。',tags:['血脂','报告复核'],reportIds:['lipid-report'],planId:'pressure',messages:[{role:'user',text:'想在复诊前整理这份血脂报告，需要带哪些资料？',time:'09.28 10:40'},{role:'assistant',text:'示例整理：检查日期、原件及当前用药清单已列入待核对资料。报告解读与用药安排由接诊医生确认。',time:'09.28 10:42'}]},
+  {id:'checkup-session',title:'体检报告整理',date:'2026-09-20',time:'16:08',status:'completed',topic:'报告咨询',summary:'本次体检资料已整理归档，保留血常规指标与影像报告文字，方便就诊时对照。',tags:['体检','资料归档'],reportIds:['blood-report','image-report'],planId:'checkup',messages:[{role:'user',text:'帮我整理体检报告，方便之后去医院时查找。',time:'09.20 16:05'},{role:'assistant',text:'示例资料已整理：血常规、胸部影像报告文字。可在检查报告页查看，最终结论以原件和医生判断为准。',time:'09.20 16:08'}]},
+  {id:'skin-session',title:'换季皮肤不适咨询',date:'2026-09-12',time:'09:25',status:'completed',topic:'症状咨询',summary:'已记录皮肤不适出现的时间及接触史，保留待就诊时说明的问题。',tags:['皮肤不适','症状记录'],reportIds:[],planId:null,messages:[{role:'user',text:'这两天皮肤有些痒，想先记录一下发生时间。',time:'09.12 09:20'},{role:'assistant',text:'本次演示只整理描述和待问问题，不生成皮肤诊断。请在正式服务中咨询专业医生。',time:'09.12 09:25'}]}
+];
+const state = {view:'dashboard',planFilter:'active',medFilter:'today',reportFilter:'all',reportQuery:'',recordFilter:'all',recordQuery:'',currentConsultation:'headache-session',notifications:true,quiet:false};
+const dialog = $('#workspace-dialog');
+const toast = $('#toast');
+let toastTimer, dialogTrigger;
+function showToast(message = '此入口为演示，未连接真实服务') {
+  toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+}
+function heading(name, subtitle, actions = '') {
+  return `<div class="page-heading"><div><div class="eyebrow">MY HEALTH / 医枢</div><h1 tabindex="-1">${name}</h1><p>${subtitle}</p></div><div class="heading-actions"><span class="demo-label">合成演示数据</span>${actions}</div></div>`;
+}
+function stats(items) {
+  return `<div class="stat-grid">${items.map(([label,value,note]) => `<div class="stat-tile"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>`;
+}
+function tabs(items, selected, group) {
+  return `<div class="filter-tabs" aria-label="${group === 'plan' ? '计划状态' : group === 'med' ? '提醒范围' : group === 'record' ? '问诊状态' : '报告类别'}">${items.map(([key,label]) => `<button class="${selected === key ? 'active' : ''}" data-filter="${group}" data-value="${key}" aria-pressed="${selected === key}">${label}</button>`).join('')}</div>`;
+}
+function field(label, name, value, type='text', extra='') {
+  return `<label class="field">${label}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;
+}
+function empty(title, description) { return `<div class="empty-state"><strong>${title}</strong>${description}</div>`; }
+function healthPage() {
+  const m = measurements[0];
+  pages.health.innerHTML = heading('健康档案','让每次问诊，都从了解你开始。',`<button class="secondary-button" data-do="measure">${icon('pulse')}记录健康指标</button><button class="primary-button" data-do="edit-profile">${icon('record')}编辑档案</button>`) +
+  `<div class="section-grid"><div class="stack"><article class="card"><div class="profile-banner"><div class="profile-monogram">${esc(profile.name.slice(0,1))}</div><div><h2>${esc(profile.name)}</h2><p>${esc(profile.gender)} · ${esc(profile.birthday)} 出生</p><div class="tag-row">${profile.chronic.map(t=>pill(t)).join('') || pill('暂无慢病记录','neutral')}</div></div></div><div class="panel"><div class="card-header"><h2>基础信息</h2>${pill('本人填写','neutral')}</div><dl class="data-grid">${[['手机',profile.phone],['邮箱',profile.email],['出生日期',profile.birthday],['身高',`${profile.height} cm`],['体重',`${profile.weight} kg`],['档案用途','问诊时供参考']].map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><div class="divider"></div><h3>过敏与既往史</h3><div class="tag-row">${profile.allergies.map(t=>pill(t+'过敏','danger')).join('') || pill('暂无已知过敏','neutral')}</div><p>既往史：${esc(profile.history || '未补充')}</p><p>家族史：${esc(profile.family || '未补充')}</p><p class="fineprint">过敏、慢病和用药在问诊时作为参考，不直接形成诊断。</p></div></article>
+  <article class="card panel"><div class="card-header"><div><h2>当前用药清单</h2><p>与你的原处方保持一致</p></div><button class="text-button" data-do="edit-drugs">编辑清单 →</button></div><div class="table-scroll"><table class="records-table"><thead><tr><th>药物名称</th><th>剂量</th><th>频率</th><th>开始日期</th></tr></thead><tbody>${medications.map(m=>`<tr><td>${esc(m.name)}</td><td>${esc(m.dosage)}</td><td>${esc(m.frequency)}</td><td>${esc(m.start)}</td></tr>`).join('') || '<tr><td colspan="4">暂无用药记录</td></tr>'}</tbody></table></div><p class="fineprint">档案用药清单与已安排提醒分别管理，修改清单不会自动更新提醒。请按原处方核对。</p></article></div>
+  <aside class="stack"><article class="card panel"><div class="card-header"><h2>最近一次健康记录</h2>${icon('pulse')}</div><dl class="data-grid" style="grid-template-columns:1fr 1fr"><div><dt>血压 · mmHg</dt><dd>${m.systolic}/${m.diastolic}</dd></div><div><dt>静息心率 · 次/分</dt><dd>${m.heart}</dd></div><div><dt>体重 · kg</dt><dd>${m.weight}</dd></div><div><dt>记录时间</dt><dd>${m.date}</dd></div></dl><div class="divider"></div><button class="secondary-button" data-do="measure">${icon('pulse')}添加记录</button></article><article class="card panel"><div class="card-header"><h2>指标记录</h2>${pill('本人记录','neutral')}</div>${measurements.slice(0,4).map(m=>`<div class="task-row"><div class="row-copy"><strong>${m.systolic}/${m.diastolic} mmHg</strong><small>${m.date} · 心率 ${m.heart} · ${m.weight} kg</small></div></div>`).join('')}</article><article class="card panel"><h2>资料一起带去问诊</h2><p>检查报告和随访记录集中保存，方便就诊时核对。</p><div class="inline-actions"><button class="text-button" data-go="reports">查看检查报告 →</button><button class="text-button" data-go="followup">随访记录 →</button></div></article></aside></div>`;
+}
+function followupPage() {
+  const active = plans.filter(p=>p.status==='active');
+  const tasks = active.flatMap(p=>p.tasks), done = tasks.filter(t=>t.done).length;
+  const visible = plans.filter(p=>state.planFilter==='all' || p.status===state.planFilter);
+  pages.followup.innerHTML = heading('随访计划','把需要做的事，变成清晰的下一步。') + stats([['进行中的计划',active.length,'按已安排的任务执行'],['任务已完成',`${done}/${tasks.length}`,'当前进行中的计划 · 患者自报'],['下一次随访','10.03','就诊时间与方式待确认']]) +
+  `<div class="toolbar">${tabs([['active','进行中'],['completed','已完成'],['all','全部计划']],state.planFilter,'plan')}<span class="fineprint">完成记录仅表示本人确认</span></div><div class="section-grid"><div class="stack">${visible.map(p=>{
+    const count=p.tasks.filter(t=>t.done).length, percent=Math.round(count/p.tasks.length*100);
+    return `<article class="card care-plan"><div class="care-plan-head"><div><h2>${p.title}</h2><p>${p.doctor} · ${p.date}</p></div>${pill({active:'进行中',completed:'已完成',expired:'已过期'}[p.status],p.status==='expired'?'warn':'')}</div><p style="margin-top:15px">${p.goal}</p><div class="progress-track"><span style="width:${percent}%"></span></div><div class="progress-meta"><span>已完成 ${count} / ${p.tasks.length} 项</span><span>${percent}%</span></div>${p.tasks.map(t=>`<div class="task-row"><button class="task-check ${t.done?'done':''}" data-do="task" data-plan="${p.id}" data-id="${t.id}" aria-label="${t.done?'已完成':'标记完成'}：${t.name}" ${t.done||p.status==='expired'?'disabled':''}>${t.done?icon('check'):''}</button><div class="row-copy"><strong>${t.name}</strong><small>${t.date} · ${esc(t.response || t.detail)}</small></div>${t.feedback&&!t.done?`<button class="text-button" data-do="feedback" data-plan="${p.id}" data-id="${t.id}">填写反馈 →</button>`:pill(t.done?'已完成':p.status==='expired'?'已过期':'待完成',t.done?'':'neutral')}</div>`).join('')}</article>`;
+  }).join('') || empty('暂无该状态的计划','试试查看全部计划。')} </div><aside class="stack"><article class="card panel"><div class="card-header"><h2>10 月照护日历</h2>${icon('calendar')}</div><div class="calendar-strip">${['四','五','六','日','一','二','三'].map((d,i)=>`<div class="calendar-day ${i===0?'today':''}">${d}<strong>${i+1}</strong>${i===2?'随访':i===0?'今天':'·'}</div>`).join('')}</div><div class="appointment"><strong>10.03 · 心内科随访准备</strong><small>带上血压记录、原处方和近期检查资料</small></div><div class="appointment"><strong>10.15 · 血脂复查准备</strong><small>时间与检查要求以接诊医生安排为准</small></div></article><article class="card panel"><h2>就诊前准备</h2><div class="task-row"><div class="row-copy"><strong>核对健康档案</strong><small>过敏史、慢病与当前用药</small></div><button class="text-button" data-go="health">查看 →</button></div><div class="task-row"><div class="row-copy"><strong>整理检查报告</strong><small>携带原件供医生核对</small></div><button class="text-button" data-go="reports">查看 →</button></div></article><div class="note-box">如症状明显加重或出现紧急危险信号，请及时就医，不必等待下一次随访。</div></aside></div>`;
+  $('#plan-count').textContent = active.length;
+}
+function medicationPage() {
+  const delivered = reminders.filter(r=>!r.review && ['sent','acknowledged'].includes(r.status));
+  const count=delivered.filter(r=>r.status==='acknowledged').length;
+  const visible=reminders.filter(r=>state.medFilter==='all'||(state.medFilter==='today'&&!r.history)||(state.medFilter==='recorded'&&r.status==='acknowledged'));
+  const names={acknowledged:'已打卡 · 患者自报',sent:'待你确认',pending:'等待发送'};
+  pages.medication.innerHTML = heading('用药提醒','按原处方用药，让提醒与记录更清楚。',`<button class="secondary-button" data-do="settings">${icon('settings')}提醒偏好</button>`) + stats([['今日用药提醒',reminders.filter(r=>!r.history&&!r.review).length,'仅包含已安排的用药提醒'],['已服用打卡',`${count}/${delivered.length}`,'当前示例中已送达的用药提醒'],['下一次提醒','20:00','阿托伐他汀 · 等待发送']]) +
+  `<div class="toolbar">${tabs([['today','今日安排'],['recorded','已打卡'],['all','全部记录']],state.medFilter,'med')}<button class="text-button" data-go="health">查看档案用药清单 →</button></div><div class="section-grid"><div>${visible.map(r=>`<article class="card med-row ${r.status==='acknowledged'?'recorded':''}"><div class="med-time">${r.time}<small>${r.history?'09.30':'10.01 · 今天'}</small></div><div class="med-icon">${icon(r.review?'record':'pill')}</div><div class="row-copy"><strong>${r.name}</strong><small>${r.dosage}<br>${r.note}</small></div><div class="inline-actions">${r.status==='sent'?`<button class="primary-button" data-do="ack" data-id="${r.id}">${icon('check')}${r.review?'已核对':'我已服用'}</button>`:pill(names[r.status],r.status==='pending'?'neutral':'')}<button class="text-button" data-do="reminder-detail" data-id="${r.id}">详情</button></div></article>`).join('') || empty('暂无提醒记录','切换到全部记录查看已安排的提醒。')}<p class="fineprint">这里只显示已安排的提醒；档案修改不会自动创建或更新已有提醒，请先核对原处方。打卡是患者自报，不代表医护确认。</p></div><aside class="stack"><article class="card panel"><h2>我的提醒偏好</h2><div class="task-row"><div class="row-copy"><strong>页面提醒</strong><small>${state.notifications?'已开启':'已关闭'} · 仅当前页面演示</small></div>${pill(state.notifications?'开启':'关闭',state.notifications?'':'neutral')}</div><div class="task-row"><div class="row-copy"><strong>安静时段</strong><small>${state.quiet?'22:00 — 次日 07:00':'未开启'}</small></div></div><button class="text-button" data-do="settings">调整偏好 →</button></article><article class="card panel"><h2>用药记录与提醒</h2><p>药物信息以原处方为准。若漏服、出现不适或需要调整用药，请联系医生或药师确认。</p><div class="note-box">本原型不提供补服、加量或停药建议。</div></article></aside></div>`;
+}
+const reportStatus = {review:['需人工复核','warn'],ready:['已整理',''],pending:['待解析','neutral']};
+function reportCards() {
+  const query=state.reportQuery.toLowerCase();
+  const visible=reports.filter(r=>(state.reportFilter==='all'||r.kind===state.reportFilter||state.reportFilter===r.status)&&`${r.title} ${r.hospital} ${r.date}`.toLowerCase().includes(query));
+  $('#report-results').innerHTML = visible.map(r=>`<article class="card report-card"><div class="care-plan-head">${icon(r.kind==='影像'?'pulse':'record')}${pill(...reportStatus[r.status])}</div><h2>${esc(r.title)}</h2><p>${esc(r.date)} · ${esc(r.kind)}<br>${esc(r.hospital)}</p><div class="fineprint">${esc(r.summary)}</div><div class="inline-actions"><span class="fineprint">${r.file?'本次添加':'示例报告'}</span><button class="text-button" data-do="report-detail" data-id="${r.id}">查看报告 →</button></div></article>`).join('') || empty('没有找到匹配报告','调整筛选条件，或清空关键词后重试。<br><button class="text-button" data-do="clear-reports">清空筛选 →</button>');
+  $('#report-result-count').textContent=`共 ${visible.length} 份`;
+}
+function reportsPage() {
+  pages.reports.innerHTML=heading('检查报告','把检查资料整理好，随时查阅与对照。',`<button class="primary-button" data-do="upload">${icon('upload')}上传检查报告</button>`)+stats([['已归档资料',reports.length,'检查报告与影像文字'],['待人工复核',reports.filter(r=>r.status==='review').length,'对照原件确认结果'],['最近一次检查',reports.map(r=>r.date).sort().at(-1).slice(5).replace('-','.'),'合成资料 · 用于交互演示']])+`<div class="toolbar">${tabs([['all','全部报告'],['检验','检验报告'],['影像','影像报告'],['review','需复核']],state.reportFilter,'report')}<div class="inline-actions"><input class="compact-input" id="report-query" value="${esc(state.reportQuery)}" placeholder="搜索名称、医院或日期" aria-label="搜索报告"><span class="fineprint" id="report-result-count"></span></div></div><div class="section-grid"><div class="report-list" id="report-results"></div><aside class="stack"><article class="card panel"><h2>资料整理进度</h2><div class="task-row"><span class="task-check done">${icon('check')}</span><div class="row-copy"><strong>示例资料已归档</strong><small>可查看整理后的指标与原始文字</small></div></div><div class="task-row"><span class="task-check">${icon('record')}</span><div class="row-copy"><strong>上传原件后待解析</strong><small>新文件不会生成演示指标</small></div></div><div class="task-row"><span class="task-check">${icon('user')}</span><div class="row-copy"><strong>人工对照与医生判断</strong><small>保留报告日期、单位和参考范围</small></div></div></article><article class="card panel"><h2>就诊时一起查看</h2><p>结合健康档案与近期记录，向接诊医生说明变化。</p><button class="text-button" data-go="health">查看健康档案 →</button></article><div class="note-box">AI 整理仅供对照原件，不代替医生判断。参考范围为合成报告示例，不作为个人诊断标准。</div></aside></div>`;
+  reportCards();
+}
+const consultationStatus = {active:['进行中',''],completed:['已结束','neutral'],followup:['待随访','warn']};
+function recordCards() {
+  const query = state.recordQuery.trim().toLowerCase();
+  const visible = consultations.filter(r => (state.recordFilter==='all'||r.status===state.recordFilter) && `${r.title} ${r.summary} ${r.date} ${r.tags.join(' ')}`.toLowerCase().includes(query));
+  $('#record-result-count').textContent = `共 ${visible.length} 次`;
+  $('#record-results').innerHTML = visible.map(r => `<article class="card record-card"><div class="record-date">${esc(r.date.slice(5,7))} 月<strong>${esc(r.date.slice(8))}</strong>${esc(r.date.slice(0,4))}<small>${esc(r.time)}</small></div><div><div class="care-plan-head"><div><h2>${esc(r.title)}</h2><div class="record-meta"><span>${esc(r.topic)} · AI 问诊</span><span>${r.messages.length} 条对话</span>${r.reportIds.length?`<span>${r.reportIds.length} 份关联报告</span>`:''}</div></div>${pill(...consultationStatus[r.status])}</div><p>${esc(r.summary)}</p><div class="tag-row">${r.tags.map(t=>pill(t,'neutral')).join('')}</div><div class="inline-actions record-actions"><button class="text-button" data-do="record-detail" data-id="${r.id}">查看问诊详情 →</button><button class="secondary-button" data-do="continue-consultation" data-id="${r.id}">${icon('chat')}继续问诊</button></div></div></article>`).join('') || empty('暂无匹配的问诊记录','调整关键词或状态后重试。<br><button class="text-button" data-do="clear-records">清空筛选 →</button>');
+}
+function recordsPage() {
+  pages.records.innerHTML = heading('问诊记录','每一次健康交流，都有迹可循。',`<button class="primary-button" data-do="new-consultation">${icon('chat')}发起新问诊</button>`) + stats([['问诊记录',consultations.length,'合成示例与本页演示会话'],['待随访',consultations.filter(r=>r.status==='followup').length,'关联照护计划，继续记录变化'],['进行中',consultations.filter(r=>r.status==='active').length,'随时回到上次对话']]) +
+    `<div class="toolbar">${tabs([['all','全部记录'],['active','进行中'],['completed','已结束'],['followup','待随访']],state.recordFilter,'record')}<div class="inline-actions"><input id="record-query" class="compact-input" aria-label="搜索问诊记录" placeholder="搜索症状、标题或日期" value="${esc(state.recordQuery)}"><span id="record-result-count" class="fineprint"></span></div></div><div class="section-grid"><div class="stack" id="record-results"></div><aside class="stack"><article class="card panel"><div class="card-header"><h2>继续上次的交流</h2>${icon('chat')}</div><p>${esc(consultations.find(r=>r.id===state.currentConsultation)?.title||'暂无当前问诊')}</p><button class="secondary-button" data-do="continue-consultation" data-id="${state.currentConsultation}">回到当前会话 ${icon('arrow')}</button></article><article class="card panel"><h2>随访资料准备</h2><div class="appointment"><strong>血脂检查报告咨询</strong><small>关联血压与血脂日常管理计划</small></div><button class="text-button" data-do="record-detail" data-id="lipid-session">查看关联记录 →</button></article><article class="card panel"><h2>就诊时一起查看</h2><p>问诊记录、检查报告与健康档案可以一起核对，帮助说明近期变化。</p><div class="inline-actions"><button class="text-button" data-go="reports">检查报告 →</button><button class="text-button" data-go="health">健康档案 →</button></div></article><div class="note-box">问诊摘要为合成演示，不是诊断结论。新增会话仅保留在本页，刷新后重置。</div></aside></div>`;
+  recordCards();
+}
+function conversationMarkup(messages) {
+  return messages.map(m=>`<div class="message-row ${m.role==='user'?'user':''}">${m.role==='assistant'?`<div class="message-avatar">${icon('bot')}</div>`:''}<div class="bubble"><div class="message-text">${esc(m.text)}</div><time>${esc(m.time)}</time></div>${m.role==='user'?`<div class="message-avatar person">${esc(profile.name.slice(0,1))}</div>`:''}</div>`).join('');
+}
+function recordDetail(id) {
+  const r=consultations.find(r=>r.id===id);if(!r)return;
+  openDialog('问诊记录详情',`<div class="care-plan-head"><div><h3>${esc(r.title)}</h3><p class="fineprint">${r.date} ${r.time} · ${esc(r.topic)} · ${r.messages.length} 条对话</p></div>${pill(...consultationStatus[r.status])}</div><div class="record-detail-summary"><h3>本次交流摘要</h3><p>${esc(r.summary)}</p></div><div class="tag-row">${r.tags.map(t=>pill(t,'neutral')).join('')}</div><div class="divider"></div><h3>关联资料</h3><div class="tag-row">${r.reportIds.map(id=>{const report=reports.find(x=>x.id===id);return report?`<button class="secondary-button" data-do="record-report" data-id="${id}">${icon('record')}${esc(report.title)}</button>`:'';}).join('')}${r.planId?`<button class="secondary-button" data-do="record-plan" data-id="${r.planId}">${icon('calendar')}查看关联随访计划</button>`:''}${!r.reportIds.length&&!r.planId?'<span class="fineprint">暂无关联报告或随访计划。</span>':''}</div><details class="record-transcript"><summary>查看完整对话（${r.messages.length} 条）</summary><div class="chat-stream">${r.messages.length?conversationMarkup(r.messages):'<p class="fineprint">尚未发送消息。</p>'}</div></details><p class="fineprint">合成示例和原型反馈不代表真实 AI 问诊或医生诊断。</p><div class="dialog-footer"><button class="secondary-button" data-do="close-dialog">关闭</button><button class="primary-button" data-do="continue-consultation" data-id="${r.id}">继续问诊 ${icon('arrow')}</button></div>`,true);
+}
+function renderCurrentConsultation() {
+  const r=consultations.find(r=>r.id===state.currentConsultation);if(!r)return;
+  $('#consult-session-label').textContent=r.title;
+  $('[data-do="end-consultation"]').disabled=r.status==='completed';
+  $('#consult-page .chat-stream').innerHTML=r.messages.length?conversationMarkup(r.messages):`<div class="note-box">开始描述你的健康问题。这是交互演示，未连接问诊模型。</div>`;
+  $('#consult-page .context-rail').innerHTML=`<article class="card context-card"><h3>${icon('chat')}本次问诊摘要</h3><p class="fineprint">${esc(r.summary)}</p></article><article class="card context-card"><h3>${icon('record')}关联资料</h3><div class="inline-actions">${r.reportIds.map(id=>{const report=reports.find(x=>x.id===id);return report?`<button class="text-button" data-do="record-report" data-id="${id}">${esc(report.title)} →</button>`:'';}).join('')||'<span class="fineprint">暂无关联报告</span>'}${r.planId?`<button class="text-button" data-do="record-plan" data-id="${r.planId}">查看关联随访计划 →</button>`:''}</div></article><article class="card context-card"><h3>${icon('clock')}会话状态</h3>${pill(...consultationStatus[r.status])}<p class="fineprint">对话修改仅保留在本页，刷新后重置。</p><button class="text-button" data-go="records">查看全部问诊记录 →</button></article><article class="card context-card"><h3>${icon('shield')}问诊边界</h3><p class="fineprint">原型反馈不生成诊断与用药建议。紧急情况请及时就医。</p></article>`;
+}
+function continueConsultation(id) {
+  const r=consultations.find(r=>r.id===id);if(!r)return;
+  if(dialog.open)dialog.close();
+  state.currentConsultation=id;r.status='active';$('#message-input').value='';
+  renderCurrentConsultation();recordsPage();openPage('consult');$('#message-input').focus();
+}
+function newConsultation() {
+  const stamp=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Hong_Kong',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date());
+  const r={id:'session-'+Date.now(),title:'新的健康咨询',date:stamp.slice(0,10),time:stamp.slice(11),status:'active',topic:'症状咨询',summary:'尚未发送消息，暂无问诊摘要。',tags:['本页演示'],reportIds:[],planId:null,messages:[]};
+  consultations.unshift(r);continueConsultation(r.id);
+}
+function updateDashboard() {
+  const sleep=plans.find(p=>p.id==='headache').tasks[0].done;
+  const evening=reminders.find(r=>r.id==='evening').status==='acknowledged';
+  const morning=reminders.find(r=>r.id==='morning').status==='acknowledged';
+  const list=[['晨间血压记录',true,'health'],['早餐后服药',morning,'medication'],['20:00 · 晚间用药',evening,'medication'],['记录睡眠与头痛',sleep,'followup']];
+  const count=list.filter(t=>t[1]).length, percent=count/4*100;
+  $('#today-score').textContent=`${percent}%`; $('#today-progress').style.width=`${percent}%`;
+  $('#today-completed').textContent=`已完成 ${count} 项`; $('#today-remaining').textContent=`还剩 ${4-count} 项`;
+  $('#today-tasks').innerHTML=list.map(([name,done,go])=>`<div class="plan-item ${done?'done':''}"><span class="check">${icon(done?'check':'clock')}</span><button class="text-button" data-go="${go}">${name}</button></div>`).join('');
+  const m=measurements[0]; $('.metric-card.blood strong').textContent=`${m.systolic}/${m.diastolic}`; $('.metric-card.heart strong').textContent=m.heart; $('.metric-card.weight strong').textContent=m.weight;
+  $('.hero-greeting').textContent=`下午好，${profile.name}`; $('.sidebar-user strong').textContent=profile.name;
+  // 不对新记录自动生成健康判断；趋势图保留合成周期数据并标注。
+  $('.metric-card.blood .metric-trend').textContent='本人记录';
+  $('.metric-card.heart .metric-trend').textContent='本人记录';
+  $('.metric-card.weight .metric-trend').textContent='本人记录';
+  $('.trend-card .card-header p').textContent='示例 7 天趋势 · 不包含本次新增记录';
+}
+function renderAll() { healthPage(); followupPage(); medicationPage(); reportsPage(); recordsPage(); updateDashboard(); }
+const profileTrigger=$('#profile-trigger'), profileMenu=$('#profile-menu');
+function setProfileMenu(open, focus=false) { profileMenu.classList.toggle('open',open); profileTrigger.setAttribute('aria-expanded',String(open)); if(open&&focus) profileMenu.querySelector('button').focus(); }
+const sidebar=$('.sidebar'); sidebar.id='patient-sidebar';
+function setMobileMenu(open) { sidebar.classList.toggle('mobile-open',open); $('#mobile-shade').hidden=!open; $('.mobile-menu').setAttribute('aria-expanded',String(open)); document.body.style.overflow=open?'hidden':''; if(open) sidebar.querySelector('.nav-item.active').focus(); }
+function openPage(name, updateUrl=true) {
+  if(!pages[name]) return;
+  state.view=name; Object.entries(pages).forEach(([key,page])=>page.classList.toggle('active',key===name));
+  document.querySelectorAll('.nav-item').forEach(item=>{const active=item.dataset.page===name; item.classList.toggle('active',active); if(active)item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current');});
+  setMobileMenu(false); setProfileMenu(false);
+  if(updateUrl) { const url=new URL(location.href); url.searchParams.set('view',name); url.searchParams.delete('profile'); history.pushState({view:name},'',url); }
+  window.scrollTo({top:0,behavior:'instant'}); pages[name].querySelector('h1')?.focus({preventScroll:true});
+}
+function openDialog(title, body, wide=false) {
+  if(dialog.open) dialog.close();
+  dialogTrigger=document.activeElement;
+  dialog.classList.toggle('wide',wide);
+  dialog.innerHTML=`<div class="dialog-head"><h2 id="dialog-title">${title}</h2><button class="icon-button" data-do="close-dialog" aria-label="关闭弹窗">×</button></div><div class="dialog-body">${body}</div>`;
+  dialog.showModal();
+}
+dialog.addEventListener('close',()=>{if(dialogTrigger?.isConnected) dialogTrigger.focus();});
+function footer(label='保存') { return `<p class="field-error" id="form-error" role="alert"></p><div class="dialog-footer"><button class="secondary-button" type="button" data-do="close-dialog">取消</button><button class="primary-button" type="submit">${label}</button></div>`; }
+function editProfile() {
+  openDialog('编辑健康档案',`<form data-form="profile"><div class="form-grid">${field('姓名','name',profile.name,'text','required maxlength="20"')}
+    <label class="field">性别<select name="gender">${['女','男','不便透露'].map(v=>`<option ${profile.gender===v?'selected':''}>${v}</option>`).join('')}</select></label>
+    ${field('手机','phone',profile.phone,'tel','required maxlength="24"')}${field('出生日期','birthday',profile.birthday,'date','required max="2026-10-01"')}${field('身高（cm）','height',profile.height,'number','required min="50" max="250" step="0.1"')}${field('体重（kg）','weight',profile.weight,'number','required min="2" max="500" step="0.1"')}
+    <label class="field full">过敏史（多个项目用逗号分隔）<input name="allergies" value="${esc(profile.allergies.join('，'))}" maxlength="200"></label><label class="field full">慢性病（多个项目用逗号分隔）<input name="chronic" value="${esc(profile.chronic.join('，'))}" maxlength="200"></label>
+    <label class="field full">既往史<textarea name="history" maxlength="500">${esc(profile.history)}</textarea></label><label class="field full">家族史<textarea name="family" maxlength="500">${esc(profile.family)}</textarea></label></div>${footer('保存档案')}</form>`);
+}
+function editDrugs() {
+  const rows=medications.length?medications:[{name:'',dosage:'',frequency:'',start:''}];
+  openDialog('编辑用药清单',`<form data-form="drugs"><p class="fineprint">按原处方填写；删除一条记录可清空该行药名。这里不会安排用药提醒。</p><div id="drug-fields">${rows.map((m,i)=>drugFields(m,i)).join('')}</div><button class="text-button" type="button" data-do="add-drug">＋ 添加一条用药记录</button>${footer('保存清单')}</form>`,true);
+}
+function drugFields(m,i) { return `<div class="form-grid drug-fields" style="margin-bottom:16px">${field('药物名称',`name-${i}`,m.name,'text','maxlength="80"')}${field('剂量',`dosage-${i}`,m.dosage,'text','maxlength="50"')}${field('频率',`frequency-${i}`,m.frequency,'text','maxlength="50"')}${field('开始日期',`start-${i}`,m.start,'date')}</div>`; }
+function measureDialog() { openDialog('记录健康指标',`<form data-form="measure"><div class="form-grid">${field('收缩压（mmHg）','systolic','','number','required min="40" max="300"')}${field('舒张压（mmHg）','diastolic','','number','required min="20" max="200"')}${field('静息心率（次/分）','heart','','number','required min="20" max="250"')}${field('体重（kg）','weight',profile.weight,'number','required min="2" max="500" step="0.1"')}${field('记录时间','date','2026-10-01T14:30','datetime-local','required max="2026-10-01T23:59"')}</div>${footer('保存记录')}</form>`); }
+function feedbackDialog(planId,taskId) {
+  const task=plans.find(p=>p.id===planId)?.tasks.find(t=>t.id===taskId); if(!task||task.done)return;
+  openDialog(task.name,`<form data-form="feedback" data-plan="${planId}" data-id="${taskId}"><div class="form-grid"><label class="field full">症状变化<select name="change"><option>基本稳定</option><option>有所缓解</option><option>有所加重</option></select></label><label class="field full">${taskId==='sleep'?'昨夜睡眠（小时）':'用药情况'}${taskId==='sleep'?'<input name="extra" type="number" min="0" max="24" step="0.5" required>':'<select name="extra"><option>按原处方用药</option><option>有漏服或不适，待咨询医生</option><option>暂无用药</option></select>'}</label><label class="field full">${taskId==='sleep'?'头痛时间、持续时长与伴随表现':'本周情况与想问医生的问题'}<textarea name="notes" required maxlength="500" placeholder="写下变化或需要关注的问题…"></textarea></label></div><p class="fineprint">提交后作为本人随访记录，不代表已发送给医生。</p>${footer('保存并完成任务')}</form>`);
+}
+function reminderDetail(id) {
+  const r=reminders.find(r=>r.id===id); if(!r)return;
+  openDialog('提醒详情',`<h3>${r.name}</h3><p class="fineprint">${r.dosage} · ${r.history?'09.30':'10.01'} ${r.time}</p>${pill({sent:'待你确认',pending:'等待发送',acknowledged:'已打卡 · 患者自报'}[r.status])}<p class="fineprint">${r.note}${r.recorded?`<br>自报时间：${r.recorded}`:''}</p><div class="note-box">${r.review?'此为核对清单任务，不计入服药打卡。':'请按原处方执行。漏服、用药后不适或需要调整时，联系医生或药师。'}</div><div class="dialog-footer">${r.status==='sent'?`<button class="primary-button" data-do="ack" data-id="${r.id}">${r.review?'已核对':'我已服用'}</button>`:''}${r.status==='pending'?'<span class="fineprint">尚未发送，不能提前打卡。</span>':''}<button class="secondary-button" data-do="close-dialog">关闭</button></div>`);
+}
+function settingsDialog() {
+  openDialog('提醒偏好',`<form data-form="settings"><label class="switch-row"><span>页面提醒<small>仅演示界面偏好，不发送系统通知</small></span><input name="notifications" type="checkbox" ${state.notifications?'checked':''}></label><label class="switch-row"><span>安静时段<small>22:00 — 次日 07:00</small></span><input name="quiet" type="checkbox" ${state.quiet?'checked':''}></label>${footer('保存偏好')}</form>`);
+}
+function reportDetail(id) {
+  const r=reports.find(r=>r.id===id); if(!r)return;
+  let content=r.metrics?`<div class="table-scroll"><table class="records-table"><thead><tr><th>指标</th><th>结果</th><th>参考范围</th><th>状态</th></tr></thead><tbody>${r.metrics.map(m=>`<tr><td>${m[0]}</td><td>${m[1]}<br><span class="fineprint">${m[2]}</span></td><td>${m[3]}</td><td>${pill(m[4],m[4]==='偏高'?'danger':'')}</td></tr>`).join('')}</tbody></table></div>`:`<p class="fineprint">${esc(r.text || '文件已添加。此原型不解析文件，暂无结构化结果。')}</p>`;
+  openDialog('报告详情',`<div class="care-plan-head"><div><h3>${esc(r.title)}</h3><p class="fineprint">${esc(r.hospital)} · ${esc(r.date)}</p></div>${pill(...reportStatus[r.status])}</div>${content}<div class="note-box" style="margin-top:20px">${r.file?'新文件仅保留在本页内存中，刷新后清除。':'此为合成示例，整理结果请对照原件，不代替医生判断。'}</div><div class="dialog-footer">${r.file?`<a class="secondary-button" href="${r.url}" target="_blank" rel="noopener">查看所选原件</a>`:`<button class="secondary-button" data-do="download-sample" data-id="${r.id}">下载示例文字</button>`}<button class="primary-button" data-do="report-consult" data-id="${r.id}">带着资料问诊 ${icon('arrow')}</button></div>`,true);
+}
+function uploadDialog() {
+  openDialog('上传检查报告',`<form data-form="upload"><div class="form-grid"><label class="field full">选择报告原件<input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" required></label>${field('报告名称','title','','text','required maxlength="80" placeholder="如：9 月血脂检查报告"')}<label class="field">报告类别<select name="kind"><option>检验</option><option>影像</option></select></label>${field('检查日期','date','2026-10-01','date','required max="2026-10-01"')}${field('检查机构','hospital','','text','required maxlength="80" placeholder="填写医院或机构"')}</div><p class="fineprint">支持 PDF、PNG、JPG，单份不超过 10 MB。文件仅在本页预览，不上传服务器、不生成解析结果。</p>${footer('添加报告')}</form>`);
+}
+function searchDialog(query) {
+  const items=[...consultations.map(r=>({title:r.title,subtitle:`问诊记录 · ${r.date} · ${r.summary}`,view:'records',id:r.id})),...reports.map(r=>({title:r.title,subtitle:`检查报告 · ${r.hospital}`,view:'reports',id:r.id})),...plans.map(p=>({title:p.title,subtitle:`随访计划 · ${p.goal}`,view:'followup'})),...medications.map(m=>({title:m.name,subtitle:`健康档案 · ${m.dosage} · ${m.frequency}`,view:'health'})),{title:'健康档案',subtitle:`${profile.name} · ${profile.chronic.join('、')} · ${profile.allergies.join('、')}`,view:'health'}];
+  const found=items.filter(i=>`${i.title} ${i.subtitle}`.toLowerCase().includes(query.toLowerCase()));
+  openDialog('搜索结果',`<p class="fineprint">关键词：${esc(query)} · ${found.length} 条结果</p><div class="search-results">${found.map(i=>`<button data-do="search-open" data-view="${i.view}" ${i.id?`data-id="${i.id}"`:''}>${esc(i.title)}<small>${esc(i.subtitle)}</small></button>`).join('')||empty('暂无匹配内容','请尝试报告名称、药名或计划名称。')}</div>`);
+}
+document.addEventListener('click',event=>{
+  const button=event.target.closest('button');
+  if(!$('#profile-area').contains(event.target)) setProfileMenu(false);
+  if(!button)return;
+  if(button.dataset.page) return openPage(button.dataset.page);
+  if(button.dataset.go) return openPage(button.dataset.go);
+  if(button.dataset.profileAction) {setProfileMenu(false); return button.dataset.profileAction==='个人资料'?openPage('health'):settingsDialog();}
+  if(button.dataset.filter) {
+    const group=button.dataset.filter;
+    if(group==='plan'){state.planFilter=button.dataset.value;followupPage();}
+    if(group==='med'){state.medFilter=button.dataset.value;medicationPage();}
+    if(group==='report'){state.reportFilter=button.dataset.value;reportsPage();}
+    if(group==='record'){state.recordFilter=button.dataset.value;recordsPage();}
+    pages[state.view].querySelector(`[data-filter="${group}"].active`)?.focus(); return;
+  }
+  const action=button.dataset.do;
+  if(action==='close-dialog')return dialog.close();
+  if(action==='edit-profile')return editProfile();
+  if(action==='edit-drugs')return editDrugs();
+  if(action==='measure')return measureDialog();
+  if(action==='feedback')return feedbackDialog(button.dataset.plan,button.dataset.id);
+  if(action==='settings')return settingsDialog();
+  if(action==='upload')return uploadDialog();
+  if(action==='reminder-detail')return reminderDetail(button.dataset.id);
+  if(action==='report-detail')return reportDetail(button.dataset.id);
+  if(action==='record-detail')return recordDetail(button.dataset.id);
+  if(action==='continue-consultation')return continueConsultation(button.dataset.id);
+  if(action==='new-consultation')return newConsultation();
+  if(action==='end-consultation'){
+    const r=consultations.find(r=>r.id===state.currentConsultation);if(!r)return;
+    r.status='completed';recordsPage();renderCurrentConsultation();openPage('records');showToast('本次演示会话已结束，可从记录中继续问诊');return;
+  }
+  if(action==='record-report'){if(dialog.open)dialog.close();openPage('reports');reportDetail(button.dataset.id);return;}
+  if(action==='record-plan'){
+    const plan=plans.find(p=>p.id===button.dataset.id);if(!plan)return;
+    if(dialog.open)dialog.close();state.planFilter=plan.status==='expired'?'all':plan.status;followupPage();openPage('followup');return;
+  }
+  if(action==='clear-records'){state.recordQuery='';state.recordFilter='all';recordsPage();return;}
+  if(action==='clear-reports'){state.reportQuery='';state.reportFilter='all';return reportsPage();}
+  if(action==='add-drug'){const i=document.querySelectorAll('.drug-fields').length;$('#drug-fields').insertAdjacentHTML('beforeend',drugFields({name:'',dosage:'',frequency:'',start:''},i));$(`[name="name-${i}"]`).focus();return;}
+  if(action==='task') {
+    const p=plans.find(p=>p.id===button.dataset.plan), t=p?.tasks.find(t=>t.id===button.dataset.id);
+    if(!t||t.done||p.status==='expired')return;
+    if(t.feedback)return feedbackDialog(p.id,t.id);
+    t.done=true; if(p.tasks.every(t=>t.done))p.status='completed'; renderAll(); showToast('已记为本人完成'); return;
+  }
+  if(action==='ack') {
+    const r=reminders.find(r=>r.id===button.dataset.id); if(!r||r.status!=='sent')return;
+    r.status='acknowledged';r.recorded='本次操作'; if(dialog.open)dialog.close(); renderAll(); showToast(r.review?'已记录用药清单核对':'已记录本次服用（患者自报）'); return;
+  }
+  if(action==='report-consult') {
+    const r=reports.find(r=>r.id===button.dataset.id);if(!r)return;
+    const session=consultations.find(c=>c.id===state.currentConsultation);
+    if(session&&!session.reportIds.includes(r.id))session.reportIds.push(r.id);
+    dialog.close();renderCurrentConsultation();recordsPage();openPage('consult');$('#message-input').value=`我想咨询这份报告：${r.title}（${r.date}）。`;$('#message-input').focus();showToast('已关联本页报告并带入名称；原件未发送');return;
+  }
+  if(action==='search-open'){dialog.close();openPage(button.dataset.view);if(button.dataset.id){if(button.dataset.view==='records')recordDetail(button.dataset.id);else reportDetail(button.dataset.id);}return;}
+  if(action==='notifications')return openDialog('照护通知',`<div class="task-row"><div class="row-copy"><strong>血脂检查资料待复核</strong><small>1 份合成报告需对照原件</small></div><button class="text-button" data-do="search-open" data-view="reports">查看 →</button></div><div class="task-row"><div class="row-copy"><strong>本周随访反馈待填写</strong><small>保存后更新任务进度</small></div><button class="text-button" data-do="search-open" data-view="followup">查看 →</button></div><p class="fineprint">通知为演示内容，不连接真实提醒服务。</p>`);
+  if(action==='download-sample') {
+    const r=reports.find(r=>r.id===button.dataset.id);
+    const text=`合成示例资料，不作为医疗依据\n${r.title}\n${r.date} · ${r.hospital}\n${r.metrics?r.metrics.map(m=>m.join(' | ')).join('\n'):r.text}`;
+    const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=r.title+'-合成示例.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return;
+  }
+  if(button.dataset.action==='toast')showToast();
+});
+document.addEventListener('submit',event=>{
+  const form=event.target; if(!form.dataset.form)return;event.preventDefault();
+  const data=new FormData(form), value=name=>String(data.get(name)||'').trim();
+  const error=message=>{$('#form-error').textContent=message;};
+  const type=form.dataset.form;
+  if(type==='profile'){
+    if(!value('name')||!value('phone'))return error('请填写姓名和手机号码。');
+    if(!/^\+?[\d\s()-]{7,24}$/.test(value('phone')))return error('请检查手机号码格式。');
+    Object.assign(profile,{name:value('name'),phone:value('phone'),gender:value('gender'),birthday:value('birthday'),height:Number(value('height')),weight:Number(value('weight')),allergies:value('allergies').split(/[,，、]/).map(s=>s.trim()).filter(Boolean),chronic:value('chronic').split(/[,，、]/).map(s=>s.trim()).filter(Boolean),history:value('history'),family:value('family')});
+  }
+  if(type==='drugs'){
+    const next=[];
+    for(let i=0;i<document.querySelectorAll('.drug-fields').length;i++){
+      const name=value(`name-${i}`);if(!name)continue;
+      if(!value(`dosage-${i}`)||!value(`frequency-${i}`))return error('填写药名后，请同时填写剂量与频率。');
+      next.push({name,dosage:value(`dosage-${i}`),frequency:value(`frequency-${i}`),start:value(`start-${i}`)||'未填写'});
+    }
+    medications.splice(0,medications.length,...next);
+  }
+  if(type==='measure'){
+    const systolic=Number(value('systolic')),diastolic=Number(value('diastolic'));
+    if(systolic<=diastolic)return error('收缩压应大于舒张压，请核对读数。');
+    measurements.unshift({systolic,diastolic,heart:Number(value('heart')),weight:Number(value('weight')),date:value('date').replace('T',' ')});measurements.sort((a,b)=>b.date.localeCompare(a.date));
+    // 新记录属于指标历史；档案中的体重只通过档案编辑更新。
+  }
+  if(type==='feedback'){
+    if(!value('notes'))return error('请补充本次记录。');
+    const p=plans.find(p=>p.id===form.dataset.plan),t=p.tasks.find(t=>t.id===form.dataset.id);
+    t.response=`${value('change')} · ${t.id==='sleep'?'睡眠 '+value('extra')+' 小时':value('extra')} · ${value('notes')}`;t.done=true;
+    if(p.tasks.every(t=>t.done))p.status='completed';
+  }
+  if(type==='settings'){state.notifications=data.has('notifications');state.quiet=data.has('quiet');}
+  if(type==='upload'){
+    const file=data.get('file');
+    if(!file?.size)return error('请选择一份非空报告文件。');
+    if(file.size>10*1024*1024)return error('文件超过 10 MB，请选择更小的文件。');
+    if(!/\.(pdf|png|jpe?g)$/i.test(file.name)||!['application/pdf','image/png','image/jpeg'].includes(file.type))return error('请使用 PDF、PNG 或 JPG 文件。');
+    if(!value('title')||!value('hospital'))return error('请填写报告名称与检查机构。');
+    reports.unshift({id:'uploaded-'+Date.now(),title:value('title'),kind:value('kind'),date:value('date'),hospital:value('hospital'),status:'pending',summary:`${file.name} · ${(file.size/1024).toFixed(1)} KB · 尚未解析`,file,url:URL.createObjectURL(file)});
+  }
+  dialog.close();renderAll();if(type==='upload')openPage('reports');showToast(type==='upload'?'报告已添加到本页，等待解析':'已保存本次演示修改，刷新后重置');
+});
+document.addEventListener('input',event=>{if(event.target.id==='report-query'){state.reportQuery=event.target.value;reportCards();}if(event.target.id==='record-query'){state.recordQuery=event.target.value;recordCards();}});
+$('#global-search').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();const q=event.target.value.trim();if(q)searchDialog(q);else showToast('请先输入关键词');}});
+profileTrigger.addEventListener('click',()=>setProfileMenu(profileTrigger.getAttribute('aria-expanded')!=='true',true));
+profileMenu.addEventListener('keydown',event=>{if(!['ArrowDown','ArrowUp'].includes(event.key))return;event.preventDefault();const actions=[...profileMenu.querySelectorAll('button')],i=actions.indexOf(document.activeElement);actions[(i+(event.key==='ArrowDown'?1:-1)+actions.length)%actions.length].focus();});
+$('.mobile-menu').addEventListener('click',()=>setMobileMenu(!sidebar.classList.contains('mobile-open')));
+$('#mobile-shade').addEventListener('click',()=>{setMobileMenu(false);$('.mobile-menu').focus();});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!dialog.open){setProfileMenu(false);if(sidebar.classList.contains('mobile-open')){setMobileMenu(false);$('.mobile-menu').focus();}else profileTrigger.focus();}
+  if(event.key==='Tab'&&sidebar.classList.contains('mobile-open')&&!dialog.open){const nodes=[...sidebar.querySelectorAll('button')].filter(n=>n.offsetParent!==null),first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}
+});
+window.addEventListener('resize',()=>{if(innerWidth>850&&sidebar.classList.contains('mobile-open'))setMobileMenu(false);});
+window.addEventListener('popstate',()=>openPage(new URLSearchParams(location.search).get('view')||'dashboard',false));
+function sendMessage() {
+  const input=$('#message-input');if(!input.value.trim())return showToast('请先输入症状描述');
+  const r=consultations.find(r=>r.id===state.currentConsultation);if(!r)return;
+  const text=input.value.trim();if(!r.messages.length){r.title=text.slice(0,24);r.summary='已保存本页演示对话，尚未生成 AI 问诊总结。';}
+  r.status='active';r.messages.push({role:'user',text,time:'本次演示'},{role:'assistant',text:'已展示你的输入。这是交互原型，未连接问诊模型；请在正式服务中咨询，紧急情况及时就医。',time:'原型反馈'});
+  input.value='';renderCurrentConsultation();recordsPage();const stream=$('#consult-page .chat-stream');stream.scrollTop=stream.scrollHeight;
+}
+$('#send-message').addEventListener('click',sendMessage);$('#message-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.isComposing)sendMessage();});
+document.querySelectorAll('.period-tabs button').forEach(button=>button.addEventListener('click',()=>{button.parentElement.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b===button));showToast(`${button.textContent}视图为展示选项，曲线仍为合成 7 天数据`);}));
+renderAll();
+const query=new URLSearchParams(location.search);openPage(pages[query.get('view')]?query.get('view'):'dashboard',false);if(query.get('profile')==='open')setProfileMenu(true);
+
+  </script>
+</body>
+</html>

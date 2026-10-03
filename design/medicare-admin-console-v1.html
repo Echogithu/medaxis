@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>医枢 MedAxis 管理控制台 · 设计提案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --blue-700: #174fcb;
+      --blue-600: #2264e5;
+      --blue-500: #3478f6;
+      --blue-100: #e8f0ff;
+      --blue-50: #f3f7ff;
+      --canvas: #f4f7fb;
+      --surface: #ffffff;
+      --surface-2: #f8faff;
+      --surface-raised: rgba(255, 255, 255, 0.94);
+      --ink: #172033;
+      --ink-2: #556176;
+      --ink-3: #8993a7;
+      --line: #e5eaf2;
+      --line-strong: #d7deea;
+      --success: #17875f;
+      --success-soft: #e8f7f0;
+      --warning: #bf6b11;
+      --warning-soft: #fff4e4;
+      --danger: #d34242;
+      --danger-soft: #feeeee;
+      --violet: #7357d8;
+      --violet-soft: #f1edff;
+      --shadow: 0 14px 36px rgba(36, 54, 85, 0.07);
+      --shadow-soft: 0 3px 12px rgba(36, 54, 85, 0.05);
+      --radius-lg: 18px;
+      --radius-md: 13px;
+      --sidebar: 242px;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --blue-700: #8cb5ff;
+      --blue-600: #70a2ff;
+      --blue-500: #5d92f4;
+      --blue-100: #1c3a68;
+      --blue-50: #142848;
+      --canvas: #0b1220;
+      --surface: #111b2c;
+      --surface-2: #152238;
+      --surface-raised: rgba(17, 27, 44, 0.96);
+      --ink: #edf3ff;
+      --ink-2: #aab7cc;
+      --ink-3: #728098;
+      --line: #22314a;
+      --line-strong: #30415d;
+      --success: #55d6a2;
+      --success-soft: #15392f;
+      --warning: #f3b560;
+      --warning-soft: #3b2d19;
+      --danger: #ff8383;
+      --danger-soft: #422126;
+      --violet: #a995ff;
+      --violet-soft: #29234a;
+      --shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+      --shadow-soft: 0 3px 14px rgba(0, 0, 0, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { margin: 0; min-height: 100%; }
+
+    body {
+      font-family: "MiSans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at 92% 2%, rgba(52, 120, 246, 0.07), transparent 22rem),
+        var(--canvas);
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color .25s ease, color .25s ease;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    svg { display: block; }
+
+    .app-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 22px 15px 17px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: var(--surface-raised);
+      backdrop-filter: blur(18px);
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 0 8px 23px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      color: #fff;
+      background: linear-gradient(145deg, var(--blue-500), var(--blue-700));
+      box-shadow: 0 8px 18px rgba(34, 100, 229, .25);
+    }
+
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand-copy { min-width: 0; }
+    .brand-title { font-size: 15px; font-weight: 760; letter-spacing: -.2px; }
+    .brand-subtitle { margin-top: 1px; color: var(--ink-3); font-size: 10px; letter-spacing: 1.35px; }
+
+    .nav-scroll { flex: 1; overflow: auto; padding: 17px 0 12px; scrollbar-width: none; }
+    .nav-scroll::-webkit-scrollbar { display: none; }
+    .nav-group + .nav-group { margin-top: 19px; }
+    .nav-label {
+      padding: 0 12px 7px;
+      color: var(--ink-3);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 1.25px;
+    }
+
+    .nav-item {
+      width: 100%;
+      min-height: 41px;
+      margin: 2px 0;
+      padding: 0 11px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border: 0;
+      border-radius: 11px;
+      background: transparent;
+      color: var(--ink-2);
+      cursor: pointer;
+      text-align: left;
+      transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+
+    .nav-item:hover { background: var(--surface-2); color: var(--ink); transform: translateX(2px); }
+    .nav-item.active { background: var(--blue-100); color: var(--blue-700); font-weight: 680; }
+    .nav-item .icon { width: 20px; height: 20px; opacity: .88; }
+    .nav-item span:nth-child(2) { flex: 1; }
+    .nav-item .badge {
+      min-width: 22px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      padding: 0 6px;
+      border-radius: 10px;
+      color: var(--warning);
+      background: var(--warning-soft);
+      font-size: 10px;
+      font-weight: 760;
+    }
+
+    .workspace { min-width: 0; }
+
+    .topbar {
+      height: 67px;
+      padding: 0 clamp(22px, 3vw, 42px);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      backdrop-filter: blur(15px);
+      position: sticky;
+      top: 0;
+      z-index: 8;
+    }
+
+    .mobile-menu { display: none; }
+    .crumbs { flex: 1; color: var(--ink-3); font-size: 12px; }
+    .crumbs strong { color: var(--ink); font-weight: 680; }
+
+    .search {
+      width: min(310px, 30vw);
+      height: 37px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--ink-3);
+      background: var(--surface-2);
+    }
+
+    .search:focus-within { border-color: var(--blue-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue-500) 12%, transparent); }
+    .search svg { width: 16px; height: 16px; flex: none; }
+    .search input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 12px; }
+    .search input::placeholder { color: var(--ink-3); }
+    .keycap { padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: 5px; font-size: 9px; }
+
+    .icon-button {
+      width: 37px;
+      height: 37px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--surface);
+      color: var(--ink-2);
+      cursor: pointer;
+      position: relative;
+      transition: transform .18s ease, border-color .18s ease, color .18s ease;
+    }
+
+    .icon-button:hover { transform: translateY(-1px); border-color: var(--blue-500); color: var(--blue-600); }
+    .icon-button svg { width: 18px; height: 18px; }
+    .notification-dot { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border: 2px solid var(--surface); border-radius: 50%; background: var(--danger); }
+    .moon-icon { display: block; }
+    .sun-icon { display: none; }
+    html[data-theme="dark"] .moon-icon { display: none; }
+    html[data-theme="dark"] .sun-icon { display: block; }
+
+    .user-menu { position: relative; }
+    .user-menu-trigger {
+      min-width: 136px;
+      height: 40px;
+      padding: 4px 6px 4px 11px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 9px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      cursor: pointer;
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+
+    .user-menu-trigger:hover,
+    .user-menu.open .user-menu-trigger {
+      border-color: var(--blue-500);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue-500) 10%, transparent);
+    }
+
+    .user-role-label { color: var(--ink-2); font-size: 11px; font-weight: 680; white-space: nowrap; }
+    .user-avatar {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      flex: none;
+      border-radius: 9px;
+      color: #fff;
+      background: linear-gradient(145deg, var(--blue-500), var(--blue-700));
+      box-shadow: 0 5px 12px rgba(34, 100, 229, .2);
+      font-size: 11px;
+      font-weight: 780;
+    }
+
+    .user-chevron { width: 14px; height: 14px; color: var(--ink-3); transition: transform .18s ease; }
+    .user-menu.open .user-chevron { transform: rotate(180deg); }
+
+    .user-dropdown {
+      position: absolute;
+      top: calc(100% + 9px);
+      right: 0;
+      width: 218px;
+      padding: 7px;
+      border: 1px solid var(--line-strong);
+      border-radius: 13px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-5px) scale(.98);
+      transform-origin: top right;
+      pointer-events: none;
+      transition: opacity .16s ease, visibility .16s ease, transform .16s ease;
+    }
+
+    .user-menu.open .user-dropdown {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .dropdown-identity { padding: 10px 10px 11px; display: flex; align-items: center; gap: 10px; }
+    .dropdown-name { font-size: 12px; font-weight: 740; }
+    .dropdown-role { margin-top: 1px; color: var(--ink-3); font-size: 9px; }
+    .dropdown-divider { height: 1px; margin: 0 4px 5px; background: var(--line); }
+    .dropdown-logout {
+      width: 100%;
+      min-height: 38px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      border-radius: 9px;
+      color: var(--danger);
+      background: transparent;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 680;
+      text-align: left;
+    }
+    .dropdown-logout:hover { background: var(--danger-soft); }
+    .dropdown-logout svg { width: 16px; height: 16px; }
+
+    main { padding: 27px clamp(22px, 3vw, 42px) 42px; max-width: 1580px; margin: 0 auto; }
+
+    .page-intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 23px; }
+    .eyebrow { display: flex; align-items: center; gap: 8px; color: var(--blue-600); font-size: 10px; font-weight: 800; letter-spacing: 1.35px; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 20px; height: 2px; border-radius: 2px; background: var(--blue-500); }
+    h1 { margin: 7px 0 2px; font-size: clamp(25px, 2.2vw, 32px); line-height: 1.25; letter-spacing: -.8px; }
+    .page-subtitle { color: var(--ink-2); font-size: 13px; }
+    .page-meta { color: var(--ink-3); font-size: 11px; text-align: right; }
+    .live-row { margin-top: 5px; display: flex; justify-content: end; align-items: center; gap: 6px; color: var(--success); font-weight: 650; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .metric-card {
+      min-height: 132px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+
+    .metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .metric-top { display: flex; align-items: center; justify-content: space-between; color: var(--ink-2); font-size: 12px; }
+    .metric-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; color: var(--blue-600); background: var(--blue-100); }
+    .metric-card.warning .metric-icon { color: var(--warning); background: var(--warning-soft); }
+    .metric-card.violet .metric-icon { color: var(--violet); background: var(--violet-soft); }
+    .metric-card.success .metric-icon { color: var(--success); background: var(--success-soft); }
+    .metric-icon svg { width: 18px; height: 18px; }
+    .metric-value { margin-top: 11px; font-size: 28px; line-height: 1; letter-spacing: -.9px; font-weight: 780; }
+    .metric-note { margin-top: 8px; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 10px; }
+    .trend-up { color: var(--success); font-weight: 760; }
+    .trend-warn { color: var(--warning); font-weight: 760; }
+
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(295px, .85fr); gap: 16px; }
+    .section-card { padding: 19px 20px; min-width: 0; }
+    .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 17px; }
+    .section-title { margin: 0; font-size: 14px; font-weight: 760; letter-spacing: -.15px; }
+    .section-desc { margin-top: 3px; color: var(--ink-3); font-size: 10px; }
+    .text-button { padding: 4px 0; border: 0; background: transparent; color: var(--blue-600); font-size: 11px; font-weight: 680; cursor: pointer; }
+    .text-button:hover { text-decoration: underline; }
+
+    .chart-card { min-height: 281px; }
+    .chart-legend { display: flex; align-items: center; gap: 15px; color: var(--ink-3); font-size: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue-500); }
+    .legend-dot.secondary { background: #74d5ba; }
+    .chart-wrap { height: 177px; position: relative; }
+    .chart-wrap svg { width: 100%; height: 100%; overflow: visible; }
+    .chart-grid { stroke: var(--line); stroke-width: 1; }
+    .chart-line { fill: none; stroke: var(--blue-500); stroke-width: 2.7; stroke-linecap: round; stroke-linejoin: round; }
+    .chart-area { fill: url(#areaGradient); opacity: .72; }
+    .chart-dot { fill: var(--surface); stroke: var(--blue-500); stroke-width: 2; }
+    .chart-axis { fill: var(--ink-3); font-size: 9px; }
+
+    .task-list { display: grid; gap: 9px; }
+    .task {
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-2);
+      cursor: pointer;
+      transition: border-color .18s ease, transform .18s ease;
+    }
+    .task:hover { border-color: var(--blue-500); transform: translateX(2px); }
+    .task-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--warning); background: var(--warning-soft); }
+    .task:nth-child(2) .task-icon { color: var(--violet); background: var(--violet-soft); }
+    .task:nth-child(3) .task-icon { color: var(--blue-600); background: var(--blue-100); }
+    .task-icon svg { width: 17px; height: 17px; }
+    .task-title { font-size: 11px; font-weight: 700; }
+    .task-subtitle { margin-top: 2px; color: var(--ink-3); font-size: 9px; }
+    .task-count { min-width: 31px; height: 25px; display: grid; place-items: center; border-radius: 8px; background: var(--surface); font-size: 11px; font-weight: 760; box-shadow: inset 0 0 0 1px var(--line); }
+
+    .lower-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr); gap: 16px; }
+    .health-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .health-item { padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+    .health-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .health-label { color: var(--ink-2); font-size: 10px; }
+    .status-pill { padding: 3px 7px; border-radius: 99px; color: var(--success); background: var(--success-soft); font-size: 8px; font-weight: 780; letter-spacing: .4px; }
+    .status-pill.warning { color: var(--warning); background: var(--warning-soft); }
+    .health-value { margin-top: 10px; font-size: 17px; font-weight: 760; }
+    .health-meta { margin-top: 2px; color: var(--ink-3); font-size: 9px; }
+    .health-bar { margin-top: 11px; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+    .health-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--success); }
+    .health-item:nth-child(2) .health-bar > i { background: var(--blue-500); }
+    .health-item:nth-child(3) .health-bar > i { background: var(--warning); }
+
+    .activity-list { display: grid; }
+    .activity { padding: 9px 0; display: grid; grid-template-columns: 29px 1fr auto; align-items: center; gap: 9px; border-top: 1px solid var(--line); }
+    .activity:first-child { border-top: 0; padding-top: 1px; }
+    .activity-avatar { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 9px; background: var(--blue-100); color: var(--blue-700); font-size: 9px; font-weight: 760; }
+    .activity-copy { font-size: 10px; color: var(--ink-2); }
+    .activity-copy strong { color: var(--ink); font-weight: 700; }
+    .activity-time { color: var(--ink-3); font-size: 9px; white-space: nowrap; }
+
+    .prototype-note {
+      margin-top: 14px;
+      padding: 9px 12px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 10px;
+      color: var(--ink-3);
+      background: color-mix(in srgb, var(--surface) 64%, transparent);
+      font-size: 9px;
+      text-align: center;
+    }
+
+    .toast {
+      position: fixed;
+      left: calc(var(--sidebar) + 50%);
+      bottom: 25px;
+      z-index: 30;
+      padding: 9px 13px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      color: var(--ink-2);
+      font-size: 11px;
+      opacity: 0;
+      transform: translate(-50%, 10px);
+      pointer-events: none;
+      transition: .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 1120px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .content-grid, .lower-grid { grid-template-columns: 1fr; }
+      .task-list { grid-template-columns: repeat(3, 1fr); }
+      .task { grid-template-columns: 32px 1fr; }
+      .task-count { grid-column: 2; justify-self: start; }
+    }
+
+    @media (max-width: 760px) {
+      :root { --sidebar: 0px; }
+      .app-shell { display: block; }
+      .sidebar { display: none; }
+      .topbar { padding: 0 15px; }
+      .mobile-menu { display: grid; }
+      .crumbs, .keycap { display: none; }
+      .search { flex: 1; width: auto; }
+      .user-menu-trigger { min-width: auto; width: 40px; padding: 4px; justify-content: center; }
+      .user-role-label, .user-chevron { display: none; }
+      main { padding: 20px 15px 30px; }
+      .page-intro { align-items: flex-start; }
+      .page-meta { display: none; }
+      .metrics { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .metric-card { min-height: 123px; padding: 15px; }
+      .metric-value { font-size: 24px; }
+      .task-list, .health-grid { grid-template-columns: 1fr; }
+      .toast { left: 50%; }
+    }
+
+    @media (max-width: 460px) {
+      .metrics { grid-template-columns: 1fr; }
+      .page-intro { display: block; }
+      .section-card { padding: 16px; }
+      .topbar .notification-button { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <defs>
+      <symbol id="i-cross" viewBox="0 0 24 24"><path d="M9.6 3.8h4.8v5.8h5.8v4.8h-5.8v5.8H9.6v-5.8H3.8V9.6h5.8V3.8Z" fill="currentColor"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 20v-1.8a3.7 3.7 0 0 0-3.7-3.7H6.7A3.7 3.7 0 0 0 3 18.2V20M9.5 10.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17 4.2a3.5 3.5 0 0 1 0 6.6m4 9.2v-1.8a3.7 3.7 0 0 0-2.8-3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-stethoscope" viewBox="0 0 24 24"><path d="M6 3v5a5 5 0 0 0 10 0V3m-3 0h3v3m-10 0V3h3m2 10v2a5 5 0 0 0 10 0v-1.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="20" cy="11.5" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4.8A2.8 2.8 0 0 1 6.8 2H11v17H6.8A2.8 2.8 0 0 0 4 21.8v-17ZM20 4.8A2.8 2.8 0 0 0 17.2 2H13v17h4.2a2.8 2.8 0 0 1 2.8 2.8v-17Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v14A1.5 1.5 0 0 0 6.5 22h11a1.5 1.5 0 0 0 1.5-1.5v-14A1.5 1.5 0 0 0 17.5 5H15M9 3.5h6v4H9v-4Zm-.5 9.5 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.5 4.6L18 9l-4.5 1.4L12 15l-1.5-4.6L6 9l4.5-1.4L12 3Zm6 11 .8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14ZM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8L5 14Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Zm-8 12h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.3-5.8L3.5 8.5M3.5 4.5v4h4M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15.3A8 8 0 0 1 8.7 4a8.5 8.5 0 1 0 11.3 11.3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5m5-4 4-4-4-4m4 4H9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="18" height="6" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 9 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><svg><use href="#i-cross"/></svg></div>
+        <div class="brand-copy">
+          <div class="brand-title">医枢 MedAxis</div>
+          <div class="brand-subtitle">ADMIN CONSOLE</div>
+        </div>
+      </div>
+
+      <div class="nav-scroll">
+        <div class="nav-group">
+          <div class="nav-label">工作台</div>
+          <button class="nav-item active" data-page="仪表盘"><svg class="icon"><use href="#i-grid"/></svg><span>仪表盘</span></button>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">运营管理</div>
+          <button class="nav-item" data-page="用户管理"><svg class="icon"><use href="#i-users"/></svg><span>用户管理</span></button>
+          <button class="nav-item" data-page="医生认证"><svg class="icon"><use href="#i-stethoscope"/></svg><span>医生认证</span><span class="badge">18</span></button>
+          <button class="nav-item" data-page="知识库管理"><svg class="icon"><use href="#i-book"/></svg><span>知识库管理</span></button>
+          <button class="nav-item" data-page="病例审核"><svg class="icon"><use href="#i-clipboard"/></svg><span>病例审核</span><span class="badge">27</span></button>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">系统管理</div>
+          <button class="nav-item" data-page="LLM 供应商"><svg class="icon"><use href="#i-spark"/></svg><span>LLM 供应商</span></button>
+          <button class="nav-item" data-page="站内信"><svg class="icon"><use href="#i-bell"/></svg><span>站内信</span></button>
+          <button class="nav-item" data-page="邮件管理"><svg class="icon"><use href="#i-mail"/></svg><span>邮件管理</span></button>
+          <button class="nav-item" data-page="审计日志"><svg class="icon"><use href="#i-history"/></svg><span>审计日志</span></button>
+          <button class="nav-item" data-page="系统设置"><svg class="icon"><use href="#i-settings"/></svg><span>系统设置</span></button>
+        </div>
+      </div>
+
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" aria-label="展开菜单"><svg><use href="#i-menu"/></svg></button>
+        <div class="crumbs">管理后台&nbsp;&nbsp;/&nbsp;&nbsp;<strong>仪表盘</strong></div>
+        <label class="search">
+          <svg><use href="#i-search"/></svg>
+          <input aria-label="全局搜索" placeholder="搜索用户、文档或设置" />
+          <span class="keycap">⌘ K</span>
+        </label>
+        <button class="icon-button notification-button" aria-label="通知">
+          <svg><use href="#i-bell"/></svg><span class="notification-dot"></span>
+        </button>
+        <button class="icon-button" id="themeToggle" aria-label="切换主题" title="切换深浅主题">
+          <svg class="moon-icon"><use href="#i-moon"/></svg>
+          <svg class="sun-icon"><use href="#i-sun"/></svg>
+        </button>
+        <div class="user-menu" id="userMenu">
+          <button class="user-menu-trigger" id="userMenuTrigger" aria-haspopup="menu" aria-expanded="false">
+            <span class="user-role-label">超级管理员</span>
+            <span class="user-avatar">管</span>
+            <svg class="user-chevron"><use href="#i-chevron"/></svg>
+          </button>
+          <div class="user-dropdown" role="menu" aria-label="账户菜单">
+            <div class="dropdown-identity">
+              <span class="user-avatar">管</span>
+              <div><div class="dropdown-name">系统管理员</div><div class="dropdown-role">Super Admin</div></div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-logout" role="menuitem"><svg><use href="#i-logout"/></svg><span>退出登录</span></button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="page-intro">
+          <div>
+            <div class="eyebrow">Operations overview</div>
+            <h1>早上好，管理员</h1>
+            <div class="page-subtitle">先处理关键待办，再关注系统运行趋势。</div>
+          </div>
+          <div class="page-meta">
+            <div id="currentDate">2026年9月22日 星期二</div>
+            <div class="live-row"><span class="live-dot"></span>服务运行正常</div>
+          </div>
+        </section>
+
+        <section class="metrics">
+          <article class="card metric-card">
+            <div class="metric-top"><span>总用户数</span><span class="metric-icon"><svg><use href="#i-users"/></svg></span></div>
+            <div class="metric-value">12,846</div>
+            <div class="metric-note"><span class="trend-up">↑ 8.2%</span><span>较上月</span></div>
+          </article>
+          <article class="card metric-card warning">
+            <div class="metric-top"><span>待认证医生</span><span class="metric-icon"><svg><use href="#i-stethoscope"/></svg></span></div>
+            <div class="metric-value">18</div>
+            <div class="metric-note"><span class="trend-warn">6 项</span><span>已等待超过 24 小时</span></div>
+          </article>
+          <article class="card metric-card violet">
+            <div class="metric-top"><span>待审核病例</span><span class="metric-icon"><svg><use href="#i-clipboard"/></svg></span></div>
+            <div class="metric-value">27</div>
+            <div class="metric-note"><span>今日新增 11 项</span></div>
+          </article>
+          <article class="card metric-card success">
+            <div class="metric-top"><span>LLM 供应商</span><span class="metric-icon"><svg><use href="#i-spark"/></svg></span></div>
+            <div class="metric-value">4 <small style="font-size:13px;color:var(--ink-3);font-weight:600">/ 5 在线</small></div>
+            <div class="metric-note"><span class="trend-up">99.96%</span><span>近 24 小时可用性</span></div>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="card section-card chart-card">
+            <div class="section-header">
+              <div><h2 class="section-title">用户增长趋势</h2><div class="section-desc">最近 7 天新增用户与医生入驻</div></div>
+              <div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i>新增用户</span><span class="legend-item"><i class="legend-dot secondary"></i>新增医生</span></div>
+            </div>
+            <div class="chart-wrap">
+              <svg viewBox="0 0 680 180" role="img" aria-label="用户增长趋势图">
+                <defs><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3478f6" stop-opacity=".28"/><stop offset="1" stop-color="#3478f6" stop-opacity="0"/></linearGradient></defs>
+                <path class="chart-grid" d="M38 24H665M38 68H665M38 112H665M38 156H665"/>
+                <path class="chart-area" d="M40 132C82 125 104 109 143 113S207 86 247 92s73-30 110-19 69-29 110-17 75-32 111-25 52-18 86-14V157H40Z"/>
+                <path class="chart-line" d="M40 132C82 125 104 109 143 113S207 86 247 92s73-30 110-19 69-29 110-17 75-32 111-25 52-18 86-14"/>
+                <g class="chart-axis"><text x="39" y="176">周一</text><text x="139" y="176">周二</text><text x="239" y="176">周三</text><text x="339" y="176">周四</text><text x="439" y="176">周五</text><text x="539" y="176">周六</text><text x="638" y="176">周日</text></g>
+                <g><circle class="chart-dot" cx="40" cy="132" r="3.5"/><circle class="chart-dot" cx="143" cy="113" r="3.5"/><circle class="chart-dot" cx="247" cy="92" r="3.5"/><circle class="chart-dot" cx="357" cy="73" r="3.5"/><circle class="chart-dot" cx="467" cy="56" r="3.5"/><circle class="chart-dot" cx="578" cy="31" r="3.5"/><circle class="chart-dot" cx="664" cy="17" r="3.5"/></g>
+              </svg>
+            </div>
+          </article>
+
+          <article class="card section-card">
+            <div class="section-header"><div><h2 class="section-title">需要关注</h2><div class="section-desc">按风险与等待时长排序</div></div><button class="text-button" data-action="查看全部待办">查看全部</button></div>
+            <div class="task-list">
+              <div class="task" data-action="医生认证"><div class="task-icon"><svg><use href="#i-stethoscope"/></svg></div><div><div class="task-title">医生资质待认证</div><div class="task-subtitle">最早提交于 26 小时前</div></div><div class="task-count">18</div></div>
+              <div class="task" data-action="病例审核"><div class="task-icon"><svg><use href="#i-clipboard"/></svg></div><div><div class="task-title">病例内容待审核</div><div class="task-subtitle">含 3 项高优先级内容</div></div><div class="task-count">27</div></div>
+              <div class="task" data-action="LLM 供应商"><div class="task-icon"><svg><use href="#i-spark"/></svg></div><div><div class="task-title">模型连接异常</div><div class="task-subtitle">供应商 MiniMax · 09:42</div></div><div class="task-count">1</div></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="lower-grid">
+          <article class="card section-card">
+            <div class="section-header"><div><h2 class="section-title">系统健康</h2><div class="section-desc">核心服务实时状态</div></div><button class="text-button" data-action="系统监控详情">监控详情</button></div>
+            <div class="health-grid">
+              <div class="health-item"><div class="health-head"><span class="health-label">API 服务</span><span class="status-pill">正常</span></div><div class="health-value">126 ms</div><div class="health-meta">P95 响应时间</div><div class="health-bar"><i style="width:86%"></i></div></div>
+              <div class="health-item"><div class="health-head"><span class="health-label">向量数据库</span><span class="status-pill">正常</span></div><div class="health-value">31.6 GB</div><div class="health-meta">已使用 62% 容量</div><div class="health-bar"><i style="width:62%"></i></div></div>
+              <div class="health-item"><div class="health-head"><span class="health-label">任务队列</span><span class="status-pill warning">注意</span></div><div class="health-value">42</div><div class="health-meta">等待中的任务</div><div class="health-bar"><i style="width:48%"></i></div></div>
+            </div>
+          </article>
+
+          <article class="card section-card">
+            <div class="section-header"><div><h2 class="section-title">最近操作</h2><div class="section-desc">来自审计日志</div></div><button class="text-button" data-action="审计日志">查看日志</button></div>
+            <div class="activity-list">
+              <div class="activity"><div class="activity-avatar">林</div><div class="activity-copy"><strong>林医生</strong> 更新了知识库文档</div><div class="activity-time">3 分钟前</div></div>
+              <div class="activity"><div class="activity-avatar">管</div><div class="activity-copy"><strong>系统管理员</strong> 认证了 4 位医生</div><div class="activity-time">18 分钟前</div></div>
+              <div class="activity"><div class="activity-avatar">AI</div><div class="activity-copy"><strong>系统任务</strong> 完成向量索引同步</div><div class="activity-time">42 分钟前</div></div>
+            </div>
+          </article>
+        </section>
+
+        <div class="prototype-note">设计原型 · 页面数据仅用于视觉与信息层级确认，不代表当前生产数据</div>
+      </main>
+    </section>
+  </div>
+
+  <div class="toast" id="toast">这是设计原型，功能将在确认后接入。</div>
+
+  <script>
+    const root = document.documentElement;
+    const themeToggle = document.getElementById('themeToggle');
+    const userMenu = document.getElementById('userMenu');
+    const userMenuTrigger = document.getElementById('userMenuTrigger');
+    const toast = document.getElementById('toast');
+    let toastTimer;
+
+    themeToggle.addEventListener('click', () => {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    });
+
+    document.querySelectorAll('[data-page]').forEach((item) => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach((nav) => nav.classList.remove('active'));
+        item.classList.add('active');
+        showToast(`${item.dataset.page}：本轮只展示管理端视觉骨架`);
+      });
+    });
+
+    document.querySelectorAll('[data-action]').forEach((item) => {
+      item.addEventListener('click', () => showToast(`${item.dataset.action}：确认设计后接入现有路由`));
+    });
+
+    userMenuTrigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const isOpen = userMenu.classList.toggle('open');
+      userMenuTrigger.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!userMenu.contains(event.target)) closeUserMenu();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeUserMenu();
+    });
+
+    document.querySelector('.dropdown-logout').addEventListener('click', () => {
+      closeUserMenu();
+      showToast('退出登录：原型不执行真实操作');
+    });
+
+    function closeUserMenu() {
+      userMenu.classList.remove('open');
+      userMenuTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    const weekday = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    const now = new Date();
+    document.getElementById('currentDate').textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${weekday[now.getDay()]}`;
+  </script>
+</body>
+</html>

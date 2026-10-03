@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>问诊记录 · 医案 · 医枢 MedAxis</title>
+<style>
+/* ============================================================
+   医案 Casebook — 问诊记录页面独立设计稿
+   概念：一次问诊 = 一份卷宗。左侧卷宗架，右侧案卷纸。
+   配色取宣纸 / 松墨 / 朱砂 / 靛青四色，不用蓝白医疗套件。
+   自包含：无 CDN、无外部字体、无外部图片。
+   ============================================================ */
+:root{
+  --paper:#faf7f0;
+  --paper-2:#f4efe2;
+  --paper-3:#ece4d3;
+  --paper-4:#e2d8c3;
+  --ink:#22262a;
+  --ink-2:#4c525a;
+  --ink-3:#82888f;
+  --cinnabar:#ab3529;
+  --cinnabar-2:#8c2a20;
+  --cinnabar-soft:#f8eae6;
+  --indigo:#2b4f60;
+  --indigo-2:#1f3b48;
+  --indigo-soft:#e8eef1;
+  --gold:#9a7a3f;
+  --line:#ded5c2;
+  --line-2:#c8bca3;
+  --serif:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",Georgia,serif;
+  --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",sans-serif;
+  --kai:"Kaiti SC","STKaiti","KaiTi","BiauKai","Noto Serif SC",serif;
+  --shelf:linear-gradient(180deg,#e7dfcd 0%,#ded4bf 100%);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--paper-2);color:var(--ink-2);
+  font-family:var(--sans);font-size:15px;line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4,p,ol,ul,figure{margin:0}
+ol,ul{padding:0;list-style:none}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+a{color:var(--indigo);text-decoration:none}
+:focus-visible{outline:2px solid var(--indigo);outline-offset:3px}
+svg{display:block}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+/* ---------- 纸张质感 ---------- */
+.grain{
+  position:fixed;inset:0;z-index:80;pointer-events:none;opacity:.42;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E");
+}
+.fibre{
+  position:fixed;inset:0;z-index:79;pointer-events:none;opacity:.16;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cg stroke='%238a7c5e' stroke-width='.7' fill='none' stroke-linecap='round' opacity='.55'%3E%3Cpath d='M8 24q40-6 78 2t86-4 74 6'/%3E%3Cpath d='M20 96q46 8 84-2t78 8 60-6'/%3E%3Cpath d='M4 168q52-8 88 4t80-6 66 8'/%3E%3Cpath d='M30 240q44 6 82-4t76 6 58-2'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ---------- 天头 ---------- */
+.masthead{
+  position:sticky;top:0;z-index:40;
+  background:rgba(250,247,240,.93);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.masthead-in{
+  width:min(1360px,calc(100% - 40px));margin-inline:auto;
+  min-height:74px;display:flex;align-items:center;justify-content:space-between;gap:20px;
+}
+.brand{display:flex;align-items:center;gap:13px}
+.brand-mark{
+  width:38px;height:44px;flex:0 0 auto;color:var(--cinnabar);
+}
+.brand-text{display:flex;flex-direction:column;line-height:1.25}
+.brand-text b{font-family:var(--serif);font-size:21px;font-weight:600;color:var(--ink);letter-spacing:.1em}
+.brand-text span{font-size:11px;letter-spacing:.24em;color:var(--ink-3);font-family:Georgia,serif}
+.mast-note{display:flex;align-items:center;gap:16px;font-size:12.5px;color:var(--ink-3)}
+.mast-note .dot{width:5px;height:5px;border-radius:50%;background:var(--gold);display:inline-block;margin-right:7px}
+.mast-seal{
+  width:52px;height:52px;color:var(--cinnabar);opacity:.9;flex:0 0 auto;
+}
+
+/* ---------- 主布局 ---------- */
+.shell{
+  width:min(1360px,calc(100% - 40px));margin:30px auto 64px;
+  display:grid;grid-template-columns:308px minmax(0,1fr);gap:26px;align-items:start;
+}
+
+/* ---------- 卷宗架 ---------- */
+.shelf{position:sticky;top:100px}
+.shelf-box{
+  background:var(--shelf);border:1px solid var(--line-2);border-radius:3px;
+  box-shadow:0 18px 40px -22px rgba(60,48,26,.5),inset 0 1px 0 rgba(255,255,255,.55);
+  padding:0 0 12px;overflow:hidden;
+}
+.shelf-head{
+  padding:15px 18px 13px;border-bottom:1px solid rgba(140,124,92,.35);
+  background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,.1));
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+}
+.shelf-head h2{font-family:var(--serif);font-size:16px;font-weight:600;color:#4a4030;letter-spacing:.12em}
+.shelf-head span{font-size:11.5px;color:#7d7259}
+.spines{padding:13px 12px 4px;display:flex;flex-direction:column;gap:9px;max-height:min(62vh,620px);overflow-y:auto}
+.spines::-webkit-scrollbar{width:7px}
+.spines::-webkit-scrollbar-thumb{background:rgba(120,104,72,.4);border-radius:4px}
+
+.spine{
+  position:relative;display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;
+  width:100%;text-align:left;padding:13px 14px 13px 11px;
+  background:linear-gradient(180deg,#fdfbf6,#f6f1e5);
+  border:1px solid var(--line);border-left:3px solid transparent;border-radius:2px;
+  box-shadow:0 2px 5px -2px rgba(70,58,34,.28);
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease;
+}
+.spine:hover{transform:translateX(5px);box-shadow:0 8px 18px -8px rgba(70,58,34,.45);border-color:var(--line-2)}
+.spine[aria-current="true"]{
+  background:linear-gradient(180deg,#fffcf6,#faf4e8);
+  border-left-color:var(--cinnabar);border-color:var(--line-2);
+  transform:translateX(9px);
+  box-shadow:0 12px 26px -10px rgba(70,58,34,.5);
+}
+.spine[aria-current="true"]::after{
+  content:"";position:absolute;right:-9px;top:50%;transform:translateY(-50%);
+  width:9px;height:34px;background:var(--cinnabar);border-radius:0 2px 2px 0;opacity:.85;
+}
+.spine-no{
+  font-family:var(--serif);font-size:16px;font-weight:600;color:var(--ink);
+  width:34px;height:34px;display:grid;place-items:center;
+  border:1px solid var(--line-2);border-radius:2px;background:rgba(255,255,255,.6);
+}
+.spine[aria-current="true"] .spine-no{color:var(--cinnabar);border-color:rgba(171,53,41,.4);background:var(--cinnabar-soft)}
+.spine-body{min-width:0}
+.spine-title{
+  font-family:var(--serif);font-size:14.5px;font-weight:600;color:var(--ink);line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;
+}
+.spine[aria-current="true"] .spine-title{color:var(--cinnabar-2)}
+.spine-meta{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11.5px;color:var(--ink-3)}
+.spine-meta .num{letter-spacing:.02em}
+.state{
+  display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:2px;
+  font-size:11px;line-height:1.7;border:1px solid;white-space:nowrap;
+}
+.state::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.state.done{color:#3f6b52;border-color:#c3d8cb;background:#eef5f0}
+.state.doing{color:#8a6420;border-color:#e2d3ae;background:#faf3e2}
+.state.wait{color:var(--ink-3);border-color:var(--line-2);background:rgba(255,255,255,.5)}
+.shelf-foot{padding:11px 18px 0;border-top:1px solid rgba(140,124,92,.3);margin-top:9px}
+.new-case{
+  width:100%;min-height:44px;display:flex;align-items:center;justify-content:center;gap:8px;
+  border:1px dashed var(--line-2);border-radius:2px;color:#5d5340;font-size:13.5px;
+  background:rgba(255,255,255,.35);transition:background .18s,border-color .18s,color .18s;
+}
+.new-case:hover{background:var(--cinnabar-soft);border-color:rgba(171,53,41,.45);color:var(--cinnabar-2)}
+.shelf-tip{font-size:11px;color:#8b8067;text-align:center;padding:9px 14px 0;line-height:1.7}
+
+/* ---------- 案卷 ---------- */
+.dossier{position:relative;min-width:0}
+.sheet{
+  position:relative;background:var(--paper);
+  border:1px solid var(--line);border-radius:2px;
+  box-shadow:0 26px 60px -30px rgba(50,42,24,.55),0 2px 0 rgba(255,255,255,.7) inset;
+  padding:0 clamp(20px,3.4vw,52px) clamp(26px,3vw,44px);
+  overflow:hidden;
+}
+/* 线装装订孔 */
+.sheet::before{
+  content:"";position:absolute;left:13px;top:0;bottom:0;width:1px;
+  background:repeating-linear-gradient(180deg,var(--line-2) 0 7px,transparent 7px 20px);opacity:.75;
+}
+/* 右侧竖排边注 */
+.marginal{
+  position:absolute;right:14px;top:120px;writing-mode:vertical-rl;
+  font-family:var(--serif);font-size:12px;letter-spacing:.42em;color:#c3b79c;
+  pointer-events:none;user-select:none;
+}
+
+/* 天头 */
+.sheet-head{
+  position:relative;padding:clamp(24px,3vw,38px) 0 20px;
+  border-bottom:1px solid var(--line-2);
+}
+.sheet-head::after{
+  content:"";position:absolute;left:0;right:0;bottom:-4px;height:1px;background:var(--line);
+}
+.head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:22px}
+.head-id{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-3);letter-spacing:.1em}
+.head-id .vol{font-family:var(--serif);color:var(--cinnabar);font-size:13px;letter-spacing:.18em}
+h1.complaint{
+  font-family:var(--serif);font-weight:600;color:var(--ink);
+  font-size:clamp(26px,3.5vw,38px);line-height:1.42;letter-spacing:.01em;
+  margin-top:14px;max-width:22em;overflow-wrap:anywhere;
+}
+.head-sub{margin-top:12px;font-size:14px;color:var(--ink-2);max-width:38em}
+.stamp{
+  flex:0 0 auto;width:104px;height:104px;color:var(--cinnabar);
+  transform:rotate(-7deg);opacity:.88;margin-top:2px;
+}
+.head-tools{display:flex;align-items:center;gap:9px;margin-top:20px;flex-wrap:wrap}
+.tool{
+  min-height:44px;padding:0 16px;display:inline-flex;align-items:center;gap:7px;
+  border:1px solid var(--line-2);border-radius:2px;background:rgba(255,255,255,.55);
+  font-size:13px;color:var(--ink-2);transition:background .18s,border-color .18s,color .18s,transform .12s;
+}
+.tool:hover{background:var(--indigo-soft);border-color:#b6c6ce;color:var(--indigo-2)}
+.tool:active{transform:translateY(1px)}
+.tool svg{width:15px;height:15px}
+.tool.primary{background:var(--indigo);border-color:var(--indigo-2);color:#f6f2e8}
+.tool.primary:hover{background:var(--indigo-2);border-color:var(--indigo-2);color:#fff}
+
+/* 页签 */
+.tabs{
+  display:flex;gap:5px;margin:26px -4px 0;padding:0 4px;position:relative;z-index:2;flex-wrap:wrap;
+}
+.tab{
+  position:relative;min-height:46px;padding:9px 20px 11px;
+  border:1px solid var(--line);border-bottom:0;border-radius:6px 6px 0 0;
+  background:linear-gradient(180deg,#f1ebdd,#e9e1cf);
+  font-family:var(--serif);font-size:14.5px;color:#6b6252;letter-spacing:.06em;
+  display:flex;align-items:center;gap:9px;
+  transition:background .18s,color .18s,transform .18s;
+  top:1px;
+}
+.tab:hover{background:linear-gradient(180deg,#f7f2e6,#efe7d6);color:var(--ink-2)}
+.tab .step{
+  width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--serif);font-size:11.5px;background:rgba(255,255,255,.7);
+  border:1px solid var(--line-2);color:#6b6252;
+}
+.tab[aria-selected="true"]{
+  background:var(--paper);color:var(--cinnabar-2);border-color:var(--line-2);
+  top:0;padding-bottom:12px;font-weight:600;z-index:3;
+  box-shadow:0 -3px 0 var(--cinnabar) inset;
+}
+.tab[aria-selected="true"] .step{background:var(--cinnabar);border-color:var(--cinnabar-2);color:#fdf8f2}
+.tab-hint{display:none}
+
+/* 案卷正文 */
+.panels{
+  position:relative;z-index:1;background:var(--paper);
+  border:1px solid var(--line-2);border-radius:0 3px 3px 3px;
+  padding:clamp(20px,2.8vw,34px) clamp(18px,2.6vw,34px) clamp(24px,3vw,36px);
+}
+.panel[hidden]{display:none}
+
+/* 文武线小节标题 */
+.sec{margin-top:34px}
+.sec:first-child{margin-top:0}
+.sec-head{display:flex;align-items:center;gap:12px}
+.sec-head h3{
+  font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink);
+  letter-spacing:.09em;white-space:nowrap;
+}
+.sec-head .rule{flex:1;height:4px;border-top:2px solid var(--line-2);border-bottom:1px solid var(--line);min-width:24px}
+.sec-head .tag{
+  font-size:11px;color:var(--ink-3);letter-spacing:.14em;white-space:nowrap;font-family:Georgia,serif;
+}
+.sec-body{margin-top:16px}
+
+/* 病情要点 */
+.findings{display:flex;flex-direction:column;gap:2px}
+.finding{display:grid;grid-template-columns:30px minmax(0,1fr);gap:11px;padding:9px 0;border-bottom:1px dotted var(--line)}
+.finding:last-child{border-bottom:0}
+.finding i{
+  font-family:var(--serif);font-style:normal;font-size:13px;color:var(--cinnabar);
+  width:30px;height:24px;display:grid;place-items:center;letter-spacing:.04em;
+}
+.finding p{color:var(--ink-2);font-size:14.5px}
+
+/* 夹批（危险信号） */
+.annotation{
+  position:relative;margin-top:22px;padding:16px 20px 16px 22px;
+  background:var(--cinnabar-soft);border-left:3px solid var(--cinnabar);border-radius:0 3px 3px 0;
+}
+.annotation::before{
+  content:"夹批";position:absolute;top:-11px;left:16px;
+  font-family:var(--kai);font-size:12px;color:var(--cinnabar);letter-spacing:.2em;
+  background:var(--cinnabar-soft);padding:0 7px;border:1px solid rgba(171,53,41,.35);border-radius:2px;
+}
+.annotation h4{font-family:var(--kai);font-size:15px;font-weight:600;color:var(--cinnabar-2);letter-spacing:.08em;margin-bottom:7px}
+.annotation p{font-family:var(--kai);font-size:14.5px;color:#8d3b31;line-height:1.95}
+.annotation .cite{
+  display:block;margin-top:10px;font-family:var(--sans);font-size:11.5px;color:#a76055;letter-spacing:.04em;
+}
+
+/* 建议 */
+.advice{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:12px}
+.advice li{
+  display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;
+  padding:12px 14px;background:rgba(255,255,255,.6);
+  border:1px solid var(--line);border-radius:2px;font-size:14px;color:var(--ink-2);
+}
+.advice li b{
+  font-family:var(--serif);font-weight:600;font-size:12.5px;color:var(--indigo);
+  width:22px;height:22px;display:grid;place-items:center;
+  border:1px solid #c3d2d9;border-radius:50%;background:var(--indigo-soft);
+}
+/* 检查建议：药签 */
+.tests{display:flex;flex-wrap:wrap;gap:9px}
+.tests li{
+  padding:7px 15px;border:1px solid var(--line-2);border-radius:2px;background:rgba(255,255,255,.6);
+  font-family:var(--serif);font-size:13.5px;color:var(--ink-2);letter-spacing:.06em;
+  box-shadow:1px 1px 0 rgba(200,188,163,.5);
+}
+.timeline{
+  display:flex;gap:13px;align-items:flex-start;padding:15px 18px;
+  background:var(--indigo-soft);border:1px solid #cddae0;border-radius:2px;
+}
+.timeline svg{width:19px;height:19px;color:var(--indigo);flex:0 0 auto;margin-top:3px}
+.timeline p{font-size:14px;color:var(--indigo-2)}
+
+/* 表单 */
+.field{margin-top:20px}
+.field:first-child{margin-top:0}
+.field label{
+  display:block;font-family:var(--serif);font-size:13.5px;font-weight:600;
+  color:var(--ink);letter-spacing:.08em;margin-bottom:8px;
+}
+.field label em{font-style:normal;color:var(--ink-3);font-family:var(--sans);font-size:11.5px;letter-spacing:.04em;margin-left:8px;font-weight:400}
+.field input,.field textarea,.field select{
+  width:100%;padding:11px 13px;background:#fffdf8;
+  border:1px solid var(--line-2);border-radius:2px;font-size:14px;color:var(--ink);
+  transition:border-color .18s,box-shadow .18s;
+}
+.field textarea{min-height:104px;resize:vertical;line-height:1.85}
+.field input:focus,.field textarea:focus,.field select:focus{
+  outline:0;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(43,79,96,.12);
+}
+.field-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+.checks{display:flex;flex-direction:column;gap:9px}
+.check{
+  display:grid;grid-template-columns:20px minmax(0,1fr);gap:11px;align-items:start;
+  padding:11px 14px;border:1px solid var(--line);border-radius:2px;background:rgba(255,255,255,.5);
+  cursor:pointer;transition:background .18s,border-color .18s;min-height:44px;
+}
+.check:hover{background:rgba(255,255,255,.85);border-color:var(--line-2)}
+.check input{width:18px;height:18px;margin-top:3px;accent-color:var(--cinnabar);cursor:pointer}
+.check span{font-size:14px;color:var(--ink-2)}
+.check:has(input:checked){background:var(--cinnabar-soft);border-color:rgba(171,53,41,.3)}
+.check:has(input:checked) span{color:var(--cinnabar-2)}
+.brief{
+  padding:16px 18px;background:#fffdf7;border:1px solid var(--line);border-radius:2px;
+  font-family:var(--serif);font-size:14.5px;line-height:2.05;color:var(--ink-2);white-space:pre-wrap;
+}
+.form-actions{display:flex;gap:11px;align-items:center;flex-wrap:wrap;margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.form-note{font-size:12px;color:var(--ink-3);margin-left:auto}
+.saved-flag{
+  display:none;align-items:center;gap:6px;font-size:12.5px;color:#3f6b52;
+  padding:3px 10px;border:1px solid #c3d8cb;background:#eef5f0;border-radius:2px;
+}
+.saved-flag.on{display:inline-flex}
+
+/* 资料抽屉 */
+.materials{margin-top:26px;border:1px solid var(--line-2);border-radius:2px;background:rgba(255,255,255,.42)}
+.materials summary{
+  display:flex;align-items:center;gap:11px;padding:14px 18px;cursor:pointer;list-style:none;
+  font-family:var(--serif);font-size:14.5px;color:var(--ink);letter-spacing:.06em;min-height:48px;
+}
+.materials summary::-webkit-details-marker{display:none}
+.materials summary .chev{margin-left:auto;width:15px;height:15px;color:var(--ink-3);transition:transform .2s}
+.materials[open] summary .chev{transform:rotate(180deg)}
+.materials summary svg.doc{width:17px;height:17px;color:var(--indigo)}
+.mat-list{padding:4px 18px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.mat{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px dotted var(--line);flex-wrap:wrap}
+.mat:last-child{border-bottom:0}
+.mat-name{font-size:13.5px;color:var(--ink);overflow-wrap:anywhere;min-width:0;flex:1}
+.mat-dl{
+  min-height:44px;padding:0 15px;border:1px solid var(--line-2);border-radius:2px;
+  font-size:12.5px;color:var(--indigo);background:rgba(255,255,255,.6);
+}
+.mat-dl:hover{background:var(--indigo-soft);border-color:#b6c6ce}
+
+/* 卷尾 */
+.colophon{
+  margin-top:30px;padding-top:20px;border-top:1px solid var(--line-2);
+  display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  font-size:11.5px;color:var(--ink-3);letter-spacing:.06em;
+}
+.colophon b{font-family:var(--serif);font-weight:600;color:var(--ink-2);letter-spacing:.12em}
+
+/* 边界条 */
+.boundary{
+  width:min(1360px,calc(100% - 40px));margin:0 auto 56px;
+  display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start;
+  padding:20px 24px;background:var(--paper-3);border:1px solid var(--line-2);border-radius:2px;
+}
+.boundary svg{width:22px;height:22px;color:var(--cinnabar);margin-top:2px}
+.boundary p{font-size:13.5px;color:#5d5340;line-height:1.9}
+.boundary p b{font-family:var(--serif);color:var(--cinnabar-2);font-weight:600}
+
+/* 返回（移动端） */
+.back{display:none}
+
+/* 空态 */
+.empty{padding:70px 24px;text-align:center}
+.empty svg{width:52px;height:52px;color:var(--line-2);margin:0 auto 18px}
+.empty h3{font-family:var(--serif);font-size:19px;color:var(--ink-2);font-weight:600;letter-spacing:.08em}
+.empty p{margin-top:9px;font-size:13.5px;color:var(--ink-3)}
+
+/* 载入动画 */
+@keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+.rise{animation:rise .5s cubic-bezier(.2,.7,.3,1) both}
+.rise:nth-child(2){animation-delay:.06s}
+.rise:nth-child(3){animation-delay:.12s}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:1080px){
+  .shell{grid-template-columns:250px minmax(0,1fr);gap:18px}
+  .marginal{display:none}
+}
+@media (max-width:900px){
+  .shell{grid-template-columns:minmax(0,1fr);margin-top:20px}
+  .shelf{position:static}
+  .spines{max-height:none}
+  .stamp{width:82px;height:82px}
+  .tab-hint{display:none}
+  body.detail-open .shelf{display:none}
+  body.detail-open .back{
+    display:flex;align-items:center;gap:7px;width:fit-content;min-height:44px;padding:0 15px;
+    margin-bottom:14px;border:1px solid var(--line-2);border-radius:2px;background:rgba(255,255,255,.6);
+    font-size:13.5px;color:var(--indigo-2);
+  }
+  body:not(.detail-open) .dossier{display:none}
+}
+@media (max-width:560px){
+  .masthead-in{min-height:64px;gap:12px}
+  .mast-note .txt{display:none}
+  .head-row{flex-direction:column;gap:16px}
+  .stamp{align-self:flex-start;transform:rotate(-6deg)}
+  .tabs{gap:3px;margin-top:22px}
+  .tab{flex:1 1 auto;justify-content:center;padding:9px 10px 11px;font-size:13.5px;letter-spacing:0}
+  .tab .step{display:none}
+  .panels{padding:18px 15px 24px}
+  .sec-head h3{font-size:16px}
+  .sec-head .tag{display:none}
+  .advice{grid-template-columns:minmax(0,1fr)}
+  .boundary{grid-template-columns:minmax(0,1fr);gap:10px;padding:17px 18px}
+  .form-note{margin-left:0;width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}
+
+/* ---------- 打印 ---------- */
+@media print{
+  body{background:#fff}
+  .grain,.fibre,.masthead,.shelf,.tabs,.head-tools,.back,.boundary,.materials summary .chev{display:none !important}
+  .shell{display:block;width:auto;margin:0}
+  .sheet{border:0;box-shadow:none;padding:0}
+  .sheet::before{display:none}
+  .panels{border:0;padding:0}
+  .panel[hidden]{display:block !important}
+  .panel{break-inside:avoid;page-break-inside:avoid;margin-top:26px}
+  .sec{break-inside:avoid;page-break-inside:avoid}
+  .annotation{break-inside:avoid}
+  .colophon{border-top:1px solid #999}
+  @page{margin:18mm 16mm}
+}
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<div class="fibre" aria-hidden="true"></div>
+
+<!-- ====== 天头 ====== -->
+<header class="masthead">
+  <div class="masthead-in">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 38 44" fill="none" aria-hidden="true">
+        <path d="M19 2C10 8 5 15 5 23c0 10 6 18 14 19 8-1 14-9 14-19 0-8-5-15-14-21Z" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M19 11v22M11 20h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M5 23h28" stroke="currentColor" stroke-width="1" opacity=".45"/>
+      </svg>
+      <span class="brand-text">
+        <b>医枢</b>
+        <span>MEDAXIS</span>
+      </span>
+    </div>
+    <div class="mast-note">
+      <span class="txt"><span class="dot"></span>案卷为 AI 辅助整理，不构成诊断</span>
+      <svg class="mast-seal" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+        <g filter="url(#rough1)">
+          <rect x="6" y="6" width="88" height="88" rx="7" stroke="currentColor" stroke-width="5.5"/>
+          <rect x="14" y="14" width="72" height="72" rx="4" stroke="currentColor" stroke-width="1.6" opacity=".55"/>
+          <text x="50" y="44" text-anchor="middle" font-family="Noto Serif SC,Songti SC,STSong,serif" font-size="21" font-weight="600" fill="currentColor" letter-spacing="1">医枢</text>
+          <text x="50" y="72" text-anchor="middle" font-family="Noto Serif SC,Songti SC,STSong,serif" font-size="17" font-weight="600" fill="currentColor" letter-spacing="1">之印</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<!-- ====== 主体 ====== -->
+<main class="shell">
+
+  <!-- 卷宗架 -->
+  <aside class="shelf" aria-label="问诊卷宗架">
+    <div class="shelf-box">
+      <div class="shelf-head">
+        <h2>卷宗架</h2>
+        <span id="shelf-count">共 5 卷</span>
+      </div>
+      <div class="spines" id="spines" role="list" aria-label="问诊记录列表"></div>
+      <div class="shelf-foot">
+        <button class="new-case" type="button" id="new-case">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          发起新问诊
+        </button>
+        <p class="shelf-tip">卷宗按问诊时间倒序归档</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 案卷 -->
+  <section class="dossier" aria-label="问诊案卷">
+    <button class="back" type="button" id="back">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3 5 8l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      返回卷宗架
+    </button>
+
+    <article class="sheet" id="sheet">
+      <span class="marginal" aria-hidden="true">医枢案卷 · MEDAXIS CASEBOOK</span>
+
+      <!-- 案卷天头 -->
+      <header class="sheet-head">
+        <div class="head-row">
+          <div style="min-width:0">
+            <div class="head-id">
+              <span class="vol" id="vol-no">第 壹 卷</span>
+              <span class="num" id="vol-date">—</span>
+              <span id="vol-state">—</span>
+            </div>
+            <h1 class="complaint" id="vol-title">—</h1>
+            <p class="head-sub" id="vol-sub">—</p>
+          </div>
+          <svg class="stamp" viewBox="0 0 104 104" fill="none" aria-label="辅助整理，非诊断">
+            <g filter="url(#rough2)">
+              <rect x="5" y="5" width="94" height="94" rx="8" stroke="currentColor" stroke-width="5"/>
+              <rect x="13" y="13" width="78" height="78" rx="4" stroke="currentColor" stroke-width="1.4" opacity=".5"/>
+              <path d="M52 13v78M13 52h78" stroke="currentColor" stroke-width="1.4" opacity=".5"/>
+              <text x="32" y="42" text-anchor="middle" font-family="Noto Serif SC,Songti SC,STSong,serif" font-size="17" font-weight="600" fill="currentColor">辅助</text>
+              <text x="72" y="42" text-anchor="middle" font-family="Noto Serif SC,Songti SC,STSong,serif" font-size="17" font-weight="600" fill="currentColor">整理</text>
+              <text x="32" y="80" text-anchor="middle" font-family="Noto Serif SC,Songti SC,STSong,serif" font-size="17" font-weight="600" fill="currentColor">非诊</text>
+              <text x="72" y="80" text-anchor="middle" font-family="Noto Serif SC,Songti SC,STSong,serif" font-size="17" font-weight="600" fill="currentColor">断书</text>
+            </g>
+          </svg>
+        </div>
+        <div class="head-tools">
+          <button class="tool primary" type="button" id="btn-prep">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 2h7l3 3v9H3V2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 8h5M5.5 10.5h3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            整理就诊摘要
+          </button>
+          <button class="tool" type="button" id="btn-print">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6V2h8v4M4 12H2.8V7h10.4v5H12M4 10h8v4H4v-4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            打印案卷
+          </button>
+          <button class="tool" type="button" id="btn-share">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 11V2.8M8 2.8 5.2 5.6M8 2.8l2.8 2.8M2.8 9.5v3.7h10.4V9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span id="share-label">分享</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- 页签 -->
+      <div class="tabs" role="tablist" aria-label="案卷阶段">
+        <button class="tab" role="tab" id="tab-summary" aria-controls="panel-summary" aria-selected="true" data-stage="summary">
+          <span class="step">一</span>本次总结
+        </button>
+        <button class="tab" role="tab" id="tab-preparation" aria-controls="panel-preparation" aria-selected="false" data-stage="preparation">
+          <span class="step">二</span>准备就诊
+        </button>
+        <button class="tab" role="tab" id="tab-visit" aria-controls="panel-visit" aria-selected="false" data-stage="visit">
+          <span class="step">三</span>诊后记录
+        </button>
+      </div>
+
+      <!-- 案卷正文 -->
+      <div class="panels">
+
+        <!-- 阶段一：本次总结 -->
+        <div class="panel" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary" tabindex="0">
+          <section class="sec">
+            <div class="sec-head">
+              <h3>病情要点</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">KEY FINDINGS</span>
+            </div>
+            <div class="sec-body">
+              <ol class="findings" id="findings"></ol>
+            </div>
+          </section>
+
+          <div id="annotation-slot"></div>
+
+          <section class="sec">
+            <div class="sec-head">
+              <h3>建议下一步</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">NEXT STEPS</span>
+            </div>
+            <div class="sec-body">
+              <ol class="advice" id="actions"></ol>
+            </div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-head">
+              <h3>建议检查</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">TESTS</span>
+            </div>
+            <div class="sec-body">
+              <ul class="tests" id="tests"></ul>
+            </div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-head">
+              <h3>复诊时机</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">FOLLOW-UP</span>
+            </div>
+            <div class="sec-body">
+              <div class="timeline">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.4" stroke="currentColor" stroke-width="1.4"/><path d="M10 6v4.3l2.8 1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <p id="timeline">—</p>
+              </div>
+            </div>
+          </section>
+
+          <details class="materials" id="materials">
+            <summary>
+              <svg class="doc" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3.2l1.4 1.8h4.4A1.5 1.5 0 0 1 14 6.3v7.2a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-9Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+              <span id="mat-title">附卷 · 检查资料</span>
+              <svg class="chev" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <div class="mat-list" id="mat-list"></div>
+          </details>
+        </div>
+
+        <!-- 阶段二：准备就诊 -->
+        <div class="panel" id="panel-preparation" role="tabpanel" aria-labelledby="tab-preparation" tabindex="0" hidden>
+          <section class="sec">
+            <div class="sec-head">
+              <h3>就诊摘要</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">BRIEF</span>
+            </div>
+            <div class="sec-body">
+              <div class="brief" id="brief">—</div>
+              <div style="margin-top:12px">
+                <button class="tool" type="button" id="btn-copy">
+                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3H4a1 1 0 0 0-1 1v6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <span id="copy-label">复制摘要</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-head">
+              <h3>就诊前准备</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">CHECKLIST</span>
+            </div>
+            <div class="sec-body">
+              <div class="checks" id="checklist"></div>
+            </div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-head">
+              <h3>想问医生的问题</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">QUESTIONS</span>
+            </div>
+            <div class="sec-body">
+              <div class="field" style="margin-top:0">
+                <label for="questions">逐条写下，看诊时照着问<em>本次浏览内自动保留</em></label>
+                <textarea id="questions" placeholder="例如：这次需要做血常规吗？&#10;例如：现在的药还要继续吃多久？"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <div class="form-actions">
+            <button class="tool primary" type="button" id="save-prep">保存准备内容</button>
+            <button class="tool" type="button" data-goto="visit">已就诊？记录结果</button>
+            <span class="saved-flag" id="prep-saved">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              已保存
+            </span>
+            <span class="form-note">摘要为通用就诊参考，不代表任何医院的挂号或预约。</span>
+          </div>
+        </div>
+
+        <!-- 阶段三：诊后记录 -->
+        <div class="panel" id="panel-visit" role="tabpanel" aria-labelledby="tab-visit" tabindex="0" hidden>
+          <section class="sec">
+            <div class="sec-head">
+              <h3>就诊结果</h3>
+              <span class="rule" aria-hidden="true"></span>
+              <span class="tag">POST-VISIT</span>
+            </div>
+            <div class="sec-body">
+              <div class="field-row">
+                <div class="field">
+                  <label for="visit-at">就诊时间</label>
+                  <input type="datetime-local" id="visit-at">
+                </div>
+                <div class="field">
+                  <label for="visit-dept">实际科室</label>
+                  <input type="text" id="visit-dept" placeholder="例如：消化内科" autocomplete="off">
+                </div>
+              </div>
+              <div class="field">
+                <label for="visit-summary">医生怎么说<em>记录原话，便于日后对照</em></label>
+                <textarea id="visit-summary" placeholder="例如：医生建议先做便常规，一周后复诊。"></textarea>
+              </div>
+              <div class="field">
+                <label for="visit-followup">后续事项</label>
+                <textarea id="visit-followup" style="min-height:88px" placeholder="例如：按处方服药七天；忌辛辣；下周三复查。"></textarea>
+              </div>
+            </div>
+          </section>
+          <div class="form-actions">
+            <button class="tool primary" type="button" id="save-visit">保存诊后记录</button>
+            <button class="tool" type="button" data-goto="preparation">返回就诊准备</button>
+            <span class="saved-flag" id="visit-saved">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              已保存
+            </span>
+            <span class="form-note">患者自报内容，未经医生核对，不作为诊疗依据。</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卷尾 -->
+      <footer class="colophon">
+        <span><b>案卷编号</b> <span class="num" id="col-id">—</span></span>
+        <span><b>归档</b> <span class="num" id="col-date">—</span></span>
+        <span><b>整理方式</b> AI 辅助 · 未经临床审核</span>
+      </footer>
+    </article>
+
+    <!-- 空态 -->
+    <article class="sheet empty" id="empty" hidden>
+      <svg viewBox="0 0 52 52" fill="none" aria-hidden="true">
+        <path d="M10 8h22l10 10v26H10V8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M32 8v10h10" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M17 28h18M17 34h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <h3>尚未选择卷宗</h3>
+      <p>从左侧卷宗架取出一卷，查看本次问诊的整理结果。</p>
+    </article>
+  </section>
+</main>
+
+<!-- ====== 边界条 ====== -->
+<div class="boundary">
+  <svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><path d="M11 2.5 20 19H2l9-16.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M11 9v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="11" cy="15.8" r=".95" fill="currentColor"/></svg>
+  <p><b>医枢用于信息整理与沟通支持，不提供正式诊断、处方或急救服务。</b>案卷内容由 AI 依据你的描述整理，未经临床审核，可能与实际病情不符。出现紧急、快速恶化或危及生命的症状时，请立即联系当地急救机构或合格医疗专业人员。</p>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="rough1"><feTurbulence type="fractalNoise" baseFrequency=".05" numOctaves="3" seed="4" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="2.2"/></filter>
+    <filter id="rough2"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="3" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="2.8"/></filter>
+  </defs>
+</svg>
+
+<script>
+/* ============================================================
+   合成数据：仅用于设计稿演示，不含真实患者信息。
+   所有输入仅保留在当前页面内存中，刷新即恢复。
+   ============================================================ */
+const CN_NUM = ['壹','贰','叁','肆','伍','陆','柒','捌','玖','拾'];
+
+const RECORDS = [
+  {
+    id: 'MX-2026-0929-01',
+    title: '餐后腹部不适与腹泻',
+    vol: '第 壹 卷',
+    date: '2026.09.29 08:30',
+    status: 'done',
+    statusText: '已整理',
+    summary: '持续 3 天，餐后明显，伴轻微腹胀',
+    findings: [
+      '腹部不适持续 3 天，餐后较为明显。',
+      '每日腹泻 3 次，伴轻微腹胀，无便血。',
+      '自测体温 37.2°C，未报告呕吐。',
+      '近期饮食有变化，具体诱因仍需确认。',
+      '既往有类似轻度发作，自行缓解。',
+    ],
+    annotation: {
+      title: '出现以下情况，请立即就医',
+      body: '持续剧烈腹痛、便血或黑便、明显脱水（口渴、尿少、头晕）、高热不退。这些表现超出自我观察范围，需要面诊评估。',
+      cite: '摘自本次问诊的危险信号整理 · 未经临床审核',
+    },
+    actions: [
+      '记录饮食与症状日记，便于复诊时对照。',
+      '暂时避免油腻、辛辣与生冷食物。',
+      '少量多次补充水分与电解质。',
+      '不要自行调整原有处方药，先咨询医生。',
+    ],
+    tests: ['血常规','便常规','电解质','其他检查由医生评估'],
+    timeline: '若不适持续一周以上，或出现上述危险信号，请就诊消化内科。',
+    brief: '主诉：餐后腹部不适与腹泻 3 天。\n伴随：每日腹泻 3 次，轻微腹胀，体温 37.2°C。\n诱因：近期饮食变化，具体待确认。\n既往：有类似轻度发作，自行缓解。\n目前用药：待补充。\n过敏史：未知，请当面告知医生。',
+    materials: [
+      { name: '血常规报告.pdf', state: 'done' },
+      { name: '便常规化验单.jpg', state: 'doing' },
+    ],
+    prep: { checks: [true,false,false,false], questions: '这次需要做便常规吗？\n现在的饮食要忌口多久？', saved: false },
+    visit: { at: '', dept: '', summary: '', followup: '', saved: false },
+  },
+  {
+    id: 'MX-2026-0926-02',
+    title: '宝宝夜间咳嗽反复',
+    vol: '第 贰 卷',
+    date: '2026.09.26 13:10',
+    status: 'done',
+    statusText: '已整理',
+    summary: '两岁幼儿，夜间咳嗽一周，白天轻微',
+    findings: [
+      '咳嗽以夜间与清晨为主，已持续 7 天。',
+      '白天症状轻微，进食与精神状况尚可。',
+      '未报告发热、气促或口唇发绀。',
+      '家中有近期上呼吸道感染接触史。',
+    ],
+    annotation: {
+      title: '儿童出现以下情况，请立即就医',
+      body: '呼吸急促或费力、口唇发青、持续高热、精神萎靡、拒食拒水、咳嗽伴喘息声。幼儿病情变化快，不建议在家继续观察。',
+      cite: '摘自本次问诊的危险信号整理 · 未经临床审核',
+    },
+    actions: [
+      '记录咳嗽时段与频次，就诊时提供给医生。',
+      '保持室内湿度，避免二手烟与刺激性气味。',
+      '不要自行给幼儿使用成人止咳药。',
+    ],
+    tests: ['儿科面诊','必要时听诊与血氧','其他检查由医生评估'],
+    timeline: '建议 2 日内就诊儿科；如出现上述任一危险信号，立即就医。',
+    brief: '患儿：2 岁幼儿。\n主诉：夜间咳嗽反复 7 天，白天轻微。\n伴随：无发热、无气促。\n接触史：家中近期有上呼吸道感染。\n用药：未自行用药。\n过敏史：未知，请当面告知医生。',
+    materials: [],
+    prep: { checks: [false,false,false,false], questions: '', saved: false },
+    visit: { at: '', dept: '', summary: '', followup: '', saved: false },
+  },
+  {
+    id: 'MX-2026-0924-03',
+    title: '手臂红疹伴瘙痒',
+    vol: '第 叁 卷',
+    date: '2026.09.24 09:45',
+    status: 'doing',
+    statusText: '整理中',
+    summary: '接触新洗涤剂后出现，无发热',
+    findings: [
+      '前臂内侧出现片状红疹，伴明显瘙痒。',
+      '更换洗涤剂后 2 天出现，时间上相关。',
+      '未报告发热、关节痛或口腔黏膜损害。',
+      '皮疹范围近 2 日无明显扩大。',
+    ],
+    annotation: {
+      title: '出现以下情况，请及时就医',
+      body: '皮疹迅速扩散、出现水疱或渗出、面部或口唇肿胀、呼吸不畅。这些可能提示较重的过敏反应。',
+      cite: '摘自本次问诊的危险信号整理 · 未经临床审核',
+    },
+    actions: [
+      '暂停使用新洗涤剂，观察皮疹变化。',
+      '拍照记录皮疹范围，便于复诊对照。',
+      '避免搔抓与热水烫洗。',
+    ],
+    tests: ['皮肤科面诊','必要时过敏原检测','其他检查由医生评估'],
+    timeline: '若停用洗涤剂一周后仍未缓解，或范围扩大，请就诊皮肤科。',
+    brief: '主诉：前臂红疹伴瘙痒 2 天。\n诱因：更换洗涤剂后出现。\n伴随：无发热，无黏膜损害。\n变化：范围近 2 日无明显扩大。\n用药：未自行用药。\n过敏史：未知，请当面告知医生。',
+    materials: [{ name: '皮疹照片-0924.jpg', state: 'done' }],
+    prep: { checks: [false,false,false,false], questions: '', saved: false },
+    visit: { at: '', dept: '', summary: '', followup: '', saved: false },
+  },
+  {
+    id: 'MX-2026-0920-04',
+    title: '长期服药后胃部不适',
+    vol: '第 肆 卷',
+    date: '2026.09.20 19:02',
+    status: 'done',
+    statusText: '已整理',
+    summary: '服用降压药两周后上腹隐痛',
+    findings: [
+      '上腹隐痛两周，与开始服用降压药时间接近。',
+      '疼痛多在餐后 1 小时出现，程度轻。',
+      '未报告黑便、呕血或体重下降。',
+      '血压自测记录在目标范围内。',
+    ],
+    annotation: {
+      title: '出现以下情况，请立即就医',
+      body: '呕血、黑便、持续剧烈腹痛、晕厥。请勿自行停用降压药，停药需由医生决定。',
+      cite: '摘自本次问诊的危险信号整理 · 未经临床审核',
+    },
+    actions: [
+      '记录疼痛与服药、进餐的时间关系。',
+      '携带完整用药清单与血压记录就诊。',
+      '不要自行停药或换药。',
+    ],
+    tests: ['心内科或消化科面诊','必要时便潜血','其他检查由医生评估'],
+    timeline: '建议 1 周内就诊，携带用药清单与血压记录。',
+    brief: '主诉：上腹隐痛 2 周。\n用药：降压药，两周前开始，未自行调整。\n伴随：餐后 1 小时明显，无黑便呕血。\n血压：自测在目标范围内。\n过敏史：未知，请当面告知医生。',
+    materials: [{ name: '血压记录-0901至0920.pdf', state: 'done' }],
+    prep: { checks: [true,true,false,false], questions: '这个药需要换吗？\n胃部和降压药有关系吗？', saved: true },
+    visit: { at: '2026-09-22T09:30', dept: '消化内科', summary: '医生建议先做便潜血，继续原降压药，两周后复诊。', followup: '便潜血检查；两周后复诊；继续记录血压。', saved: true },
+  },
+  {
+    id: 'MX-2026-0918-05',
+    title: '皮肤瘙痒记录',
+    vol: '第 伍 卷',
+    date: '2026.09.18 06:00',
+    status: 'wait',
+    statusText: '待整理',
+    summary: '本次问诊尚未生成整理结果',
+    findings: [],
+    annotation: null,
+    actions: [],
+    tests: [],
+    timeline: '',
+    brief: '',
+    materials: [],
+    prep: { checks: [false,false,false,false], questions: '', saved: false },
+    visit: { at: '', dept: '', summary: '', followup: '', saved: false },
+  },
+];
+
+const CHECKLIST = [
+  '带上本次问诊整理出的摘要（可打印或截图）',
+  '带上既往检查报告与影像资料原件',
+  '列出正在服用的全部药物与剂量',
+  '记录症状出现的时间、频次与诱因',
+];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+let activeId = RECORDS[0].id;
+let activeStage = 'summary';
+
+/* ---------- 卷宗架 ---------- */
+function renderSpines() {
+  const box = $('spines');
+  box.innerHTML = RECORDS.map((r, i) => `
+    <button class="spine" type="button" role="listitem" data-id="${r.id}"
+      aria-current="${r.id === activeId}" aria-label="${esc(r.title)}，${esc(r.date)}，${esc(r.statusText)}">
+      <span class="spine-no" aria-hidden="true">${CN_NUM[i]}</span>
+      <span class="spine-body">
+        <span class="spine-title">${esc(r.title)}</span>
+        <span class="spine-meta">
+          <span class="num">${esc(r.date)}</span>
+          <span class="state ${r.status}">${esc(r.statusText)}</span>
+        </span>
+      </span>
+    </button>`).join('');
+  $('shelf-count').textContent = `共 ${RECORDS.length} 卷`;
+  box.querySelectorAll('.spine').forEach(btn => {
+    btn.addEventListener('click', () => selectRecord(btn.dataset.id));
+  });
+}
+
+/* ---------- 案卷 ---------- */
+function renderRecord() {
+  const r = RECORDS.find(x => x.id === activeId);
+  const sheet = $('sheet'), empty = $('empty');
+  if (!r) { sheet.hidden = true; empty.hidden = false; return; }
+  sheet.hidden = false; empty.hidden = true;
+
+  $('vol-no').textContent = r.vol;
+  $('vol-date').textContent = r.date;
+  $('vol-state').innerHTML = `<span class="state ${r.status}">${esc(r.statusText)}</span>`;
+  $('vol-title').textContent = r.title;
+  $('vol-sub').textContent = r.summary;
+  $('col-id').textContent = r.id;
+  $('col-date').textContent = r.date;
+
+  const hasReport = r.findings.length > 0;
+
+  $('findings').innerHTML = hasReport
+    ? r.findings.map((f, i) => `<li class="finding"><i aria-hidden="true">${CN_NUM[i] || i + 1}</i><p>${esc(f)}</p></li>`).join('')
+    : `<li class="finding"><i aria-hidden="true">—</i><p>这次问诊尚未生成整理结果。补充病情描述后可重新整理。</p></li>`;
+
+  $('annotation-slot').innerHTML = r.annotation ? `
+    <aside class="annotation">
+      <h4>${esc(r.annotation.title)}</h4>
+      <p>${esc(r.annotation.body)}</p>
+      <span class="cite">${esc(r.annotation.cite)}</span>
+    </aside>` : '';
+
+  $('actions').innerHTML = hasReport
+    ? r.actions.map((a, i) => `<li><b class="num" aria-hidden="true">${i + 1}</b><span>${esc(a)}</span></li>`).join('')
+    : `<li><b aria-hidden="true">—</b><span>暂无建议。整理完成后会出现在这里。</span></li>`;
+
+  $('tests').innerHTML = hasReport
+    ? r.tests.map(t => `<li>${esc(t)}</li>`).join('')
+    : `<li>暂无检查建议</li>`;
+
+  $('timeline').textContent = r.timeline || '整理完成后会给出复诊时机参考。';
+
+  // 附卷资料
+  const mat = $('materials');
+  if (r.materials.length) {
+    mat.hidden = false;
+    $('mat-title').textContent = `附卷 · 检查资料（${r.materials.length}）`;
+    $('mat-list').innerHTML = r.materials.map(m => `
+      <div class="mat">
+        <span class="mat-name">${esc(m.name)}</span>
+        <span class="state ${m.state}">${m.state === 'done' ? '已解析' : '解析中'}</span>
+        <button class="mat-dl" type="button">下载</button>
+      </div>`).join('');
+  } else {
+    mat.hidden = true;
+  }
+
+  // 阶段二
+  $('brief').textContent = r.brief || '本次问诊暂无整理结果，无法生成就诊摘要。你仍可直接记录实际就诊结果。';
+  $('checklist').innerHTML = CHECKLIST.map((c, i) => `
+    <label class="check">
+      <input type="checkbox" data-check="${i}" ${r.prep.checks[i] ? 'checked' : ''}>
+      <span>${esc(c)}</span>
+    </label>`).join('');
+  $('questions').value = r.prep.questions;
+  $('prep-saved').classList.toggle('on', r.prep.saved);
+
+  // 阶段三
+  $('visit-at').value = r.visit.at;
+  $('visit-dept').value = r.visit.dept;
+  $('visit-summary').value = r.visit.summary;
+  $('visit-followup').value = r.visit.followup;
+  $('visit-saved').classList.toggle('on', r.visit.saved);
+
+  // 无整理结果时，主操作改为发起新问诊
+  const btnPrep = $('btn-prep');
+  btnPrep.querySelector('svg').style.opacity = hasReport ? '1' : '.5';
+  btnPrep.lastChild.textContent = hasReport ? '整理就诊摘要' : '补充病情描述';
+
+  renderStage();
+}
+
+function renderStage() {
+  document.querySelectorAll('.tab').forEach(t => {
+    const on = t.dataset.stage === activeStage;
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1;
+  });
+  ['summary','preparation','visit'].forEach(s => {
+    $('panel-' + s).hidden = s !== activeStage;
+  });
+  const hash = activeStage === 'summary' ? `#${activeId}` : `#${activeId}/${activeStage}`;
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+}
+
+function selectRecord(id) {
+  const mobile = window.matchMedia('(max-width:900px)').matches;
+  // 手机上卷宗架与案卷互斥：即便点的就是当前卷，也要负责切到案卷视图。
+  const needOpen = mobile && !document.body.classList.contains('detail-open');
+  if (id === activeId && !needOpen) return;
+  if (id !== activeId) {
+    stashDraft();
+    activeId = id;
+    activeStage = 'summary';
+    renderSpines();
+    renderRecord();
+  }
+  document.body.classList.add('detail-open');
+  if (mobile) window.scrollTo({ top: 0, behavior: 'auto' });
+  else $('sheet').scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function goStage(stage) {
+  if (stage === activeStage) return;
+  stashDraft();
+  activeStage = stage;
+  renderStage();
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelector('.tabs').scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+}
+
+/* ---------- 草稿保留（仅当前页面内存） ---------- */
+function stashDraft() {
+  const r = RECORDS.find(x => x.id === activeId);
+  if (!r) return;
+  document.querySelectorAll('#checklist input[data-check]').forEach(inp => {
+    r.prep.checks[Number(inp.dataset.check)] = inp.checked;
+  });
+  r.prep.questions = $('questions').value;
+  r.visit.at = $('visit-at').value;
+  r.visit.dept = $('visit-dept').value;
+  r.visit.summary = $('visit-summary').value;
+  r.visit.followup = $('visit-followup').value;
+}
+
+/* ---------- 交互 ---------- */
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => goStage(tab.dataset.stage));
+  tab.addEventListener('keydown', e => {
+    const tabs = [...document.querySelectorAll('.tab')];
+    const i = tabs.indexOf(tab);
+    let next = null;
+    if (e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
+    else if (e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
+    else if (e.key === 'Home') next = tabs[0];
+    else if (e.key === 'End') next = tabs[tabs.length - 1];
+    if (next) { e.preventDefault(); next.focus(); goStage(next.dataset.stage); }
+  });
+});
+
+document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goStage(b.dataset.goto)));
+$('back').addEventListener('click', () => {
+  stashDraft();
+  document.body.classList.remove('detail-open');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+$('new-case').addEventListener('click', () => {
+  const note = document.createElement('div');
+  note.setAttribute('role', 'status');
+  note.textContent = '设计稿演示：此处将进入 AI 问诊对话页。';
+  note.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);z-index:90;padding:11px 20px;background:#22262a;color:#f6f2e8;font-size:13px;border-radius:2px;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)';
+  document.body.appendChild(note);
+  setTimeout(() => note.remove(), 2200);
+});
+$('btn-print').addEventListener('click', () => window.print());
+
+$('btn-prep').addEventListener('click', () => {
+  const r = RECORDS.find(x => x.id === activeId);
+  if (r && r.findings.length) goStage('preparation');
+  else $('new-case').click();
+});
+
+$('btn-share').addEventListener('click', async () => {
+  const r = RECORDS.find(x => x.id === activeId);
+  const text = `医枢案卷 ${r.vol}：${r.title}（${r.date}）`;
+  try {
+    if (navigator.share) await navigator.share({ title: '医枢问诊记录', text });
+    else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      $('share-label').textContent = '已复制';
+      setTimeout(() => { $('share-label').textContent = '分享'; }, 1800);
+    }
+  } catch { /* 用户取消分享，无需提示 */ }
+});
+
+$('btn-copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('brief').textContent);
+    $('copy-label').textContent = '已复制';
+    setTimeout(() => { $('copy-label').textContent = '复制摘要'; }, 1800);
+  } catch { $('copy-label').textContent = '复制失败，请手动选择'; }
+});
+
+$('save-prep').addEventListener('click', () => {
+  const r = RECORDS.find(x => x.id === activeId);
+  stashDraft();
+  r.prep.saved = true;
+  $('prep-saved').classList.add('on');
+});
+$('save-visit').addEventListener('click', () => {
+  const r = RECORDS.find(x => x.id === activeId);
+  stashDraft();
+  r.visit.saved = true;
+  $('visit-saved').classList.add('on');
+});
+window.addEventListener('beforeunload', stashDraft);
+
+/* ---------- 哈希深链 ---------- */
+function applyHash() {
+  const raw = location.hash.replace(/^#/, '');
+  if (!raw) return false;
+  const [id, stage] = raw.split('/');
+  let changed = false;
+  if (RECORDS.some(r => r.id === id) && id !== activeId) { activeId = id; changed = true; }
+  if (RECORDS.some(r => r.id === id)) document.body.classList.add('detail-open');
+  const nextStage = stage === 'preparation' || stage === 'visit' ? stage : 'summary';
+  if (nextStage !== activeStage) { activeStage = nextStage; changed = true; }
+  return changed;
+}
+
+/* 同一文档内改哈希（粘贴链接、前进后退）不会重新加载页面，需要显式跟随。 */
+window.addEventListener('hashchange', () => {
+  stashDraft();
+  if (applyHash()) { renderSpines(); renderRecord(); }
+});
+
+applyHash();
+renderSpines();
+renderRecord();
+</script>
+</body>
+</html>
