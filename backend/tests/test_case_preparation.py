@@ -73,10 +73,15 @@ async def test_preparation_is_persisted_idempotent_and_keeps_patient_corrections
     assert created.json()["created"] is True
     assert repeated.json()["created"] is False
     assert repeated.json()["package_id"] == created.json()["package_id"]
-    assert created.json()["department"]["status"] == "insufficient_evidence"
-    assert created.json()["unknown_facts"] == [
-        {"id": "unknown.allergies", "label": "过敏史", "status": "unknown"},
-        {"id": "unknown.medications", "label": "当前用药", "status": "unknown"},
+    assert created.json()["department"]["status"] == "general_consultation"
+    assert [
+        (fact["id"], fact["label"], fact["status"])
+        for fact in created.json()["unknown_facts"]
+    ] == [
+        ("unknown.allergies", "过敏史", "unknown"),
+        ("unknown.medications", "当前用药", "unknown"),
+        ("unknown.conditions", "慢性病／特殊疾病", "unknown"),
+        ("unknown.department_focus", "这次主要想咨询哪类问题？", "unknown"),
     ]
 
     recovered = await client.get(url, headers=headers)
@@ -129,6 +134,17 @@ async def test_preparation_is_persisted_idempotent_and_keeps_patient_corrections
     assert recovered.json()["history"][0]["version"] == 1
     assert recovered.json()["history"][0]["is_stale"] is True
 
+    unchanged_corrections = await client.patch(
+        f"{url}/{regenerated.json()['package_id']}", headers=headers,
+        json={
+            "expected_revision": regenerated.json()["revision"],
+            "patient_corrections": regenerated.json()["patient_corrections"],
+            "patient_questions": ["复诊时需要带哪些资料？"],
+        },
+    )
+    assert 200 == unchanged_corrections.status_code
+    assert False is unchanged_corrections.json()["is_stale"]
+
     source_session.structured_output = {
         **source_session.structured_output,
         "key_findings": ["来源报告已修订"],
@@ -139,6 +155,42 @@ async def test_preparation_is_persisted_idempotent_and_keeps_patient_corrections
     assert source_updated.status_code == 200
     assert source_updated.json()["version"] == 3
     assert source_updated.json()["summary"]["ai_inference"][-1] == "来源报告已修订"
+
+
+@pytest.mark.asyncio
+async def test_preparation_repeated_corrections_update_guidance_and_preserve_original(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    owner = _patient("T4 Repeat Correction")
+    db_session.add(owner)
+    await db_session.flush()
+    case, _ = await _case_for(db_session, owner)
+    case.chief_complaint = "咳嗽"
+    await db_session.commit()
+    url = f"/api/v1/patient/cases/{case.id}/preparation"
+    headers = _headers(owner)
+    package = (await client.post(url, headers=headers)).json()
+    assert "呼吸内科" == package["department"]["recommendation"]
+    for complaint, department in [("牙痛", "口腔科"), ("腹泻", "消化内科")]:
+        changed = await client.patch(
+            f"{url}/{package['package_id']}", headers=headers,
+            json={"expected_revision": package["revision"], "patient_corrections": [
+                {"fact_id": "patient.chief_complaint", "value": complaint},
+            ]},
+        )
+        assert 200 == changed.status_code
+        assert True is changed.json()["is_stale"]
+        regenerated = await client.post(url, headers=headers)
+        assert 200 == regenerated.status_code
+        package = regenerated.json()
+        assert department == package["department"]["recommendation"]
+        assert ["patient.chief_complaint"] == [entry["fact_id"] for entry in package["patient_corrections"]]
+        assert complaint == next(fact["value"] for fact in package["known_facts"]
+                                 if fact["id"] == "correction.patient.chief_complaint")
+    await db_session.refresh(case)
+    assert "咳嗽" == case.chief_complaint
+    assert "咳嗽" == next(fact["value"] for fact in package["known_facts"]
+                           if fact["id"] == "patient.chief_complaint" and fact["active"] is False)
 
 
 @pytest.mark.asyncio
@@ -235,8 +287,8 @@ async def test_preparation_includes_patient_profile_and_unverified_source_names(
     }
     assert profile_facts["patient_profile.allergies"]["value"] == ["青霉素"]
     assert profile_facts["patient_profile.current_medications"]["value"][0]["name"] == "示例药物"
-    assert all(fact["source_type"] == "patient_reported" for fact in profile_facts.values())
-    assert package["unknown_facts"] == []
+    assert all(fact["source_type"] == "legacy_record" for fact in profile_facts.values())
+    assert ["unknown.conditions", "unknown.department_focus"] == [fact["id"] for fact in package["unknown_facts"]]
     assert {item["id"] for item in package["source_index"]} >= {
         "patient_profile.allergies", "patient_profile.current_medications", "source_session.report"
     }

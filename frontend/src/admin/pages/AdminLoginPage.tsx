@@ -4,7 +4,11 @@ import {
 } from '@mui/material';
 import { adminLogin } from '../../api/admin';
 
-export default function AdminLoginPage() {
+interface AdminLoginPageProps {
+  message?: string;
+}
+
+export default function AdminLoginPage({ message }: AdminLoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -44,6 +48,12 @@ export default function AdminLoginPage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
             管理员登录
           </Typography>
+
+          {message && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {message}
+            </Alert>
+          )}
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>

@@ -1,10 +1,10 @@
 # 本地与生产配置
 
-> 本页说明仓库内的 Compose 和 Nginx 配置，不声明生产环境当前运行状态。静态核对日期：**2026-09-24**。
+> 本页说明仓库内的 Compose 和 Nginx 配置，不声明生产环境当前运行状态。静态核对日期：**2026-09-29**。
 
 ## 本地 Docker Compose
 
-本地栈由根目录 docker-compose.yml 定义，包含 PostgreSQL、Redis、backend、Celery worker、Celery beat 和 frontend；不包含 SearXNG，因此该栈本身不能保证外部搜索可用。
+本地栈由根目录 docker-compose.yml 定义，默认启动 PostgreSQL、Redis、backend、Celery worker、Celery beat 和 frontend。SearXNG 位于 `external-search` profile，默认不启动；管理员将外部搜索地址设为 `http://searxng:8080` 时，只有启动该服务后才能使用外部检索。
 
 | 服务 | 主机绑定 | 容器端口/作用 |
 |---|---|---|
@@ -13,10 +13,13 @@
 | backend | 127.0.0.1:8000 | 8000 |
 | frontend | 127.0.0.1:3000 | 80 |
 | Celery worker / beat | 无主机端口 | 后台任务进程 |
+| SearXNG（按需） | 无主机端口 | 8080，仅供 Compose 网络内的 backend 访问 |
 
 PostgreSQL 与 Redis 使用命名卷。backend 将 app 目录以只读方式挂载；frontend 使用镜像内构建产物。
 
 启动前复制 .env.example 为 .env 并填写必要配置：
+
+首次启动和带有迁移脚本的代码更新，须先按[根 README 的快速启动步骤](../../README.md)初始化或升级数据库，再启动应用。以下命令用于已经完成迁移的本地栈；重启容器不会自动执行 Alembic 迁移，`/health` 返回正常也不表示表结构已与代码同步。
 
 ~~~sh
 docker compose config -q
@@ -31,6 +34,16 @@ docker compose down
 ~~~
 
 运行日志可使用 docker compose logs -f backend 或 docker compose logs -f frontend。健康检查入口为 http://localhost:8000/health。
+
+需要外部检索时，先在未提交的 `.env` 中设置随机 `SEARXNG_SECRET`，确认现有 Redis 正在运行，再执行以下命令。它只启动一个 SearXNG 服务容器，复用现有 Redis 的 DB 3，不创建第二套数据库或缓存，也不向宿主机开放 SearXNG 端口。
+
+~~~sh
+docker compose --profile external-search config -q
+docker compose --profile external-search up -d --no-deps searxng
+docker compose --profile external-search ps searxng
+~~~
+
+服务启动后，从 backend 容器检查 `searxng` 是否可解析，并用管理员的外部搜索健康检查确认 `/search?format=json` 返回正常。若未启动此 profile，应在管理员设置中关闭外部搜索，避免把缺少服务误判为通用 DNS 故障。
 
 ## 独立开发服务器
 

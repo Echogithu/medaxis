@@ -1,6 +1,6 @@
 # 后端参考
 
-> 静态源码索引，核对日期：**2026-09-24**。端点和服务代码存在不代表本轮已启动后端或验证外部依赖。
+> 静态源码索引，核对日期：**2026-09-28**。端点和服务代码存在不代表本轮已启动后端或验证外部依赖。
 
 ## 技术与入口
 
@@ -27,9 +27,10 @@
 
 重要路径：
 
-- GET /api/v1/agents/route/stream：问诊 SSE 入口。
-- POST /api/v1/agents/route/stream/continue：提交问诊卡答案并继续问诊。
+- POST /api/v1/agents/route/stream：问诊 SSE 入口；主诉与病史在 JSON body，凭证和 `Idempotency-Key` 在请求头。
+- POST /api/v1/agents/route/stream/continue：提交问诊卡答案并继续问诊；答案在 JSON body，`session_id` / `question_id` 为 query 参数。
 - POST /api/v1/agents/sessions/{session_id}/chat：诊断后独立对话，返回 SSE。
+- 三条患者 SSE 路由在通用身份解析前拒绝 URL 凭证和患者文本；续答仅保留不透明 `session_id` / `question_id` query 参数。其他兼容路由仍可能使用旧 query-token 解析。
 - POST /api/v1/documents/upload：上传并开始解析，结果由 /api/v1/documents/{task_id}/result 轮询。
 - POST /api/v1/upload/upload：病例附件落盘，不是上一个异步解析接口。
 

@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401 — registers all models with Base.metada
     audit,
     config,
     document_parse,
+    guest_submission,
     medical_case,
     rag,
     user,

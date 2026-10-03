@@ -2,6 +2,8 @@
 
 Status: **DEFINED_NOT_RUN**｜2026-09-27
 
+2026-09-29 已新增 [T06 DeepSeek 部分成绩单](results/2026-09-29-t06-deepseek-live.json)：SM-01–04 真实模型、25 项映射工程断言与合成内部引用分别记账。目录文件仍保持 `DEFINED_NOT_RUN`，表示固定题集本身不冒充完整 10 案例验收；实际私有知识库文档外发和隔离报告中的外部 URL 仍未验证。
+
 这是作品集约定的第一批 **10 个固定合成案例**，不是已经跑完的分数。用途：把输入、禁止推断、失败语义和现有回归测试钉死，之后用同一口径跑替身演示和真实模型。
 
 权威文件：
@@ -45,7 +47,7 @@ $env:DATABASE_URL=$env:TEST_DATABASE_URL
 python evals/patient-smoke/run_eval.py --pytest
 ```
 
-真实模型主线仍按案例脚本手工或后续 runner 执行。把带日期的成绩写到 `evals/patient-smoke/results/`，不要改 `catalog.json` 里的 `DEFINED_NOT_RUN` 除非同时提交成绩文件。
+真实模型按案例脚本或隔离 runner 执行。把带日期的成绩写到 `evals/patient-smoke/results/`，保留未执行项及成本缺失值，不把目录校验或替身测试计作模型结果。
 
 ## 记账规则
 

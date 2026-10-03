@@ -30,6 +30,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { login, getMe } from '../api/auth';
 import { agentApi } from '../api/agent';
 import { getToken } from '../api/client';
+import { completeGuestMigration } from './guestMigration';
 import { carePalette } from '../theme';
 
 const serviceItems = [
@@ -37,6 +38,14 @@ const serviceItems = [
   { label: '健康档案', icon: <FolderOpenOutlined /> },
   { label: '随访计划', icon: <EventNoteOutlined /> },
 ];
+
+function loginNotice(state: unknown, search: string): string {
+  const message = (state as { message?: string } | null)?.message || '';
+  const params = new URLSearchParams(search);
+  if (params.get('verified') === 'true') return '邮箱验证成功！请登录您的账号。';
+  if (params.get('doctor_confirmed') === 'true') return '医生认证确认成功！请登录您的账号。';
+  return message;
+}
 
 const LoginPage: React.FC = () => {
   const theme = useTheme();
@@ -52,23 +61,17 @@ const LoginPage: React.FC = () => {
     open: boolean;
     message: string;
     severity: 'error' | 'success';
-  }>({ open: false, message: '', severity: 'error' });
+  }>(() => {
+    const message = loginNotice(location.state, location.search);
+    return { open: Boolean(message), message, severity: 'success' };
+  });
 
   useEffect(() => {
     const msg = (location.state as { message?: string } | null)?.message;
-    if (msg) {
-      setSnackbar({ open: true, message: msg, severity: 'success' });
-      window.history.replaceState({}, '');
-    }
     const params = new URLSearchParams(location.search);
-    if (params.get('verified') === 'true') {
-      setSnackbar({ open: true, message: '邮箱验证成功！请登录您的账号。', severity: 'success' });
+    if (params.get('verified') === 'true' || params.get('doctor_confirmed') === 'true') {
       window.history.replaceState({}, '', '/login');
-    }
-    if (params.get('doctor_confirmed') === 'true') {
-      setSnackbar({ open: true, message: '医生认证确认成功！请登录您的账号。', severity: 'success' });
-      window.history.replaceState({}, '', '/login');
-    }
+    } else if (msg) window.history.replaceState({}, '');
   }, [location.state, location.search]);
 
   const handleCloseSnackbar = () => setSnackbar((prev) => ({ ...prev, open: false }));
@@ -95,23 +98,22 @@ const LoginPage: React.FC = () => {
     try {
       await login({ email: email.trim(), password, role: 'patient' });
       try {
-        const { migrateGuestData } = await import('../api/agent');
-        await migrateGuestData();
+        await completeGuestMigration();
       } catch {
         setSnackbar({
           open: true,
-          message: '登录已成功，但访客记录迁移失败。请再次提交登录以重试；访客记录仍保留。',
+          message: '登录已成功，但访客记录迁移未全部完成。请再次提交登录以重试；本地访客记录仍保留。',
           severity: 'error',
         });
         return;
       }
       const user = await getMe();
       const routes: Record<string, string> = {
-        patient: '/chat',
+        patient: '/today',
         doctor: '/doctor',
         admin: '/admin',
       };
-      navigate(routes[user.role] || '/chat', { replace: true });
+      navigate(routes[user.role] || '/today', { replace: true });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '登录失败，请稍后重试';
       setSnackbar({ open: true, message, severity: 'error' });

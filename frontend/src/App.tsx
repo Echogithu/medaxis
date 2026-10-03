@@ -14,7 +14,8 @@ const HealthProfilePage = lazy(() => import('./patient/pages/HealthProfilePage')
 const FollowUpPage = lazy(() => import('./patient/pages/FollowUpPage'));
 const MedicationReminderPage = lazy(() => import('./patient/pages/MedicationReminderPage'));
 const PatientCasesPage = lazy(() => import('./patient/pages/PatientCasesPage'));
-const PatientLayout = lazy(() => import('./patient/layout/PatientLayout'));
+import PatientLayout from './patient/layout/PatientLayout';
+const TodayHealthPage = lazy(() => import('./patient/pages/TodayHealthPage'));
 
 // 医生端
 const DoctorLayout = lazy(() => import('./doctor/layout/DoctorLayout'));
@@ -54,7 +55,7 @@ function RequireRole({ role, children }: { role: string; children: React.ReactNo
     // 如果是 admin，允许访问所有页面
     if (userRole === 'admin') return <>{children}</>;
     // 否则跳转到对应首页
-    return <Navigate to={userRole === 'doctor' ? '/doctor' : '/chat'} replace />;
+    return <Navigate to={userRole === 'doctor' ? '/doctor' : '/today'} replace />;
   }
   return <>{children}</>;
 }
@@ -77,17 +78,18 @@ function App() {
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             {/* 公共路由 */}
-            <Route path="/" element={<EntryPage />} />
-            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/" element={isLoggedIn() ? <Navigate to={getUserRole() === 'doctor' ? '/doctor' : getUserRole() === 'admin' ? '/admin' : '/today'} replace /> : <EntryPage />} />
             <Route path="/login" element={<EntryPage />} />
             <Route path="/register" element={<RegisterPage />} />
 
             {/* 患者端 */}
-            <Route element={<RequireRole role="patient"><PatientLayout /></RequireRole>}>
-              <Route path="/health" element={<HealthProfilePage />} />
-              <Route path="/followups" element={<FollowUpPage />} />
-              <Route path="/reminders" element={<MedicationReminderPage />} />
-              <Route path="/cases" element={<PatientCasesPage />} />
+            <Route element={<PatientLayout />}>
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/today" element={<RequireRole role="patient"><TodayHealthPage /></RequireRole>} />
+              <Route path="/health" element={<RequireRole role="patient"><HealthProfilePage /></RequireRole>} />
+              <Route path="/followups" element={<RequireRole role="patient"><FollowUpPage /></RequireRole>} />
+              <Route path="/reminders" element={<RequireRole role="patient"><MedicationReminderPage /></RequireRole>} />
+              <Route path="/cases" element={<RequireRole role="patient"><PatientCasesPage /></RequireRole>} />
             </Route>
 
             {/* 医生端 — 与患者端共享青绿色品牌主题 */}

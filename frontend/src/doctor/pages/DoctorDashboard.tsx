@@ -20,6 +20,7 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { fetchDashboardStats, listPatients } from '../../api/doctor';
 import type { DoctorStats, PatientSummary } from '../../api/doctor';
 import { cardStyle } from '../../styles/sxUtils';
+import DoctorHandoffRequests from '../components/DoctorHandoffRequests';
 
 
 const demoStats: DoctorStats = {
@@ -61,8 +62,6 @@ export default function DoctorDashboard() {
 
   useEffect(() => {
     let mounted = true;
-    setLoadingStats(true);
-    setLoadingPatients(true);
 
     fetchDashboardStats()
       .then((data) => {
@@ -101,6 +100,7 @@ export default function DoctorDashboard() {
       <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', mb: 3 }}>
         工作台
       </Typography>
+      <DoctorHandoffRequests />
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {statMeta.map((s) => (
           <Grid size={{ xs: 12, sm: 6, md: 3 }} key={s.key}>

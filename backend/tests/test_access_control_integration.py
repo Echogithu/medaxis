@@ -1,6 +1,7 @@
 """数据库/API 边界的身份与病例访问控制回归测试。"""
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
@@ -8,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import deps
-from app.api.v1 import documents
+from app.api.v1 import agents, documents
 from app.core.security import create_access_token, create_guest_token
 from app.models.medical_case import MedicalCase
 from app.models.document_parse import DocumentParseTask
@@ -219,3 +220,178 @@ async def test_parse_results_are_private_across_user_and_guest_sessions(
     )
     assert owner_delete.status_code == 204
     assert guest_delete.status_code == 204
+
+
+@pytest.mark.parametrize("database_session_state", ["missing", "expired"])
+@pytest.mark.asyncio
+async def test_nonstream_agent_rejects_missing_or_expired_guest_session(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    database_session_state: str,
+) -> None:
+    guest_id = uuid.uuid4()
+    if database_session_state == "expired":
+        db_session.add(
+            GuestSession(
+                id=guest_id,
+                session_token=f"expired-{uuid.uuid4()}",
+                fingerprint="expired-guest-test",
+                expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            )
+        )
+        await db_session.commit()
+
+    async def _stub_route(_self: object, **_kwargs: object) -> dict[str, str]:
+        return {"stub": "model service must stay behind guest-session validation"}
+
+    monkeypatch.setattr(agents.AgentOrchestrator, "route", _stub_route)
+    response = await client.post(
+        "/api/v1/agents/route",
+        headers={"X-Guest-Token": create_guest_token(str(guest_id), platform="web")},
+        json={"message": "合成问诊消息"},
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_nonstream_agent_accepts_active_database_guest(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    guest = GuestSession(
+        session_token=f"active-{uuid.uuid4()}",
+        fingerprint="active-guest-test",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    db_session.add(guest)
+    await db_session.commit()
+
+    async def _stub_route(_self: object, **_kwargs: object) -> dict[str, str]:
+        return {"stub": "active guest request accepted"}
+
+    monkeypatch.setattr(agents.AgentOrchestrator, "route", _stub_route)
+    response = await client.post(
+        "/api/v1/agents/route",
+        headers={
+            "X-Guest-Token": create_guest_token(str(guest.id), platform="web"),
+            "Idempotency-Key": str(uuid.uuid4()),
+        },
+        json={"message": "合成问诊消息"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"stub": "active guest request accepted"}
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/v1/agents/route", {"message": "合成问诊消息"}),
+        ("/api/v1/agents/diagnose", {"symptoms": "合成症状描述足够长"}),
+        ("/api/v1/agents/consult", {"symptoms": "合成症状描述足够长"}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_nonstream_agent_rejects_client_selected_patient_identity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    payload: dict[str, str],
+) -> None:
+    patient = _new_user(UserRole.PATIENT, "Authenticated Patient")
+    another_patient = _new_user(UserRole.PATIENT, "Other Patient")
+    db_session.add_all([patient, another_patient])
+    await db_session.commit()
+
+    model_called = False
+
+    async def _stub_route(_self: object, **_kwargs: object) -> dict[str, str]:
+        nonlocal model_called
+        model_called = True
+        return {"stub": "model boundary"}
+
+    async def _stub_analyze(_self: object, **_kwargs: object) -> SimpleNamespace:
+        nonlocal model_called
+        model_called = True
+        return SimpleNamespace(
+            structured_output=None,
+            content="合成结果",
+            tool_calls_used=[],
+            session_id="synthetic-session",
+        )
+
+    monkeypatch.setattr(agents.AgentOrchestrator, "route", _stub_route)
+    monkeypatch.setattr(agents.DiagnosisAgent, "analyze", _stub_analyze)
+    response = await client.post(
+        path,
+        headers=_auth_header(patient),
+        json={**payload, "patient_id": str(another_patient.id)},
+    )
+
+    assert response.status_code == 403
+    assert model_called is False
+
+
+@pytest.mark.parametrize("send_patient_id", [False, True])
+@pytest.mark.asyncio
+async def test_patient_route_uses_authenticated_identity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    send_patient_id: bool,
+) -> None:
+    patient = _new_user(UserRole.PATIENT, "Authenticated Patient")
+    db_session.add(patient)
+    await db_session.commit()
+    received_patient_ids: list[str | None] = []
+
+    async def _stub_route(_self: object, **kwargs: object) -> dict[str, str | None]:
+        received_patient_ids.append(kwargs["patient_id"])
+        return {"patient_id": kwargs["patient_id"]}
+
+    monkeypatch.setattr(agents.AgentOrchestrator, "route", _stub_route)
+    payload: dict[str, str] = {"message": "合成问诊消息"}
+    if send_patient_id:
+        payload["patient_id"] = str(patient.id)
+
+    response = await client.post(
+        "/api/v1/agents/route",
+        headers=_auth_header(patient),
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    assert received_patient_ids == [str(patient.id)]
+    assert response.json()["patient_id"] == str(patient.id)
+
+
+@pytest.mark.asyncio
+async def test_guest_cannot_select_authenticated_patient_identity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patient = _new_user(UserRole.PATIENT, "Other Patient")
+    guest = GuestSession(
+        session_token=f"active-{uuid.uuid4()}",
+        fingerprint="patient-scope-guest-test",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    db_session.add_all([patient, guest])
+    await db_session.commit()
+
+    async def _stub_route(_self: object, **_kwargs: object) -> dict[str, str]:
+        return {"stub": "model boundary must not be reached"}
+
+    monkeypatch.setattr(agents.AgentOrchestrator, "route", _stub_route)
+    response = await client.post(
+        "/api/v1/agents/route",
+        headers={"X-Guest-Token": create_guest_token(str(guest.id), platform="web")},
+        json={"message": "合成问诊消息", "patient_id": str(patient.id)},
+    )
+
+    assert response.status_code == 403

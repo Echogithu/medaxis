@@ -26,6 +26,18 @@
 | 文档 | 用途与状态 |
 |---|---|
 | [PORTFOLIO_PRD.md](./product/PORTFOLIO_PRD.md) | 患者侧作品范围、MVP、指标与证据边界；状态为 REVIEW |
+| [DOCTOR_PRD.md](./product/DOCTOR_PRD.md) | 医生端定向咨询、患者回复联通、认证撤销、机构授权病例库与科研导出；Q1–Q3已确认，整稿为 REVIEW |
+| [VISIT_PREPARATION_SPEC.md](./product/VISIT_PREPARATION_SPEC.md) | 2026-09-30 就医准备的三块信息层级、通用科室参考和验证边界 |
+| [CONSULTATION_OPTIMIZATION_ACCEPTANCE.md](./product/CONSULTATION_OPTIMIZATION_ACCEPTANCE.md) | 问诊题量、信息复用、阶段缺口、来源预算与引用排序的验收步骤 |
+| [CONSULTATION_OPTIMIZATION_COMPARISON.md](./product/CONSULTATION_OPTIMIZATION_COMPARISON.md) | 修改前后固定重放与真实模型小样本：收益、成本和证据边界 |
+| [CONSULTATION_REGRESSION_FIX.md](./product/CONSULTATION_REGRESSION_FIX.md) | 2026-10-03 来源丢失、内部标识和必要缺口未补问的修复、前后对比及验收 |
+| [SOURCE_EMPTY_RUNTIME_FIX.md](./product/SOURCE_EMPTY_RUNTIME_FIX.md) | 2026-10-03 真实检索候选筛成零来源的复现、报告证据门禁及真实产物验收 |
+| [CLOSURE_ROADMAP.md](./product/CLOSURE_ROADMAP.md) | 按业务链路闭环排序的下一步计划与待决策项；状态为 DRAFT |
+| [HEALTH_FOLLOWUP_MEDICATION_REVIEW.md](./product/HEALTH_FOLLOWUP_MEDICATION_REVIEW.md) | 2026-10-02 健康档案、随访、用药提醒审查及分阶段验收；REQUEST CHANGES |
+| [HEALTH_PROFILE_SPEC.md](./product/HEALTH_PROFILE_SPEC.md) | 健康档案补充链路、疾病分类、来源与时间、兼容及验收；部署环境迁移待执行 |
+| [FOLLOWUP_PLAN_SPEC.md](./product/FOLLOWUP_PLAN_SPEC.md) | 患者手动随访创建、确认、执行与生命周期，来源和提醒联动边界及验收 |
+| [POST_VISIT_AI_ACTIONS_SPEC.md](./product/POST_VISIT_AI_ACTIONS_SPEC.md) | 诊后记录脱敏预览、逐次同意、AI候选确认、随访/用药排程与来源失效联动 |
+| [PATIENT_REPORTS_REQUIREMENTS.md](./product/PATIENT_REPORTS_REQUIREMENTS.md) | 患者独立检查报告归档、脱敏同意、核对管理、关联与验收；REVIEW，隐私方式已确认，尚未开发 |
 | [PATIENT_DEMO_CLOSURE_PLAN.md](./product/PATIENT_DEMO_CLOSURE_PLAN.md) | 合成数据演示闭环的范围、结果与未验证项 |
 | [PATIENT_DEMO_CLOSURE_REVIEW.md](./product/PATIENT_DEMO_CLOSURE_REVIEW.md) | 患者侧独立审查、验证范围和剩余风险 |
 | [PRD.md](./product/PRD.md) | 完整需求与实现差距的历史审查；旧问题须回查当前源码 |
@@ -65,6 +77,8 @@
 - [磷酸奥司他韦胶囊（达菲，2025-02-20 版）](<./medical/medications/儿童药物参考-磷酸奥司他韦胶囊（达菲，2025-02-20版）.pdf>)
 
 ## 阅读边界
+
+- [OpenMed 借鉴功能与验收](./product/OPENMED_BORROWING_ACCEPTANCE.md)：原话语境、逐条原文核对与外发文本遮蔽的本地集成和验证边界。
 
 - `PRD.md` 和 `PORTFOLIO_PRD.md` 是评审材料，不替代当前源码事实或开发授权。
 - 患者侧演示结论仅覆盖合成数据与明确列出的测试范围，不证明真实模型质量、临床有效性或医生闭环。

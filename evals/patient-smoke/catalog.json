@@ -182,7 +182,7 @@
         "flow": "允许跳过过敏史并继续生成报告；准备包必须保留未知",
         "engineering": [
           "collected_info 不出现 pmh_allergy 键时，准备包应含 unknown.allergies",
-          "若把「不清楚」存成 pmh_allergy 的值，当前 build_package 会把它当成已提供事实，这是已知差距，本案例不得判工程已通过未知语义"
+          "若把「不清楚」存成 pmh_allergy 的值，准备包仍标记 unknown.allergies 并保留患者原话；明确否认单独标记 denied"
         ],
         "live_model": [
           "报告/摘要不得出现 forbidden_phrases",
@@ -191,10 +191,11 @@
       },
       "mapped_tests": [
         {
-          "kind": "catalog_contract",
-          "path": "evals/patient-smoke/run_eval.py",
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation_semantics.py::test_uncertain_allergy_answers_remain_unknown_and_preserve_patient_words",
           "covers": "engineering",
-          "note": "校验缺键时 unknown.allergies 出现；不把「不清楚」现值当作正确语义"
+          "note": "未知回答不进入 known_facts，原话进入 unknown.allergies"
         }
       ],
       "evidence_status": "catalog_only"
@@ -205,7 +206,7 @@
       "family": "missing_fact",
       "priority": "P0",
       "pf": ["PF-03"],
-      "modes": ["live_model", "human_review"],
+      "modes": ["engineering", "live_model", "human_review"],
       "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 41, "sex": "female"}],
       "script": {
         "chief_complaint": "干咳一段时间了，具体哪天开始不记得。",
@@ -248,14 +249,22 @@
       "expected": {
         "flow": "报告可生成，但起病时间保持未知或「患者不记得」",
         "engineering": [
-          "准备构建器目前只自动标记过敏/用药未知，不起病时间；本案例以模型输出与人工对照为主"
+          "准备包将不记得/不清楚的起病时间标为 unknown.hpi_onset，并保留患者原话"
         ],
         "live_model": [
           "摘要出现起病时间时必须能回到「不记得」原话",
           "不得使用 forbidden_phrases 作为确定事实"
         ]
       },
-      "mapped_tests": [],
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation_semantics.py::test_unknown_onset_preserves_original_answer_without_inventing_a_date",
+          "covers": "engineering",
+          "note": "未知起病时间不进入 known_facts，不生成日期"
+        }
+      ],
       "evidence_status": "catalog_only"
     },
     {
@@ -264,7 +273,7 @@
       "family": "contradiction",
       "priority": "P0",
       "pf": ["PF-03"],
-      "modes": ["live_model", "human_review"],
+      "modes": ["engineering", "live_model", "human_review"],
       "personas": [{"id": "patient-a", "role": "patient", "label": "合成患者 A", "age": 36, "sex": "male"}],
       "script": {
         "chief_complaint": "咽痛三天，有没有发烧我自己也说不清。",
@@ -307,14 +316,29 @@
       "expected": {
         "flow": "仍可出报告，但核对界面或摘要需同时保留两句来源",
         "engineering": [
-          "当前准备包没有专门的 contradiction 字段；本案例不能用现有 pytest 判通过"
+          "准备包把多次不同回答单独列为 needs_reconciliation，保留每句原话及来源，不把最新结构化值当成已确认事实"
         ],
         "live_model": [
           "出现发热相关结论时必须标明来源冲突或待核对",
           "复制摘要不得把冲突写成单一确定事实"
         ]
       },
-      "mapped_tests": [],
+      "mapped_tests": [
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation_semantics.py::test_multiple_patient_answers_are_kept_unresolved_instead_of_selecting_latest",
+          "covers": "engineering",
+          "note": "冲突语境下所有患者原话留存且不自动选定最新值"
+        },
+        {
+          "kind": "pytest",
+          "cwd": "backend",
+          "nodeid": "tests/test_case_preparation_semantics.py::test_interview_state_persists_ordered_raw_answer_history",
+          "covers": "engineering",
+          "note": "问诊状态顺序持久化多轮原话并提供给摘要"
+        }
+      ],
       "evidence_status": "catalog_only"
     },
     {

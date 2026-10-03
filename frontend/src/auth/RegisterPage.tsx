@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Box, Container, Paper, Typography, TextField, Button, Alert, CircularProgress,
   Link, ToggleButton, ToggleButtonGroup, InputAdornment, IconButton,
-  FormControl, InputLabel, Select, MenuItem, LinearProgress,
+  FormControl, FormHelperText, InputLabel, Select, MenuItem, LinearProgress, Checkbox,
   Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
-import { Visibility, VisibilityOff, Email, Lock, Person, Phone, LocalHospital } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { Visibility, VisibilityOff, Email, Lock, Person, Phone, LocalHospital, MonitorHeartRounded, ArrowBackRounded, AttachFileRounded } from '@mui/icons-material';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { register, registerDoctor, type RegisterRequest } from '../api/auth';
-import { carePalette } from '../theme';
+import { completeGuestMigration } from './guestMigration';
+import { carePalette, careShadows } from '../theme';
 
 type Gender = 'male' | 'female';
 type Role = 'patient' | 'doctor';
@@ -36,6 +37,7 @@ interface FormData {
   title: string;
   years_of_practice: string;
   specialties: string;
+  uploadFiles?: File[];
   terms: boolean;
 }
 
@@ -59,16 +61,18 @@ function checkPasswordStrength(password: string): { score: number; label: string
 
 function validateForm(data: FormData): FormErrors {
   const errors: FormErrors = {};
-  if (!data.full_name.trim()) errors.full_name = '请输入姓名';
+  if (!data.full_name.trim()) errors.full_name = data.role === 'doctor' ? '请输入真实姓名' : '请输入昵称';
   if (!data.email.trim()) errors.email = '请输入邮箱地址';
   else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(data.email)) errors.email = '请输入有效的邮箱地址';
   if (!data.password) errors.password = '请输入密码';
   else if (data.password.length < 8) errors.password = '密码长度至少为 8 个字符';
+  else if (data.password.length > 128) errors.password = '密码长度不能超过 128 个字符';
   if (!data.confirmPassword) errors.confirmPassword = '请再次输入密码';
   else if (data.password !== data.confirmPassword) errors.confirmPassword = '两次输入的密码不一致';
   if (!data.province) errors.province = '请选择省份';
   if (data.phone && !/^1[3-9]\d{9}$/.test(data.phone)) errors.phone = '请输入有效的手机号码';
-  if (data.age_years && (parseInt(data.age_years) < 0 || parseInt(data.age_years) > 120)) errors.age_years = '年龄范围 0-120';
+  if (data.age_years && (!Number.isInteger(Number(data.age_years)) || Number(data.age_years) < 0 || Number(data.age_years) > 120)) errors.age_years = '请输入 0–120 的整数';
+  if (data.age_months && (!Number.isInteger(Number(data.age_months)) || Number(data.age_months) < 0 || Number(data.age_months) > 11)) errors.age_months = '请输入 0–11 的整数';
   if (data.role === 'doctor') {
     if (!data.hospital?.trim()) errors.hospital = '请输入执业医院';
     if (!data.department?.trim()) errors.department = '请输入科室';
@@ -128,14 +132,19 @@ export default function RegisterPage() {
       if (field === 'city') { next.district = ''; }
       return next;
     });
+    setErrors((p) => { const next = { ...p }; delete next[field]; return next; });
   }, []);
 
   const handleRoleChange = useCallback((_: React.MouseEvent, newRole: Role | null) => {
-    if (newRole) setFormData(emptyForm(newRole));
+    if (!newRole) return;
+    setFormData((previous) => ({ ...previous, role: newRole }));
+    setErrors({});
+    setGeneralError('');
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     const ve = validateForm(formData);
     if (Object.keys(ve).length > 0) { setErrors(ve); return; }
     setSubmitting(true);
@@ -154,9 +163,9 @@ export default function RegisterPage() {
         city: formData.city || undefined,
         district: formData.district || undefined,
         street: formData.street || undefined,
-        education: formData.education || undefined,
       };
       if (isDoctor) {
+        payload.education = formData.education || undefined;
         payload.hospital = formData.hospital;
         payload.department = formData.department;
         payload.license_number = formData.license_number;
@@ -164,11 +173,19 @@ export default function RegisterPage() {
         payload.years_of_practice = formData.years_of_practice ? parseInt(formData.years_of_practice) : null;
         payload.specialties = formData.specialties || undefined;
       }
-      const files = isDoctor ? ((formData as any).uploadFiles as File[] | undefined) : undefined;
+      const files = isDoctor ? formData.uploadFiles : undefined;
       const result = files && files.length > 0
         ? await registerDoctor(payload, files)
         : await register(payload);
       if ('access_token' in result && result.access_token) {
+        try {
+          await completeGuestMigration();
+        } catch {
+          navigate('/login', { replace: true, state: {
+            message: '注册已成功，但访客记录迁移未完成。请重新登录后重试；本地访客记录仍保留。',
+          } });
+          return;
+        }
         navigate('/chat', { replace: true });
       } else {
         navigate('/login', { replace: true, state: { message: result.message || '注册成功，请等待管理员审核' } });
@@ -191,26 +208,38 @@ export default function RegisterPage() {
   );
 
   const selectField = (label: string, field: keyof FormData, options: string[], opts?: { required?: boolean }) => (
-    <FormControl fullWidth required={opts?.required !== false} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
-      <InputLabel>{label}</InputLabel>
-      <Select value={String(formData[field])} label={label} onChange={setSelectField(field)} error={!!errors[field]} disabled={submitting}>
+    <FormControl fullWidth required={opts?.required !== false} error={!!errors[field]} sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
+      <InputLabel id={`register-${field}-label`}>{label}</InputLabel>
+      <Select labelId={`register-${field}-label`} value={String(formData[field])} label={label} onChange={setSelectField(field)} disabled={submitting}>
         <MenuItem value=""><em>请选择</em></MenuItem>
         {options.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
       </Select>
+      {errors[field] && <FormHelperText>{errors[field]}</FormHelperText>}
     </FormControl>
   );
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 1.5, sm: 3 } }}>
-      <Paper sx={{ maxWidth: 760, mx: 'auto', p: { xs: 2, sm: 4 }, borderRadius: '20px', border: `1px solid ${carePalette.line}`, boxShadow: '0 12px 34px rgba(34,61,55,0.06)' }}>
-        <Typography variant="h5" align="center" gutterBottom sx={{ fontWeight: 700 }}>创建账户</Typography>
+    <Container component="main" maxWidth="md" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 3 } }}>
+      <Box sx={{ maxWidth: 760, mx: 'auto', mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+        <Link component={RouterLink} to="/" underline="none" sx={{ display: 'flex', alignItems: 'center', gap: 1.25, color: carePalette.ink }}>
+          <Box sx={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: '13px', color: '#fff', bgcolor: carePalette.primary }}><MonitorHeartRounded sx={{ fontSize: 23 }} /></Box>
+          <Typography sx={{ fontWeight: 750, fontSize: 16 }}>医枢 MedAxis</Typography>
+        </Link>
+        <Button component={RouterLink} to="/login" startIcon={<ArrowBackRounded sx={{ fontSize: 18 }} />} sx={{ color: carePalette.muted, minWidth: 0, px: 1, flexShrink: 0 }}>登录</Button>
+      </Box>
+      <Paper elevation={0} sx={{ maxWidth: 760, mx: 'auto', p: { xs: 3, sm: 4 }, borderRadius: { xs: '24px', sm: '32px' }, boxShadow: careShadows.card,
+        '& .MuiFormControl-root': { minWidth: 0 }, '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' }, '& .MuiInputLabel-root': { fontSize: 14 } }}>
+        <Typography component="h1" variant="h5" sx={{ fontWeight: 650, fontSize: { xs: 26, sm: 30 }, mb: 3 }}>创建账户</Typography>
 
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-          <ToggleButtonGroup value={formData.role} exclusive onChange={handleRoleChange} disabled={submitting}>
-            <ToggleButton value="patient" sx={{ px: 4 }}>
+        <Box sx={{ mb: 3 }}>
+          <ToggleButtonGroup aria-label="注册身份" value={formData.role} exclusive onChange={handleRoleChange} disabled={submitting}
+            sx={{ width: '100%', bgcolor: carePalette.page, p: 0.5, borderRadius: '16px', gap: 0.5,
+              '& .MuiToggleButtonGroup-grouped': { flex: 1, border: '0 !important', borderRadius: '12px !important', minHeight: 48, color: carePalette.muted, fontWeight: 600 },
+              '& .MuiToggleButton-root.Mui-selected': { bgcolor: carePalette.mint, color: carePalette.primaryDark, boxShadow: '0 2px 8px rgba(15,23,42,.04)', '&:hover': { bgcolor: carePalette.primarySoft } } }}>
+            <ToggleButton value="patient">
               <Person sx={{ mr: 1 }} /> 患者
             </ToggleButton>
-            <ToggleButton value="doctor" sx={{ px: 4 }}>
+            <ToggleButton value="doctor">
               <LocalHospital sx={{ mr: 1 }} /> 医生
             </ToggleButton>
           </ToggleButtonGroup>
@@ -218,8 +247,10 @@ export default function RegisterPage() {
 
         {generalError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setGeneralError('')}>{generalError}</Alert>}
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {/* Shared fields */}
+        <Box component="form" noValidate onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Box component="section" aria-label="账户信息">
+          <Typography component="h2" sx={{ fontSize: 16, fontWeight: 600, mb: 2 }}>账户信息</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
           <TextField fullWidth label={isDoctor ? '真实姓名' : '昵称'} placeholder={isDoctor ? '请输入真实姓名' : '请输入昵称'}
             autoComplete="name" value={formData.full_name} onChange={setField('full_name')}
             error={!!errors.full_name} helperText={errors.full_name} disabled={submitting} required
@@ -232,99 +263,102 @@ export default function RegisterPage() {
             slotProps={{ input: { startAdornment: <InputAdornment position="start"><Email sx={{ color: 'text.secondary' }} /></InputAdornment> } }}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
 
+          <Box>
           <TextField fullWidth label="密码" type={showPwd ? 'text' : 'password'} placeholder="至少 8 位字符" autoComplete="new-password"
             value={formData.password} onChange={setField('password')} error={!!errors.password} helperText={errors.password}
             disabled={submitting} required
             slotProps={{ input: {
               startAdornment: <InputAdornment position="start"><Lock sx={{ color: 'text.secondary' }} /></InputAdornment>,
-              endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPwd(!showPwd)} edge="end" disabled={submitting}>{showPwd ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>,
+              endAdornment: <InputAdornment position="end"><IconButton aria-label={showPwd ? '隐藏密码' : '显示密码'} onClick={() => setShowPwd(!showPwd)} edge="end" disabled={submitting}>{showPwd ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>,
             } }}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
 
           {formData.password && (
-            <Box sx={{ px: 0.5 }}>
-              <LinearProgress variant="determinate" value={strengthPct} color={pwdStrength.color} sx={{ height: 6, borderRadius: 3, mb: 0.5 }} />
-              <Typography variant="caption" color="text.secondary">密码强度: {pwdStrength.label}</Typography>
+            <Box sx={{ px: 0.5, mt: 1 }}>
+              <LinearProgress aria-label="密码强度" variant="determinate" value={strengthPct} color={pwdStrength.color} sx={{ height: 3, borderRadius: 3, mb: 0.5 }} />
+              <Typography variant="caption" color="text.secondary">密码强度：{pwdStrength.label}</Typography>
             </Box>
           )}
+          </Box>
 
           <TextField fullWidth label="确认密码" type={showConfirm ? 'text' : 'password'} placeholder="请再次输入密码" autoComplete="new-password"
             value={formData.confirmPassword} onChange={setField('confirmPassword')} error={!!errors.confirmPassword} helperText={errors.confirmPassword}
             disabled={submitting} required
             slotProps={{ input: {
               startAdornment: <InputAdornment position="start"><Lock sx={{ color: 'text.secondary' }} /></InputAdornment>,
-              endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowConfirm(!showConfirm)} edge="end" disabled={submitting}>{showConfirm ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>,
+              endAdornment: <InputAdornment position="end"><IconButton aria-label={showConfirm ? '隐藏确认密码' : '显示确认密码'} onClick={() => setShowConfirm(!showConfirm)} edge="end" disabled={submitting}>{showConfirm ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>,
             } }}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+          </Box>
+          </Box>
 
-          {/* Age + Gender row */}
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
-            <TextField label="年龄(岁)" type="number" size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+          <Box component="section" aria-label="个人信息" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography component="h2" sx={{ fontSize: 16, fontWeight: 600 }}>个人信息</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+            <TextField label="年龄（岁）" type="number" sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
               value={formData.age_years} onChange={setField('age_years')} error={!!errors.age_years} helperText={errors.age_years}
               disabled={submitting} slotProps={{ htmlInput: { min: 0, max: 120 } }} />
-            <TextField label="月(可选)" type="number" size="small" sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-              value={formData.age_months} onChange={setField('age_months')} disabled={submitting} slotProps={{ htmlInput: { min: 0, max: 11 } }} />
-            <FormControl size="small" sx={{ flex: 1 }}>
-              <InputLabel>性别</InputLabel>
-              <Select value={formData.gender} label="性别" onChange={setSelectField('gender')} disabled={submitting} sx={{ borderRadius: 2 }}>
-                <MenuItem value=""><em>不限</em></MenuItem>
+            <TextField label="月龄补充" type="number" sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              value={formData.age_months} onChange={setField('age_months')} error={!!errors.age_months} helperText={errors.age_months} disabled={submitting} slotProps={{ htmlInput: { min: 0, max: 11 } }} />
+            <FormControl sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}>
+              <InputLabel id="register-gender-label">性别</InputLabel>
+              <Select labelId="register-gender-label" value={formData.gender} label="性别" onChange={setSelectField('gender')} disabled={submitting} sx={{ borderRadius: 2 }}>
+                <MenuItem value=""><em>未填写</em></MenuItem>
                 <MenuItem value="male">男</MenuItem>
                 <MenuItem value="female">女</MenuItem>
               </Select>
             </FormControl>
           </Box>
 
-          {/* Address cascade */}
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
             {selectField('省/直辖市', 'province', provinces, { required: true })}
-            <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
-              <InputLabel>市</InputLabel>
-              <Select value={formData.city} label="市" onChange={setSelectField('city')} disabled={submitting || !formData.province} error={!!errors.city}>
+            <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
+              <InputLabel id="register-city-label">市</InputLabel>
+              <Select labelId="register-city-label" value={formData.city} label="市" onChange={setSelectField('city')} disabled={submitting || !formData.province} error={!!errors.city}>
                 <MenuItem value=""><em>请选择</em></MenuItem>
                 {cities.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
               </Select>
             </FormControl>
-            <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
-              <InputLabel>区/县</InputLabel>
-              <Select value={formData.district} label="区/县" onChange={setSelectField('district')} disabled={submitting || !formData.city} error={!!errors.district}>
+            <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
+              <InputLabel id="register-district-label">区/县</InputLabel>
+              <Select labelId="register-district-label" value={formData.district} label="区/县" onChange={setSelectField('district')} disabled={submitting || !formData.city} error={!!errors.district}>
                 <MenuItem value=""><em>请选择</em></MenuItem>
                 {districts.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)}
               </Select>
             </FormControl>
           </Box>
 
-          {textField('街道/详细地址 (可选)', 'street', { required: false })}
-
-          <TextField fullWidth label="手机号 (可选)" placeholder="用于医生联系" autoComplete="tel"
-            value={formData.phone} onChange={setField('phone')} error={!!errors.phone} helperText={errors.phone || '仅用于医生联系，不会公开'}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+          {textField('详细地址（选填）', 'street', { required: false, autoComplete: 'street-address' })}
+          <TextField fullWidth label="手机号（选填）" autoComplete="tel"
+            value={formData.phone} onChange={setField('phone')} error={!!errors.phone} helperText={errors.phone}
             disabled={submitting}
             slotProps={{ input: { startAdornment: <InputAdornment position="start"><Phone sx={{ color: 'text.secondary' }} /></InputAdornment> } }}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+          </Box>
+          </Box>
 
-          {selectField('学历 (可选)', 'education', EDUCATION_OPTIONS, { required: false })}
-
-          {/* Doctor-only fields */}
           {isDoctor && (
-            <>
-              <Typography variant="subtitle1" sx={{ fontWeight: 650, mt: 1, color: 'primary.main' }}>执业信息</Typography>
+            <Box component="section" aria-label="执业信息">
+              <Typography component="h2" sx={{ fontSize: 16, fontWeight: 600, mb: 2 }}>执业信息</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2, mb: 2 }}>
               {textField('执业医院', 'hospital', { placeholder: '如：深圳市人民医院', required: true })}
               {textField('科室', 'department', { placeholder: '如：心血管内科', required: true })}
               {textField('执业证号', 'license_number', { placeholder: '医师执业证书编号', required: true })}
               {selectField('职称', 'title', TITLE_OPTIONS, { required: true })}
+              {selectField('学历（选填）', 'education', EDUCATION_OPTIONS, { required: false })}
               <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}>
-                <InputLabel>从业年限 (可选)</InputLabel>
-                <Select value={formData.years_of_practice} label="从业年限 (可选)" onChange={setSelectField('years_of_practice')} disabled={submitting}>
+                <InputLabel id="register-practice-label">从业年限（选填）</InputLabel>
+                <Select labelId="register-practice-label" value={formData.years_of_practice} label="从业年限（选填）" onChange={setSelectField('years_of_practice')} disabled={submitting}>
                   <MenuItem value=""><em>请选择</em></MenuItem>
                   {Array.from({ length: 61 }, (_, i) => <MenuItem key={i} value={String(i)}>{i} 年</MenuItem>)}
                 </Select>
               </FormControl>
+              </Box>
               <TextField fullWidth label="擅长领域 (可选)" placeholder="如：心血管内科,高血压,冠心病（逗号分隔，最多 5 个）"
                 value={formData.specialties} onChange={setField('specialties')} disabled={submitting}
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-              <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
-                请上传执业证件照片（支持 JPG/PNG/PDF，单文件 ≤5MB，总量 ≤20MB）。管理员审核通过后将发送确认邮件。
-              </Alert>
-              <Box sx={{ border: `1px dashed ${carePalette.line}`, borderRadius: '12px', p: 2, textAlign: 'center', bgcolor: carePalette.mint }}>
+                sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+              <Box sx={{ border: `1px dashed ${carePalette.line}`, borderRadius: '16px', p: 2, bgcolor: carePalette.page }}>
                 <input
                   type="file"
                   id="credential-files"
@@ -335,42 +369,45 @@ export default function RegisterPage() {
                   onChange={(e) => {
                     const flist = e.target.files;
                     if (flist && flist.length > 0) {
-                      setFormData((p) => ({ ...p, uploadFiles: Array.from(flist) as unknown as FileList }));
+                      setFormData((p) => ({ ...p, uploadFiles: Array.from(flist) }));
                     }
                   }}
                 />
-                <label htmlFor="credential-files" style={{ cursor: submitting ? 'default' : 'pointer', display: 'block' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {(formData as any).uploadFiles?.length
-                      ? `已选择 ${(formData as any).uploadFiles.length} 个文件`
-                      : '📎 点击选择证件文件（医师资格证 + 执业证）'}
-                  </Typography>
-                </label>
+                <Button component="label" htmlFor="credential-files" variant="outlined" disabled={submitting} startIcon={<AttachFileRounded />} sx={{ bgcolor: '#fff' }}>
+                    {formData.uploadFiles?.length
+                      ? `已选择 ${formData.uploadFiles.length} 个文件`
+                      : '上传执业证件'}
+                </Button>
+                <Typography sx={{ mt: 1, fontSize: 12, color: carePalette.muted, lineHeight: 1.7 }}>医师资格证、执业证；JPG / PNG / PDF，单文件 ≤5MB，总量 ≤20MB。</Typography>
               </Box>
-            </>
+              <Typography sx={{ mt: 1.5, color: carePalette.muted, fontSize: 12 }}>审核通过后将发送确认邮件。</Typography>
+            </Box>
           )}
 
-          {/* Terms */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <input type="checkbox" id="terms" checked={formData.terms} onChange={(e) => { setFormData((p) => ({ ...p, terms: e.target.checked })); }}
-              style={{ width: 18, height: 18 }} />
-            <Typography variant="body2">
+          <Box sx={{ pt: 2.5, borderTop: `1px solid ${carePalette.line}`, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <Checkbox checked={formData.terms} disabled={submitting} onChange={(e) => {
+              setFormData((p) => ({ ...p, terms: e.target.checked }));
+              setErrors((previous) => { const next = { ...previous }; delete next.terms; return next; });
+            }} slotProps={{ input: { 'aria-label': '同意用户协议和隐私政策', 'aria-describedby': errors.terms ? 'terms-error' : undefined } }} sx={{ p: 0.75, mt: -0.5 }} />
+            <Typography variant="body2" sx={{ pt: 0.125, fontSize: 13 }}>
               我已阅读并同意{' '}
               <Link component="button" type="button" onClick={() => setTermsDialog(true)}>用户协议</Link>
               {' '}和{' '}
               <Link component="button" type="button" onClick={() => setPrivacyDialog(true)}>隐私政策</Link>
             </Typography>
           </Box>
-          {errors.terms && <Typography variant="caption" color="error">{errors.terms}</Typography>}
+          {errors.terms && <Typography id="terms-error" variant="caption" color="error">{errors.terms}</Typography>}
 
           <Button type="submit" variant="contained" fullWidth size="large" disabled={submitting}
-            sx={{ mt: 1, py: 1.5, borderRadius: 2, textTransform: 'none', fontSize: '1rem', fontWeight: 600 }}>
+            sx={{ minHeight: 48, borderRadius: '14px', bgcolor: carePalette.primaryDark, '&:hover': { bgcolor: '#115e59' }, fontSize: 15, fontWeight: 600 }}>
             {submitting ? <CircularProgress size={24} sx={{ color: 'white' }} /> : isDoctor ? '提交审核' : '立即注册'}
           </Button>
 
           <Typography align="center" variant="body2" color="text.secondary">
-            已有账号？<Link href="/login">立即登录</Link>
+            已有账号？<Link component={RouterLink} to="/login" sx={{ ml: 0.5 }}>立即登录</Link>
           </Typography>
+          </Box>
         </Box>
       </Paper>
 
@@ -378,7 +415,7 @@ export default function RegisterPage() {
         <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>用户服务协议</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" component="p" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-            最后更新日期：2025年2月
+            最后更新日期：2026年9月
           </Typography>
 
           <Typography variant="body1" component="p" sx={{ fontWeight: 'bold', color: 'error.main' }}>
@@ -490,7 +527,7 @@ export default function RegisterPage() {
         <DialogTitle sx={{ bgcolor: 'secondary.main', color: 'white' }}>隐私保护政策</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" component="p" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-            最后更新日期：2025年2月
+            最后更新日期：2026年9月
           </Typography>
 
           <Typography variant="body1" component="p" sx={{ fontWeight: 'bold', color: 'primary.main' }}>

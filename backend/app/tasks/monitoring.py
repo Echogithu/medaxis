@@ -5,19 +5,20 @@ ETA upgrade: precise per-event scheduling (send_reminder) with the
 periodic sweep kept as a fallback safety net.
 
 Delivery guarantees:
-- Atomic claim (UPDATE ... WHERE status='pending') makes duplicate
-  deliveries (Redis visibility-timeout redelivery, ETA+sweep races)
-  harmless no-ops.
+- Atomic claim serializes ordinary duplicate ETA/sweep deliveries.
+- SMTP success followed by a crash before recording 'sent' can cause
+  another send after stale reclaim. This is at-least-once, not exactly-once.
 - 'in_flight' rows older than IN_FLIGHT_STALE_MINUTES are reclaimed
   by the sweeper, so a crashed worker never loses a reminder.
 - Each task run uses a fresh async engine: asyncpg connections are
   loop-bound and every task runs its own asyncio.run() loop.
 """
 import logging
+from html import escape
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
@@ -29,6 +30,22 @@ _log = logging.getLogger("heartbeat")
 # How long an 'in_flight' event may stay unclaimed before the sweeper
 # resets it to 'pending' (covers worker crashes between claim and send).
 IN_FLIGHT_STALE_MINUTES = 10
+MAX_SEND_FAILURES = 3
+
+
+def _pending_events_query(now: datetime):
+    """Build the bounded due-event query shared by the sweeper and its tests."""
+    from app.models.agent import MonitoringEvent
+
+    return (
+        select(MonitoringEvent.id)
+        .where(
+            MonitoringEvent.status == "pending",
+            MonitoringEvent.scheduled_at <= now,
+            func.coalesce(MonitoringEvent.retry_count, 0) < MAX_SEND_FAILURES,
+        )
+        .limit(50)
+    )
 
 # event_type -> default email template name (see DEFAULT_REMINDER_TEMPLATES)
 _TEMPLATE_NAME_MAP = {
@@ -156,6 +173,14 @@ async def _send_reminder_email(db, evt) -> None:
     from app.models.user import User
 
     payload = evt.payload or {}
+    if payload.get("privacy_mode") == "generic":
+        patient = await db.get(User, evt.patient_id)
+        delivery = await email_service.send_email(db=db, to_email=patient.email if patient else "",
+            subject="【医枢 MedAxis】你有一项待查看提醒",
+            html_content="<p>你有一项已确认的安排到时了，请登录医枢查看详情。</p>")
+        if not delivery[0]:
+            raise RuntimeError("邮件通道未接受提醒")
+        return
     desc = payload.get("description", payload.get("name", "医疗提醒"))
 
     to_email = payload.get("email") or ""
@@ -183,11 +208,11 @@ async def _send_reminder_email(db, evt) -> None:
         template = result.scalar_one_or_none()
 
     if template:
-        await email_service.send_templated_email(
+        delivery = await email_service.send_templated_email(
             db=db, template=template, to_email=to_email, variables=variables,
         )
     else:
-        await email_service.send_email(
+        delivery = await email_service.send_email(
             db=db,
             to_email=to_email,
             subject=f"【医枢 MedAxis】{evt.event_type}",
@@ -195,10 +220,46 @@ async def _send_reminder_email(db, evt) -> None:
 <html><body style="font-family:Arial,sans-serif;">
 <div style="max-width:500px;margin:0 auto;padding:20px;border:1px solid #eee;border-radius:8px;">
 <h2 style="color:#E8956A;">📋{evt.event_type}</h2>
-<p style="font-size:16px;">{desc}</p>
+<p style="font-size:16px;">{escape(str(desc))}</p>
 <p style="color:#999;font-size:12px;">自动化提醒 · 如有疑问请联系平台管理员</p>
 </div></body></html>""",
         )
+    if not delivery[0]:
+        raise RuntimeError(delivery[1] or "邮件通道未接受提醒")
+
+
+async def _plan_blocks_send(db, evt):
+    """每次发送前检查计划；暂停时保留，结束或到期时取消未发送事件。"""
+    from app.models.agent import CarePlan
+    from app.services.care_plan import effective_status, today
+
+    if not getattr(evt, "plan_id", None):
+        return None
+    plan = await db.get(CarePlan, evt.plan_id)
+    if plan is None or plan.patient_id != evt.patient_id:
+        return "cancelled"
+    status = effective_status(plan)
+    if status in {"completed", "cancelled", "expired"}:
+        return "cancelled"
+    if status != "active":
+        return "paused"
+    if plan.start_date and plan.start_date > today():
+        return "pending"
+    return None
+
+
+async def _source_blocks_send(db, evt):
+    """发送前重新核对诊后来源及确认状态，失效候选不产生通知。"""
+    from app.models.post_visit_feedback import PatientPostVisitFeedback
+    from app.models.medical_case import MedicalCase
+    payload = getattr(evt, "payload", None) or {}
+    if not payload.get("source_feedback_id"):
+        return False
+    row = await db.get(PatientPostVisitFeedback, payload["source_feedback_id"], populate_existing=True)
+    case = await db.get(MedicalCase, row.case_id) if row else None
+    draft = (row.payload or {}).get("ai_actions", {}) if row else {}
+    return not (row and case and case.patient_id == evt.patient_id and row.revision == payload.get("source_revision")
+                and draft.get("state") == "confirmed" and draft.get("id") == payload.get("ai_draft_id"))
 
 
 async def _claim_and_send(event_id: str, session_factory=None) -> str:
@@ -220,6 +281,7 @@ async def _claim_and_send(event_id: str, session_factory=None) -> str:
             .where(
                 MonitoringEvent.id == event_id,
                 MonitoringEvent.status == "pending",
+                MonitoringEvent.scheduled_at <= now,
             )
             .values(status="in_flight", triggered_at=now)
             .returning(MonitoringEvent.id)
@@ -230,6 +292,13 @@ async def _claim_and_send(event_id: str, session_factory=None) -> str:
 
         evt = await db.get(MonitoringEvent, event_id)
 
+        blocked = "cancelled" if await _source_blocks_send(db, evt) else await _plan_blocks_send(db, evt)
+        if blocked:
+            evt.status = blocked
+            evt.triggered_at = None
+            await db.commit()
+            return "skipped"
+
         # skipWhenBusy: release the claim, let the sweeper retry later.
         if await _is_patient_busy(db, evt.patient_id):
             evt.status = "pending"
@@ -238,13 +307,31 @@ async def _claim_and_send(event_id: str, session_factory=None) -> str:
             return "busy"
 
         try:
-            await _send_reminder_email(db, evt)
+            # busy 查询期间也可能暂停/取消；重新读关联计划。
+            if getattr(evt, "plan_id", None):
+                from app.models.agent import CarePlan
+                await db.get(CarePlan, evt.plan_id, populate_existing=True)
+                blocked = await _plan_blocks_send(db, evt)
+                if blocked:
+                    evt.status = blocked
+                    evt.triggered_at = None
+                    await db.commit()
+                    return "skipped"
+            if await _source_blocks_send(db, evt):
+                evt.status = "cancelled"
+                evt.triggered_at = None
+                await db.commit()
+                return "skipped"
+            if getattr(evt, "channel", "email") == "email":
+                await _send_reminder_email(db, evt)
+            elif evt.channel != "in_app":
+                raise RuntimeError("不支持的提醒通道")
             evt.status = "sent"
             outcome = "sent"
         except Exception as e:
-            evt.status = "pending"
             evt.retry_count = (evt.retry_count or 0) + 1
-            evt.error_message = str(e)
+            evt.status = "failed" if evt.retry_count >= MAX_SEND_FAILURES else "pending"
+            evt.error_message = "提醒发送失败" if (getattr(evt, "payload", None) or {}).get("privacy_mode") == "generic" else str(e)
             outcome = "failed"
         await db.commit()
         return outcome
@@ -306,13 +393,7 @@ def scan_pending_events() -> dict:
                 )
                 await db.commit()
 
-                result = await db.execute(
-                    select(MonitoringEvent.id).where(
-                        MonitoringEvent.status == "pending",
-                        MonitoringEvent.scheduled_at <= now,
-                        MonitoringEvent.retry_count < 3,
-                    ).limit(50)
-                )
+                result = await db.execute(_pending_events_query(now))
                 event_ids = [str(eid) for eid in result.scalars().all()]
 
             outcomes = {"sent": 0, "failed": 0, "busy": 0, "skipped": 0}

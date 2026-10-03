@@ -18,19 +18,27 @@ from sqlalchemy.pool import NullPool
 
 from app.db.session import Base, get_db
 from app.main import app
+from tests.database_safety import resolve_test_database
 
 # Allow override via env var; default to in-memory SQLite for fast tests
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "sqlite+aiosqlite:///:memory:",
 )
 
 
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
     """Create a test database engine and tables."""
+    target = resolve_test_database(os.environ)
+    print(
+        "\nTest database target: "
+        f"{target.backend} / {target.host or 'in-memory'} / {target.database}"
+    )
     engine = create_async_engine(
-        TEST_DATABASE_URL, echo=False, poolclass=NullPool, pool_pre_ping=True
+        TEST_DATABASE_URL or "",
+        echo=False,
+        poolclass=NullPool,
+        pool_pre_ping=True,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

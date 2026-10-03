@@ -43,7 +43,7 @@ def main():
                 assert internal not in text, internal
             assert '38.5°C' in text and '未检索到资料' in text
 
-            page.get_by_role('button', name='会话操作：待删除的合成聊天').click()
+            page.get_by_role('button', name='会话操作：待删除的合成聊天', exact=True).click()
             page.get_by_role('menuitem', name='删除聊天').click()
             dialog = page.get_by_role('dialog', name='删除这段聊天？')
             expect(dialog).to_contain_text('已保存的问诊报告和资料仍会保留')
@@ -58,24 +58,26 @@ def main():
                 window.originalSetItem.call(this, key, value);
               };
             }''')
-            page.get_by_role('button', name='会话操作：待删除的合成聊天').click()
+            page.get_by_role('button', name='会话操作：待删除的合成聊天', exact=True).click()
             page.get_by_role('menuitem', name='删除聊天').click()
             page.get_by_role('dialog').get_by_role('button', name='删除聊天', exact=True).click()
             expect(page.get_by_text('聊天未删除，请检查浏览器存储权限后重试。', exact=True)).to_be_visible()
             assert history(page, 'user:ux-test')['currentSessionId'] == 'chat-a'
             page.evaluate('() => { Storage.prototype.setItem = window.originalSetItem; }')
 
-            page.get_by_role('button', name='会话操作：待删除的合成聊天').click()
+            page.get_by_role('button', name='会话操作：待删除的合成聊天', exact=True).click()
             page.get_by_role('menuitem', name='删除聊天').click()
             page.get_by_role('dialog').get_by_role('button', name='删除聊天', exact=True).click()
             expect(page.get_by_role('button', name='会话操作：待删除的合成聊天')).to_have_count(0)
             page.reload()
-            expect(page.get_by_role('button', name='会话操作：需要保留的合成聊天')).to_be_visible()
+            expect(page.get_by_role('button', name='会话操作：需要保留的合成聊天', exact=True)).to_be_visible()
             assert all(item['id'] != 'chat-a' for item in history(page, 'user:ux-test')['sessions'])
             assert 'DELETE' not in methods
             print('PASS: 取消、存储失败和刷新后的聊天删除；没有调用服务端删除接口')
 
             page.get_by_role('button', name='问诊记录', exact=True).click()
+            expect(page).to_have_url(f'{BASE}/cases')
+            expect(page.get_by_role('heading', name='问诊记录', exact=True)).to_be_visible()
             expect(page.get_by_text('腹泻型肠易激综合征', exact=True)).to_be_visible()
             expect(page.get_by_text('测试危险信号', exact=True)).to_be_visible()
             expect(page.get_by_role('button', name='整理就诊摘要', exact=True)).not_to_be_visible()
@@ -84,6 +86,7 @@ def main():
             expect(page.get_by_role('button', name='整理就诊摘要', exact=True)).to_be_visible()
             page.get_by_role('button', name='记录就诊结果', exact=True).click()
             expect(page.get_by_label('就诊时间', exact=True)).to_be_visible()
+            expect(page.get_by_role('button', name='整理就诊摘要', exact=True)).not_to_be_visible()
             artifact = Path(__file__).resolve().parents[2] / '.ai/tasks/2026-09-26-patient-ux'
             artifact.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(artifact / 'records-desktop.png'), full_page=True)
@@ -91,10 +94,10 @@ def main():
             expect(page.get_by_role('alert')).to_contain_text('这条问诊记录暂时无法读取')
             expect(page.get_by_text('腹泻型肠易激综合征', exact=True)).to_have_count(0)
             expect(page.get_by_role('button', name='记录就诊结果', exact=True)).to_have_count(0)
-            page.get_by_role('button', name='返回问诊', exact=True).click()
+            page.get_by_role('button', name='AI 问诊', exact=True).click()
             expect(page).to_have_url(f'{BASE}/chat')
-            expect(page.get_by_role('button', name='会话操作：需要保留的合成聊天')).to_be_visible()
-            print('PASS: 删除聊天后报告仍可查看；折叠详情、失败切换及返回问诊')
+            expect(page.get_by_role('button', name='会话操作：需要保留的合成聊天', exact=True)).to_be_visible()
+            print('PASS: 删除聊天后报告仍可查看；阶段切换、失败切换及返回问诊')
 
             page.set_viewport_size({'width': 390, 'height': 844})
             page.goto(f'{BASE}/cases?case_id=demo-case-a')

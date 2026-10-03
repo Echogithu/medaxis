@@ -13,20 +13,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user
 from app.db.session import get_db
-from app.models.agent import AgentSession, CarePlan, MonitoringEvent, PatientHealthProfile
+from app.models.agent import AgentSession, MonitoringEvent, PatientHealthProfile
 from app.models.case_preparation import CasePreparationPackage
 from app.models.document_parse import DocumentParseTask
 from app.models.medical_case import MedicalCase
 from app.models.post_visit_feedback import PatientPostVisitFeedback
 from app.models.user import User, UserRole
+from app.schemas.patient_profile import ProfileUpdateRequest
+from app.schemas.care_plan import CheckInRequest
+from app.api.v1.care_plans import router as care_plan_router, require_patient
+from app.api.v1.health_measurements import router as health_measurement_router
+from app.api.v1.post_visit_actions import router as post_visit_actions_router
+from app.services.post_visit_actions import invalidate_derived
+from app.services.care_plan import complete_task
+from app.services.patient_profile import apply_profile_update, serialize_profile
+from app.services.knowledge_citations import restore_report_sources
 from app.services.case_preparation import (
     build_package,
     build_source_snapshot,
-    canonical_fingerprint,
+    preparation_fingerprint,
     source_fact_fingerprint,
 )
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+router.include_router(health_measurement_router)
+router.include_router(care_plan_router)
+router.include_router(post_visit_actions_router)
 
 
 class PostVisitFeedbackRequest(BaseModel):
@@ -100,30 +112,7 @@ async def get_profile(
         )
     )
     profile = result.scalar_one_or_none()
-    return {
-        "id": str(current_user.id),
-        "name": current_user.full_name,
-        "email": current_user.email,
-        "phone": current_user.phone,
-        "date_of_birth": getattr(current_user, 'date_of_birth', None),
-        "gender": current_user.gender,
-        "height": profile.height if profile else None,
-        "weight": profile.weight if profile else None,
-        "allergies": profile.allergies if profile else [],
-        "chronic_diseases": profile.chronic_diseases if profile else [],
-        "medications": profile.current_medications if profile else [],
-    }
-
-
-class ProfileUpdateRequest(BaseModel):
-    name: str | None = None
-    phone: str | None = Field(None, max_length=20)
-    gender: str | None = Field(None, pattern=r'^(male|female|男|女)$')
-    height: int | None = Field(None, ge=50, le=300)
-    weight: int | None = Field(None, ge=10, le=500)
-    allergies: list[str] | None = None
-    chronic_diseases: list[dict] | None = None
-    medications: list[dict] | None = None
+    return serialize_profile(current_user, profile)
 
 
 @router.patch("/profile")
@@ -133,49 +122,34 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Update patient profile (flat format)."""
-    if data.name is not None:
-        current_user.full_name = data.name
-    if data.phone is not None:
-        current_user.phone = data.phone
-    if data.gender is not None:
-        current_user.gender = data.gender
-
+    # 先锁用户，串行化首次建档；再锁档案，检查最新修订号。
+    locked_user = await db.scalar(select(User).where(User.id == current_user.id)
+        .with_for_update().execution_options(populate_existing=True))
+    if locked_user is None:
+        raise HTTPException(404, "用户不存在")
     profile = await db.scalar(
         select(PatientHealthProfile).where(
             PatientHealthProfile.patient_id == current_user.id
-        )
+        ).with_for_update().execution_options(populate_existing=True)
     )
     if not profile:
         profile = PatientHealthProfile(patient_id=current_user.id)
-        db.add(profile)
-
-    if data.height is not None:
+    now = datetime.now(timezone.utc)
+    apply_profile_update(profile, data, now.isoformat())
+    db.add(profile)
+    for field, column in (("name", "full_name"), ("phone", "phone"), ("gender", "gender")):
+        if field in data.model_fields_set:
+            setattr(locked_user, column, getattr(data, field))
+    if "height" in data.model_fields_set:
         profile.height = data.height
-    if data.weight is not None:
+    if "weight" in data.model_fields_set:
         profile.weight = data.weight
-    if data.allergies is not None:
-        profile.allergies = data.allergies
-    if data.chronic_diseases is not None:
-        profile.chronic_diseases = data.chronic_diseases
-    if data.medications is not None:
-        profile.current_medications = data.medications
-    profile.last_updated = datetime.now(timezone.utc)
+    profile.last_updated = now
 
     await db.commit()
     await db.refresh(current_user)
     await db.refresh(profile)
-    return {
-        "id": str(current_user.id),
-        "name": current_user.full_name,
-        "email": current_user.email,
-        "phone": current_user.phone,
-        "gender": current_user.gender,
-        "height": profile.height,
-        "weight": profile.weight,
-        "allergies": profile.allergies or [],
-        "chronic_diseases": profile.chronic_diseases or [],
-        "medications": profile.current_medications or [],
-    }
+    return serialize_profile(locked_user, profile)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -193,7 +167,7 @@ async def list_cases(
     stmt = (
         select(MedicalCase)
         .where(MedicalCase.patient_id == current_user.id)
-        .order_by(MedicalCase.created_at.desc())
+        .order_by(MedicalCase.created_at.desc(), MedicalCase.id.desc())
         .offset((page - 1) * limit)
         .limit(limit)
     )
@@ -263,7 +237,7 @@ async def get_case_recovery(
             "status": case.status.value,
             "created_at": case.created_at.isoformat() if case.created_at else None,
         },
-        "report": source_session.structured_output if source_session else None,
+        "report": restore_report_sources(source_session.structured_output, getattr(source_session, "tool_calls", None)) if source_session else None,
         "lab_reports": lab_reports,
         "materials": [
             {
@@ -413,11 +387,18 @@ def _preparation_response(
     package_row: CasePreparationPackage,
     current_source: dict,
 ) -> dict:
-    package = package_row.package
-    current_fingerprint = canonical_fingerprint({
-        "source": current_source,
-        "patient_corrections": package.get("patient_corrections", []),
-    })
+    package = dict(package_row.package or {})
+    package["known_facts"] = package.get("known_facts", [])
+    package["unknown_facts"] = package.get("unknown_facts", [])
+    package["unresolved_facts"] = package.get("unresolved_facts", [])
+    summary = package.get("summary") if isinstance(package.get("summary"), dict) else {}
+    package["summary"] = {
+        **summary,
+        "patient_facts": summary.get("patient_facts", package["known_facts"]),
+        "unknown_facts": summary.get("unknown_facts", package["unknown_facts"]),
+        "unresolved_facts": summary.get("unresolved_facts", package["unresolved_facts"]),
+    }
+    current_fingerprint = preparation_fingerprint(current_source, package.get("patient_corrections", []))
     is_stale = (
         current_fingerprint != package_row.source_fingerprint
         or package_row.state == "needs_reassessment"
@@ -481,7 +462,7 @@ async def create_case_preparation(
         if correction.get("source_fact_fingerprint")
         == source_fact_fingerprint(source, correction["fact_id"])
     ]
-    fingerprint = canonical_fingerprint({"source": source, "patient_corrections": corrections})
+    fingerprint = preparation_fingerprint(source, corrections)
     existing = await db.scalar(
         select(CasePreparationPackage).where(
             CasePreparationPackage.case_id == case.id,
@@ -495,6 +476,11 @@ async def create_case_preparation(
     package = build_package(source, corrections)
     if latest is not None:
         previous_package = latest.package or {}
+        previous_facts = {fact["id"]: fact for fact in previous_package.get("known_facts", [])}
+        for fact in package["known_facts"]:
+            previous = previous_facts.get(fact["id"])
+            if previous and previous.get("value") == fact.get("value") and fact.get("active", True):
+                fact["confirmed"] = previous.get("confirmed", False) or fact.get("confirmed", False)
         package["patient_questions"] = previous_package.get("patient_questions", [])
         previous_checklist = {
             item["id"]: item.get("status", "pending")
@@ -518,6 +504,18 @@ async def create_case_preparation(
     await db.commit()
     await db.refresh(row)
     return {"created": True, **_preparation_response(row, source)}
+
+
+def _confirmable_patient_fact(fact: dict) -> bool:
+    # 本人可核对历史档案，但保留原始来源；不能将 AI/上传资料变成已核验事实。
+    is_profile_history = (
+        fact.get("source_type") == "legacy_record"
+        and str(fact.get("source_id", "")).startswith("patient_profile.")
+        and str(fact.get("id", "")).startswith("patient.profile.")
+    )
+    return bool(fact.get("active", True) and (
+        fact.get("source_type") in {"patient_reported", "patient_correction"} or is_profile_history
+    ))
 
 
 @router.patch("/cases/{case_id}/preparation/{package_id}")
@@ -551,32 +549,35 @@ async def update_case_preparation(
     known_facts = package.get("known_facts", [])
     confirmable_ids = {
         fact["id"] for fact in known_facts
-        if fact.get("source_type") in {"patient_reported", "patient_correction"}
-        and fact.get("active", True)
+        if _confirmable_patient_fact(fact)
     }
     unknown_ids = {fact["id"] for fact in package.get("unknown_facts", [])}
+    unresolved_ids = {fact["id"] for fact in package.get("unresolved_facts", [])}
     existing_correction_ids = {
         item["fact_id"] for item in package.get("patient_corrections", [])
     }
     if any(fact_id not in confirmable_ids for fact_id in data.confirmed_fact_ids):
-        raise HTTPException(status_code=422, detail="Only patient-reported facts can be confirmed")
+        raise HTTPException(status_code=422, detail="只能核对本人陈述或本人档案中的历史记录，不代表医生核验")
     if any(
-        correction.fact_id not in confirmable_ids | unknown_ids | existing_correction_ids
+        correction.fact_id not in confirmable_ids | unknown_ids | unresolved_ids | existing_correction_ids
         for correction in data.patient_corrections
     ):
-        raise HTTPException(status_code=422, detail="Correction must refer to a known or unknown patient fact")
+        raise HTTPException(
+            status_code=422,
+            detail="Correction must refer to a known, unknown, or unresolved patient fact",
+        )
 
     confirmed = set(data.confirmed_fact_ids)
     package["known_facts"] = [
         {**fact, "confirmed": fact["id"] in confirmed}
-        if fact.get("source_type") in {"patient_reported", "patient_correction"}
-        and fact.get("active", True)
+        if _confirmable_patient_fact(fact)
         else fact
         for fact in known_facts
     ]
     corrections = {
         item["fact_id"]: item for item in package.get("patient_corrections", [])
     }
+    previous_corrections = {key: entry["value"] for key, entry in corrections.items()}
     for correction in data.patient_corrections:
         corrections[correction.fact_id] = {
             "fact_id": correction.fact_id,
@@ -596,7 +597,7 @@ async def update_case_preparation(
     ]
     row.package = package
     row.revision += 1
-    if data.patient_corrections:
+    if previous_corrections != {key: entry["value"] for key, entry in corrections.items()}:
         row.state = "needs_reassessment"
     await db.commit()
     await db.refresh(row)
@@ -742,6 +743,7 @@ async def update_post_visit_feedback(
         )
 
     await _validate_feedback_materials(db, case, current_user, data.material_file_ids)
+    await invalidate_derived(db, row, current_user.id)
     old_payload = row.payload or {}
     history = list(old_payload.get("revision_history", []))
     history.append({
@@ -767,106 +769,6 @@ async def update_post_visit_feedback(
 # Care Plans
 # ═══════════════════════════════════════════════════════════════
 
-@router.get("/care-plans")
-async def list_care_plans(
-    current_user: CurrentUser,
-    status: Annotated[str | None, Query()] = None,
-    page: Annotated[int, Query(ge=1)] = 1,
-    limit: Annotated[int, Query(ge=1, le=50)] = 10,
-    db: AsyncSession = Depends(get_db),
-) -> list[dict]:
-    """List patient's care plans."""
-    stmt = (
-        select(CarePlan)
-        .where(CarePlan.patient_id == current_user.id)
-        .order_by(CarePlan.created_at.desc())
-    )
-    if status:
-        stmt = stmt.where(CarePlan.status == status)
-    stmt = stmt.offset((page - 1) * limit).limit(limit)
-    result = await db.execute(stmt)
-    return [
-        {
-            "id": str(p.id),
-            "title": p.title,
-            "description": p.description,
-            "goals": [],
-            "tasks": p.tasks or {},
-            "status": p.status,
-            "progress_percent": p.progress_percent or 0,
-            "start_date": p.start_date.isoformat() if p.start_date else None,
-            "end_date": p.end_date.isoformat() if p.end_date else None,
-            "created_at": p.created_at.isoformat() if p.created_at else None,
-        }
-        for p in result.scalars().all()
-    ]
-
-
-@router.get("/care-plans/{plan_id}")
-async def get_care_plan(
-    plan_id: str,
-    current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Get a specific care plan."""
-    result = await db.execute(
-        select(CarePlan).where(
-            CarePlan.id == plan_id,
-            CarePlan.patient_id == current_user.id,
-        )
-    )
-    p = result.scalar_one_or_none()
-    if not p:
-        raise HTTPException(status_code=404, detail="Plan not found")
-    return {
-        "id": str(p.id),
-        "title": p.title,
-        "description": p.description,
-        "diagnosis_summary": p.diagnosis_summary,
-        "goals": [],
-        "tasks": p.tasks or {},
-        "status": p.status,
-        "progress_percent": p.progress_percent or 0,
-        "start_date": p.start_date.isoformat() if p.start_date else None,
-        "end_date": p.end_date.isoformat() if p.end_date else None,
-        "created_at": p.created_at.isoformat() if p.created_at else None,
-    }
-
-
-@router.post("/care-plans/{plan_id}/ack")
-async def ack_task(
-    plan_id: str,
-    task_id: Annotated[str, Query(alias="task_id")],
-    current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Acknowledge (complete) a task in a care plan."""
-    result = await db.execute(
-        select(CarePlan).where(
-            CarePlan.id == plan_id,
-            CarePlan.patient_id == current_user.id,
-        )
-    )
-    plan = result.scalar_one_or_none()
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found")
-
-    tasks = plan.tasks or {}
-    # Accept either dict tasks or AcknowledgeRequest body
-    if task_id:
-        if isinstance(tasks, dict) and "tasks" in tasks:
-            for t in tasks["tasks"]:
-                if t.get("id") == task_id:
-                    t["status"] = "completed"
-        elif isinstance(tasks, list):
-            for t in tasks:
-                if t.get("id") == task_id:
-                    t["completed"] = True
-    plan.tasks = tasks
-    await db.commit()
-    return {"success": True, "task_id": task_id}
-
-
 # ═══════════════════════════════════════════════════════════════
 # Reminders
 # ═══════════════════════════════════════════════════════════════
@@ -874,22 +776,38 @@ async def ack_task(
 @router.get("/reminders")
 async def list_reminders(
     current_user: CurrentUser,
-    status: Annotated[str | None, Query()] = "pending",
-    page: Annotated[int, Query(ge=1)] = 1,
+    status: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    cursor_at: datetime | None = None,
+    cursor_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-) -> list[dict]:
+) -> dict:
     """List patient's scheduled reminders."""
+    if (cursor_at is None) != (cursor_id is None):
+        raise HTTPException(status_code=422, detail="Both reminder cursor fields are required")
+    if cursor_at is not None and cursor_at.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="Reminder cursor timestamp must include a timezone")
+
     stmt = (
         select(MonitoringEvent)
         .where(MonitoringEvent.patient_id == current_user.id)
-        .order_by(MonitoringEvent.scheduled_at.desc())
+        .order_by(MonitoringEvent.scheduled_at.desc(), MonitoringEvent.id.desc())
     )
     if status:
         stmt = stmt.where(MonitoringEvent.status == status)
-    stmt = stmt.offset((page - 1) * limit).limit(limit)
+    if cursor_at is not None and cursor_id is not None:
+        stmt = stmt.where(
+            or_(
+                MonitoringEvent.scheduled_at < cursor_at,
+                and_(MonitoringEvent.scheduled_at == cursor_at, MonitoringEvent.id < cursor_id),
+            )
+        )
+    stmt = stmt.limit(limit + 1)
     result = await db.execute(stmt)
-    return [
+    events = result.scalars().all()
+    has_more = len(events) > limit
+    events = events[:limit]
+    items = [
         {
             "id": str(e.id),
             "event_type": e.event_type,
@@ -898,10 +816,20 @@ async def list_reminders(
             "triggered_at": e.triggered_at.isoformat() if e.triggered_at else None,
             "acknowledged_at": e.acknowledged_at.isoformat() if e.acknowledged_at else None,
             "status": e.status,
+            "retry_count": e.retry_count or 0,
             "plan_id": str(e.plan_id) if e.plan_id else None,
         }
-        for e in result.scalars().all()
+        for e in events
     ]
+    last = events[-1] if has_more and events else None
+    return {
+        "items": items,
+        "next_cursor": (
+            {"scheduled_at": last.scheduled_at.isoformat(), "id": str(last.id)}
+            if last is not None
+            else None
+        ),
+    }
 
 
 @router.patch("/reminders/{reminder_id}/acknowledge")
@@ -912,30 +840,40 @@ async def acknowledge_reminder(
 ) -> dict:
     """Acknowledge a specific reminder."""
     result = await db.execute(
-        select(MonitoringEvent).where(
+        select(MonitoringEvent)
+        .where(
             MonitoringEvent.id == reminder_id,
             MonitoringEvent.patient_id == current_user.id,
         )
+        .with_for_update()
     )
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Reminder not found")
+    if event.status == "acknowledged":
+        return {
+            "success": True,
+            "id": str(event.id),
+            "status": event.status,
+            "acknowledged_at": event.acknowledged_at.isoformat() if event.acknowledged_at else None,
+        }
+    if event.status != "sent":
+        raise HTTPException(status_code=409, detail="Reminder has not been delivered")
+
     event.acknowledged_at = datetime.now(timezone.utc)
     event.status = "acknowledged"
     await db.commit()
-    return {"success": True, "id": reminder_id}
+    return {
+        "success": True,
+        "id": str(event.id),
+        "status": event.status,
+        "acknowledged_at": event.acknowledged_at.isoformat(),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════
 # Check-in
 # ═══════════════════════════════════════════════════════════════
-
-class CheckInRequest(BaseModel):
-    plan_id: str
-    task_id: str
-    value: float | None = None
-    notes: str | None = None
-
 
 @router.post("/check-in")
 async def check_in(
@@ -943,29 +881,10 @@ async def check_in(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Patient check-in: mark a task as completed with optional value/notes."""
-    result = await db.execute(
-        select(CarePlan).where(
-            CarePlan.id == data.plan_id,
-            CarePlan.patient_id == current_user.id,
-        )
-    )
-    plan = result.scalar_one_or_none()
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found")
-
-    tasks = plan.tasks or {}
-    if isinstance(tasks, dict) and "tasks" in tasks:
-        for t in tasks["tasks"]:
-            if t.get("id") == data.task_id:
-                t["status"] = "completed"
-                if data.value is not None:
-                    t["last_value"] = data.value
-                if data.notes:
-                    t["notes"] = data.notes
-    plan.tasks = tasks
-    await db.commit()
-    return {"success": True, "task_id": data.task_id, "task_status": "completed"}
+    """患者自报完成，统一与任务确认的持久化与幂等逻辑。"""
+    require_patient(current_user)
+    return await complete_task(db, data.plan_id, current_user.id, data.task_id,
+                               value=data.value, notes=data.notes)
 
 
 @router.get("/reminders/count")

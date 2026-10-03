@@ -1,10 +1,11 @@
 """患者演示闭环的病例身份持久化契约。"""
 
+import asyncio
 import uuid
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.agent import AgentSession, AgentSessionType
 from app.models.document_parse import DocumentParseTask
@@ -77,6 +78,52 @@ async def test_diagnosis_case_is_created_once_and_source_material_is_bound(
     assert first.status == CaseStatus.PENDING_REVIEW
     assert count == 1
     assert material.case_id == first.id
+
+
+@pytest.mark.asyncio
+async def test_concurrent_diagnosis_case_persistence_reuses_one_case(
+    db_session: AsyncSession,
+    test_engine,
+) -> None:
+    from app.services.patient_case_persistence import persist_diagnosis_case
+
+    if not test_engine.url.drivername.startswith("postgresql"):
+        pytest.skip("source row-lock contract requires PostgreSQL")
+
+    patient = _patient("Concurrent Closure")
+    db_session.add(patient)
+    await db_session.flush()
+    session = AgentSession(
+        user_id=patient.id,
+        session_type=AgentSessionType.DIAGNOSIS,
+        context={"interview": {"chief_complaint": "合成并发主诉"}},
+    )
+    db_session.add(session)
+    await db_session.commit()
+    patient_id = patient.id
+    source_session_id = session.id
+    factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def persist_once() -> uuid.UUID:
+        async with factory() as db:
+            case = await persist_diagnosis_case(
+                db,
+                patient_id=patient_id,
+                source_session_id=source_session_id,
+                report={"primary_diagnosis": "并发合成报告", "severity": "unknown"},
+                fallback_chief_complaint="备用合成主诉",
+            )
+            return case.id
+
+    first_id, second_id = await asyncio.gather(persist_once(), persist_once())
+    count = await db_session.scalar(
+        select(func.count())
+        .select_from(MedicalCase)
+        .where(MedicalCase.source_session_id == source_session_id)
+    )
+
+    assert first_id == second_id
+    assert count == 1
 
 
 @pytest.mark.asyncio

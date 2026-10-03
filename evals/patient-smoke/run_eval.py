@@ -142,8 +142,8 @@ def result_template(catalog: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def unknown_allergy_contract() -> list[str]:
-    """DB-free check: missing allergy key stays unknown; a stated allergy does not."""
+def patient_fact_semantics_contract() -> list[str]:
+    """DB-free checks for explicit unknown, denial, onset and conflicting answers."""
     sys.path.insert(0, str(ROOT / "backend"))
     from app.services.case_preparation import build_package
 
@@ -170,13 +170,48 @@ def unknown_allergy_contract() -> list[str]:
 
     unclear = build_package({**base, "patient_facts": {"pmh_allergy": "不清楚"}}, [])
     unclear_unknown = {item["id"] for item in unclear["unknown_facts"]}
-    if "unknown.allergies" in unclear_unknown:
-        # Current builder treats any non-empty value as provided. If this starts
-        # passing, update SM-02 engineering notes; do not fail the catalog.
-        pass
-    else:
-        # Record the known gap in stdout only; catalog already documents it.
-        print("NOTE: build_package treats pmh_allergy='不清楚' as a provided fact, not unknown.allergies")
+    if "unknown.allergies" not in unclear_unknown:
+        errors.append("SM-02 contract: pmh_allergy='不清楚' must stay unknown")
+    if any(fact["id"] == "patient.reported.pmh_allergy" for fact in unclear["known_facts"]):
+        errors.append("SM-02 contract: unclear allergy must not be listed as a known fact")
+
+    denied = build_package({**base, "patient_facts": {"pmh_allergy": "明确无"}}, [])
+    if "unknown.allergies" in {item["id"] for item in denied["unknown_facts"]}:
+        errors.append("Explicit allergy denial must not be marked unknown")
+    denial_fact = next(
+        (fact for fact in denied["known_facts"] if fact["id"] == "patient.reported.pmh_allergy"),
+        None,
+    )
+    if denial_fact is None or denial_fact.get("assertion_status") != "denied":
+        errors.append("Explicit allergy denial must retain a distinct denied status")
+
+    onset = build_package({**base, "patient_facts": {"hpi_onset": "不记得"}}, [])
+    onset_fact = next(
+        (fact for fact in onset["unknown_facts"] if fact["id"] == "unknown.hpi_onset"),
+        None,
+    )
+    if onset_fact is None or onset_fact.get("patient_response") != "不记得":
+        errors.append("SM-03 contract: unknown onset must preserve the patient response")
+
+    conflict = build_package(
+        {
+            **base,
+            "patient_facts": {"hpi_associated": "无发热"},
+            "raw_answers": {"hpi_associated": "我没发过烧。"},
+            "raw_answer_history": {"hpi_associated": ["测到 38.5℃。", "我没发过烧。"]},
+        },
+        [],
+    )
+    unresolved = next(
+        (fact for fact in conflict["unresolved_facts"] if fact["id"] == "unresolved.hpi_associated"),
+        None,
+    )
+    if unresolved is None or [item["value"] for item in unresolved["statements"]] != [
+        "测到 38.5℃。", "我没发过烧。"
+    ]:
+        errors.append("SM-04 contract: both conflicting patient statements must remain unresolved")
+    if any(fact["id"] == "patient.reported.hpi_associated" for fact in conflict["known_facts"]):
+        errors.append("SM-04 contract: latest structured value must not silently win over history")
     return errors
 
 
@@ -227,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
 
     catalog = load_catalog(args.catalog)
     errors = validate_catalog(catalog)
-    errors.extend(unknown_allergy_contract())
+    errors.extend(patient_fact_semantics_contract())
     print_table(catalog)
     print(f"status={catalog['status']} cases={len(catalog['cases'])} split={catalog['split']}")
     if errors:

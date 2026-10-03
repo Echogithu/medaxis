@@ -133,6 +133,7 @@ export default function AdminLayout() {
       checked: !token,
       authenticated: !!token,
       needPasswordChange: false,
+      message: '',
     };
   });
   const theme = useMemo(() => createAdminTheme(themeMode), [themeMode]);
@@ -159,20 +160,37 @@ export default function AdminLayout() {
 
     getMe()
       .then((user) => {
+        if (user.role !== 'admin') {
+          logout();
+          setAuthState({
+            checked: true,
+            authenticated: false,
+            needPasswordChange: false,
+            message: '当前账号没有管理员权限，请使用管理员账号登录。',
+          });
+          return;
+        }
+
         setAuthState({
           checked: true,
           authenticated: true,
           needPasswordChange:
             user.password_change_required || localStorage.getItem('password_change_required') === 'true',
+          message: '',
         });
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : '';
         if (msg.includes('401') || msg.includes('Unauthorized')) {
           logout();
-          setAuthState({ checked: true, authenticated: false, needPasswordChange: false });
+          setAuthState({ checked: true, authenticated: false, needPasswordChange: false, message: '' });
         } else {
-          setAuthState({ checked: true, authenticated: true, needPasswordChange: false });
+          setAuthState({
+            checked: true,
+            authenticated: false,
+            needPasswordChange: false,
+            message: '暂时无法验证管理员身份，请重新登录。',
+          });
         }
       });
   }, []);
@@ -191,7 +209,7 @@ export default function AdminLayout() {
     setAccountAnchor(null);
     setUnreadCount(null);
     logout();
-    setAuthState({ checked: true, authenticated: false, needPasswordChange: false });
+    setAuthState({ checked: true, authenticated: false, needPasswordChange: false, message: '' });
     navigate('/admin');
   };
 
@@ -208,7 +226,7 @@ export default function AdminLayout() {
   }
 
   if (!isAuthenticated) {
-    return <AdminThemeShell theme={theme}><AdminLoginPage /></AdminThemeShell>;
+    return <AdminThemeShell theme={theme}><AdminLoginPage message={authState.message} /></AdminThemeShell>;
   }
 
   if (needPasswordChange) {

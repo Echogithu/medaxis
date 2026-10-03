@@ -1,7 +1,7 @@
 /** API 统一客户端配置
  * 所有 API 模块从此处导入 API_BASE，禁止自行定义
  */
-const rawBase = import.meta.env.VITE_API_BASE || '/api/v1';
+const rawBase = import.meta.env?.VITE_API_BASE || '/api/v1';
 
 /** 生产环境防御：绝对 HTTP URL 自动升级为 HTTPS，避免 Mixed Content */
 function ensureHttps(base: string): string {

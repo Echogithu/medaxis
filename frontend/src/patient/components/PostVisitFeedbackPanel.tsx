@@ -7,6 +7,7 @@ import {
   updatePostVisitFeedback,
 } from '../../api/patient';
 import type { CaseRecovery, PostVisitFeedback, PostVisitFeedbackFields } from '../../api/patient';
+import PostVisitActionsPanel from './PostVisitActionsPanel';
 
 function toLocalDateTime(value: string | null): string {
   if (!value) return '';
@@ -27,6 +28,7 @@ function toLocalFields(item: PostVisitFeedback | null): PostVisitFeedbackFields 
 }
 
 export default function PostVisitFeedbackPanel({ caseId }: { caseId: string }) {
+  const [aiBusy, setAiBusy] = useState(false);
   const [feedback, setFeedback] = useState<PostVisitFeedback | null>(null);
   const [materials, setMaterials] = useState<CaseRecovery['materials']>([]);
   const [visitAt, setVisitAt] = useState('');
@@ -147,10 +149,15 @@ export default function PostVisitFeedbackPanel({ caseId }: { caseId: string }) {
             </Box>
           )}
         </>}
-        <Button variant="contained" onClick={() => void save()} disabled={busy}>
+        <Button variant="contained" onClick={() => void save()} disabled={busy || aiBusy}>
           {busy ? '保存中…' : feedback ? '保存修改' : '保存就诊结果'}
         </Button>
       </Stack>
+      {feedback && <PostVisitActionsPanel caseId={caseId} revision={feedback.revision} onBusyChange={setAiBusy} dirty={busy ||
+        summary.trim() !== (feedback.patient_summary || '') || department.trim() !== (feedback.actual_department || '') ||
+        visitAt !== toLocalDateTime(feedback.self_reported_visit_at) ||
+        JSON.stringify(fields().follow_up_items) !== JSON.stringify(feedback.follow_up_items) ||
+        JSON.stringify(materialIds) !== JSON.stringify(feedback.material_file_ids)} />}
     </Paper>
   );
 }

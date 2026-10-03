@@ -203,7 +203,7 @@ export default function DoctorLayout() {
             )?.label || '医生工作台'}
           </Typography>
           <Box sx={flexRowGap2}>
-            <Tooltip title={user?.name || user?.email || '医生'}>
+            <Tooltip title={user?.name || user?.full_name || user?.email || '医生'}>
               <Box sx={flexRowGap1}>
                 <Avatar
                   sx={{
@@ -214,10 +214,10 @@ export default function DoctorLayout() {
                     fontWeight: 600,
                   }}
                 >
-                  {(user?.name || user?.email || 'D')[0].toUpperCase()}
+                  {(user?.name || user?.full_name || user?.email || 'D')[0].toUpperCase()}
                 </Avatar>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>
-                  {user?.name || user?.email || '医生'}
+                  {user?.name || user?.full_name || user?.email || '医生'}
                 </Typography>
               </Box>
             </Tooltip>
