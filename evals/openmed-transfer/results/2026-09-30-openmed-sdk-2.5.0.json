@@ -1,0 +1,1518 @@
+{
+  "created_at": "2026-09-30T15:55:01.576151+00:00",
+  "mode": "full",
+  "synthetic": true,
+  "not_blind": true,
+  "decision": "HOLD_NO_PRODUCTION_INTEGRATION",
+  "components": {
+    "context": "MEASURED_SDK_RULES",
+    "pii": "MEASURED_SDK_EXTRACT_PLUS_STAR_ADAPTER",
+    "ner": "NOT_RUN",
+    "nli": "NOT_RUN",
+    "brief": "NOT_RUN",
+    "medaxis_history": "NOT_MEASURED_AS_SDK"
+  },
+  "versions": {
+    "openmed": "2.5.0",
+    "transformers": "4.57.6",
+    "huggingface-hub": "0.36.2",
+    "torch": "2.10.0+cpu",
+    "pydantic": "2.13.0"
+  },
+  "source_sha256": {
+    "catalog.json": "e8deaf8dddb402c03d6459868b217ad86634ce1301334a7209c91e1cd254e731",
+    "sdk_adapter.py": "7299dc533c24eeb58b1621be1a3ad3d2dab4bb7084f0153a42d9fb542b20670e",
+    "run_sdk_eval.py": "589253c250d3b472317f2ef2be190a63f67be51b82590ef9202d51c102df562c",
+    "run_eval.py": "3753807110e0768417a475baeb9a47d2ae52cdf7ddc4ef0b29b3ed9a181ae4aa"
+  },
+  "model": {
+    "model_id": "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
+    "revision": "5cf65bca4760d6efbea015a65b9cf9116aa3519c",
+    "license": "apache-2.0",
+    "files": [
+      {
+        "name": "README.md",
+        "size": 10139,
+        "sha256": "246578f95cd936065d036701493092e17c1e0c101388370822520f70c5be4619"
+      },
+      {
+        "name": "config.json",
+        "size": 4260,
+        "sha256": "7d4dcca6da1cefb04cd60d57bf1e1b88098ae66c32c0270370a17447e8e69b4b"
+      },
+      {
+        "name": "model.safetensors",
+        "size": 2235723416,
+        "sha256": "4c17740551646c9f4e8c1de63e3118ef35e59376654f00010cd8f2b97193e87d"
+      },
+      {
+        "name": "tokenizer.json",
+        "size": 17098184,
+        "sha256": "d1065c14bf5f3d26a369bb348eae791e137f4b69cc85f846cc14bde0e6c49aca"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "size": 314,
+        "sha256": "c019e3e4f7f901adf680dde303c7d964de86675a13e089bcc0f614d3fce75333"
+      }
+    ]
+  },
+  "threshold": 0.5,
+  "lang": "zh",
+  "device": "cpu",
+  "load_ms": 4831.840199418366,
+  "network_attempts": [],
+  "summaries": {
+    "all": {
+      "case_count": 24,
+      "assertions": {
+        "total": 28,
+        "correct": 19,
+        "accuracy": 0.6785714285714286,
+        "false_present": 5,
+        "false_refuted": 3
+      },
+      "privacy": {
+        "gold_chars": 101,
+        "detected_gold_chars": 92,
+        "false_redacted_chars": 23,
+        "redacted_chars": 115,
+        "leaked_chars": 9,
+        "recall": 0.9108910891089109,
+        "precision": 0.8
+      },
+      "protected": {
+        "total": 14,
+        "preserved": 6
+      },
+      "pii_median_ms": 37.081699818372726
+    },
+    "development": {
+      "case_count": 12,
+      "assertions": {
+        "total": 12,
+        "correct": 7,
+        "accuracy": 0.5833333333333334,
+        "false_present": 2,
+        "false_refuted": 3
+      },
+      "privacy": {
+        "gold_chars": 64,
+        "detected_gold_chars": 64,
+        "false_redacted_chars": 9,
+        "redacted_chars": 73,
+        "leaked_chars": 0,
+        "recall": 1.0,
+        "precision": 0.8767123287671232
+      },
+      "protected": {
+        "total": 6,
+        "preserved": 3
+      },
+      "pii_median_ms": 36.48369945585728
+    },
+    "evaluation": {
+      "case_count": 12,
+      "assertions": {
+        "total": 16,
+        "correct": 12,
+        "accuracy": 0.75,
+        "false_present": 3,
+        "false_refuted": 0
+      },
+      "privacy": {
+        "gold_chars": 37,
+        "detected_gold_chars": 28,
+        "false_redacted_chars": 14,
+        "redacted_chars": 42,
+        "leaked_chars": 9,
+        "recall": 0.7567567567567568,
+        "precision": 0.6666666666666666
+      },
+      "protected": {
+        "total": 8,
+        "preserved": 3
+      },
+      "pii_median_ms": 37.588450126349926
+    }
+  },
+  "cases": [
+    {
+      "id": "D01",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "咳嗽",
+            "expected": "refuted",
+            "actual": "refuted",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 1
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 6,
+          "text": "咳嗽",
+          "negation": "negated",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "negated",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 2.2078007459640503,
+      "pii_ms": 190.43479952961206,
+      "redactions": [],
+      "redacted_text": "目前没有咳嗽，体温36.8℃。"
+    },
+    {
+      "id": "D02",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "肺炎",
+            "expected": "historical",
+            "actual": "present",
+            "correct": false
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 6,
+          "text": "肺炎",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 0.9316001087427139,
+      "pii_ms": 34.597099758684635,
+      "redactions": [],
+      "redacted_text": "去年患过肺炎，目前已痊愈。"
+    },
+    {
+      "id": "D03",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "糖尿病",
+            "expected": "non_patient",
+            "actual": "present",
+            "correct": false
+          },
+          {
+            "text": "咳嗽",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 2,
+          "redacted_chars": 2,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 7,
+          "text": "糖尿病",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        },
+        {
+          "start": 12,
+          "end": 14,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.4591002836823463,
+      "pii_ms": 35.74750013649464,
+      "redactions": [
+        {
+          "start": 14,
+          "end": 16,
+          "text": "3天",
+          "label": "AGE",
+          "confidence": 0.643693208694458
+        }
+      ],
+      "redacted_text": "母亲患有糖尿病，患者目前咳嗽**。"
+    },
+    {
+      "id": "D04",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "胸痛",
+            "expected": "hypothetical",
+            "actual": "hypothetical",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 6,
+          "text": "胸痛",
+          "negation": "affirmed",
+          "uncertainty": "uncertain",
+          "experiencer": "patient",
+          "temporality": "hypothetical",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "uncertain",
+              "experiencer": "patient",
+              "temporality": "hypothetical"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.1387001723051071,
+      "pii_ms": 33.53449981659651,
+      "redactions": [],
+      "redacted_text": "如果出现胸痛，请就医。"
+    },
+    {
+      "id": "D05",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "肺炎",
+            "expected": "uncertain",
+            "actual": "uncertain",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 5,
+          "end": 7,
+          "text": "肺炎",
+          "negation": "affirmed",
+          "uncertainty": "uncertain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "uncertain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.1427998542785645,
+      "pii_ms": 36.01149935275316,
+      "redactions": [],
+      "redacted_text": "目前可能有肺炎，需进一步核对。"
+    },
+    {
+      "id": "D06",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "药物过敏",
+            "expected": "unknown",
+            "actual": "refuted",
+            "correct": false
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 7,
+          "end": 11,
+          "text": "药物过敏",
+          "negation": "negated",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "negated",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.1315001174807549,
+      "pii_ms": 31.690199859440327,
+      "redactions": [],
+      "redacted_text": "我不清楚是否有药物过敏。"
+    },
+    {
+      "id": "D07",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "发热",
+            "expected": "needs_review",
+            "actual": "refuted",
+            "correct": false
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 3,
+          "end": 5,
+          "text": "发热",
+          "negation": "negated",
+          "uncertainty": "uncertain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "negated",
+              "uncertainty": "uncertain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.321200281381607,
+      "pii_ms": 36.95589955896139,
+      "redactions": [],
+      "redacted_text": "我没有发热，可能记错了。"
+    },
+    {
+      "id": "D08",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "发热",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 14,
+          "detected_gold_chars": 14,
+          "false_redacted_chars": 4,
+          "redacted_chars": 18,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 2,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 24,
+          "end": 26,
+          "text": "发热",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.1711996048688889,
+      "pii_ms": 53.150699473917484,
+      "redactions": [
+        {
+          "start": 3,
+          "end": 6,
+          "text": "陈小禾",
+          "label": "person",
+          "confidence": 0.8359310123324394
+        },
+        {
+          "start": 10,
+          "end": 21,
+          "text": "13800000000",
+          "label": "phone_number",
+          "confidence": 0.95
+        },
+        {
+          "start": 26,
+          "end": 28,
+          "text": "3天",
+          "label": "AGE",
+          "confidence": 0.6284143924713135
+        },
+        {
+          "start": 31,
+          "end": 33,
+          "text": "39",
+          "label": "AGE",
+          "confidence": 0.5145218372344971
+        }
+      ],
+      "redacted_text": "姓名：***，电话：***********；目前发热**，体温**℃。"
+    },
+    {
+      "id": "D09",
+      "split": "development",
+      "score": {
+        "assertions": [],
+        "privacy": {
+          "gold_chars": 50,
+          "detected_gold_chars": 50,
+          "false_redacted_chars": 0,
+          "redacted_chars": 50,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [],
+      "context_ms": 22.509300149977207,
+      "pii_ms": 66.28279946744442,
+      "redactions": [
+        {
+          "start": 4,
+          "end": 22,
+          "text": "000000200001010000",
+          "label": "social_credit_code",
+          "confidence": 0.18
+        },
+        {
+          "start": 27,
+          "end": 36,
+          "text": "SYNTH-001",
+          "label": "ACCOUNTNAME",
+          "confidence": 0.6701757907867432
+        },
+        {
+          "start": 40,
+          "end": 63,
+          "text": "patient@example.invalid",
+          "label": "email",
+          "confidence": 0.9
+        }
+      ],
+      "redacted_text": "证件号：******************；病历号：*********；邮箱：***********************。"
+    },
+    {
+      "id": "D10",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "发热",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 3,
+          "redacted_chars": 3,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 2,
+          "preserved": 2
+        }
+      },
+      "raw_context": [
+        {
+          "start": 2,
+          "end": 4,
+          "text": "发热",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.3669002801179886,
+      "pii_ms": 45.82380037754774,
+      "redactions": [
+        {
+          "start": 5,
+          "end": 8,
+          "text": "白细胞",
+          "label": "person",
+          "confidence": 0.75
+        }
+      ],
+      "redacted_text": "目前发热，***12.3×10^9/L，CRP 80mg/L。"
+    },
+    {
+      "id": "D11",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "咳嗽",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 3,
+          "end": 5,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 0.8608996868133545,
+      "pii_ms": 37.13189996778965,
+      "redactions": [],
+      "redacted_text": "目前有咳嗽。"
+    },
+    {
+      "id": "D12",
+      "split": "development",
+      "score": {
+        "assertions": [
+          {
+            "text": "开始",
+            "expected": "unknown",
+            "actual": "refuted",
+            "correct": false
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 6,
+          "end": 8,
+          "text": "开始",
+          "negation": "negated",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "negated",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.2227008119225502,
+      "pii_ms": 34.214699640870094,
+      "redactions": [],
+      "redacted_text": "我不记得哪天开始。"
+    },
+    {
+      "id": "E01",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "咳嗽",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          },
+          {
+            "text": "胸痛",
+            "expected": "refuted",
+            "actual": "refuted",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 1
+        }
+      },
+      "raw_context": [
+        {
+          "start": 3,
+          "end": 5,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        },
+        {
+          "start": 9,
+          "end": 11,
+          "text": "胸痛",
+          "negation": "negated",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "negated",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.7475001513957977,
+      "pii_ms": 38.11600059270859,
+      "redactions": [],
+      "redacted_text": "近3天咳嗽，但没有胸痛。"
+    },
+    {
+      "id": "E02",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "哮喘",
+            "expected": "non_patient",
+            "actual": "present",
+            "correct": false
+          },
+          {
+            "text": "喘息",
+            "expected": "refuted",
+            "actual": "refuted",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 6,
+          "text": "哮喘",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        },
+        {
+          "start": 12,
+          "end": 14,
+          "text": "喘息",
+          "negation": "negated",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "negated",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.73179991543293,
+      "pii_ms": 37.21620049327612,
+      "redactions": [],
+      "redacted_text": "父亲患过哮喘。我目前没有喘息。"
+    },
+    {
+      "id": "E03",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "肺炎",
+            "expected": "historical",
+            "actual": "historical",
+            "correct": true
+          },
+          {
+            "text": "咳嗽",
+            "expected": "present",
+            "actual": "historical",
+            "correct": false
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 2,
+          "redacted_chars": 2,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 3,
+          "end": 5,
+          "text": "肺炎",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "historical",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "historical"
+            }
+          }
+        },
+        {
+          "start": 10,
+          "end": 12,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "historical",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "historical"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.9348999485373497,
+      "pii_ms": 37.96069975942373,
+      "redactions": [
+        {
+          "start": 12,
+          "end": 14,
+          "text": "2天",
+          "label": "AGE",
+          "confidence": 0.5785782933235168
+        }
+      ],
+      "redacted_text": "既往有肺炎，今年出现咳嗽**。"
+    },
+    {
+      "id": "E04",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "肺炎",
+            "expected": "uncertain",
+            "actual": "uncertain",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 1
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 6,
+          "text": "肺炎",
+          "negation": "affirmed",
+          "uncertainty": "uncertain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "uncertain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.1236006394028664,
+      "pii_ms": 37.0314996689558,
+      "redactions": [],
+      "redacted_text": "不能排除肺炎，目前体温38.2℃。"
+    },
+    {
+      "id": "E05",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "咳嗽",
+            "expected": "uncertain",
+            "actual": "present",
+            "correct": false
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 5,
+          "end": 7,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.4100996777415276,
+      "pii_ms": 39.89539947360754,
+      "redactions": [],
+      "redacted_text": "我没有否认咳嗽，但无法说清是否真的有。"
+    },
+    {
+      "id": "E06",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "呼吸困难",
+            "expected": "hypothetical",
+            "actual": "hypothetical",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 3,
+          "end": 7,
+          "text": "呼吸困难",
+          "negation": "affirmed",
+          "uncertainty": "uncertain",
+          "experiencer": "patient",
+          "temporality": "hypothetical",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "uncertain",
+              "experiencer": "patient",
+              "temporality": "hypothetical"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.2281006202101707,
+      "pii_ms": 34.9392993375659,
+      "redactions": [],
+      "redacted_text": "若出现呼吸困难，应立即寻求帮助。"
+    },
+    {
+      "id": "E07",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "咳嗽",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 14,
+          "detected_gold_chars": 14,
+          "false_redacted_chars": 6,
+          "redacted_chars": 20,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 5,
+          "end": 7,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 0.8889995515346527,
+      "pii_ms": 38.19040022790432,
+      "redactions": [
+        {
+          "start": 0,
+          "end": 9,
+          "text": "李晓雨今天咳嗽3天",
+          "label": "LASTNAME",
+          "confidence": 0.8746488094329834
+        },
+        {
+          "start": 15,
+          "end": 26,
+          "text": "13900000000",
+          "label": "phone_number",
+          "confidence": 0.95
+        }
+      ],
+      "redacted_text": "*********，联系电话：***********。"
+    },
+    {
+      "id": "E08",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "咳嗽",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 12,
+          "detected_gold_chars": 12,
+          "false_redacted_chars": 2,
+          "redacted_chars": 14,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 9,
+          "end": 11,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 0.9309006854891777,
+      "pii_ms": 48.75619988888502,
+      "redactions": [
+        {
+          "start": 3,
+          "end": 6,
+          "text": "欧阳晨",
+          "label": "person",
+          "confidence": 0.8012667375802993
+        },
+        {
+          "start": 11,
+          "end": 13,
+          "text": "2天",
+          "label": "AGE",
+          "confidence": 0.5758975148200989
+        },
+        {
+          "start": 18,
+          "end": 27,
+          "text": "SYNTH-E08",
+          "label": "ACCOUNTNAME",
+          "confidence": 0.7621279358863831
+        }
+      ],
+      "redacted_text": "姓名：***；目前咳嗽**；病历号：*********。"
+    },
+    {
+      "id": "E09",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "腹泻",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 11,
+          "detected_gold_chars": 2,
+          "false_redacted_chars": 2,
+          "redacted_chars": 4,
+          "leaked_chars": 9
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 21,
+          "end": 23,
+          "text": "腹泻",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.155099831521511,
+      "pii_ms": 39.45640008896589,
+      "redactions": [
+        {
+          "start": 3,
+          "end": 5,
+          "text": "周安",
+          "label": "person",
+          "confidence": 0.7679785656929017
+        },
+        {
+          "start": 23,
+          "end": 25,
+          "text": "2天",
+          "label": "AGE",
+          "confidence": 0.5428133010864258
+        }
+      ],
+      "redacted_text": "姓名：**，住址：合成市示例路99号，目前腹泻**。"
+    },
+    {
+      "id": "E10",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "过敏",
+            "expected": "unknown",
+            "actual": "present",
+            "correct": false
+          },
+          {
+            "text": "咳嗽",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 2,
+          "redacted_chars": 2,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 7,
+          "end": 9,
+          "text": "过敏",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        },
+        {
+          "start": 14,
+          "end": 16,
+          "text": "咳嗽",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 2.4897996336221695,
+      "pii_ms": 33.92460010945797,
+      "redactions": [
+        {
+          "start": 16,
+          "end": 18,
+          "text": "3天",
+          "label": "AGE",
+          "confidence": 0.631424069404602
+        }
+      ],
+      "redacted_text": "我不知道有没有过敏，另外现在咳嗽**。"
+    },
+    {
+      "id": "E11",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "发热",
+            "expected": "refuted",
+            "actual": "refuted",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 0,
+          "preserved": 0
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 6,
+          "text": "发热",
+          "negation": "negated",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "negated",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 1.088700257241726,
+      "pii_ms": 34.942999482154846,
+      "redactions": [],
+      "redacted_text": "目前没有发热。"
+    },
+    {
+      "id": "E12",
+      "split": "evaluation",
+      "score": {
+        "assertions": [
+          {
+            "text": "腹泻",
+            "expected": "present",
+            "actual": "present",
+            "correct": true
+          }
+        ],
+        "privacy": {
+          "gold_chars": 0,
+          "detected_gold_chars": 0,
+          "false_redacted_chars": 0,
+          "redacted_chars": 0,
+          "leaked_chars": 0
+        },
+        "protected": {
+          "total": 1,
+          "preserved": 1
+        }
+      },
+      "raw_context": [
+        {
+          "start": 4,
+          "end": 6,
+          "text": "腹泻",
+          "negation": "affirmed",
+          "uncertainty": "certain",
+          "experiencer": "patient",
+          "temporality": "recent",
+          "metadata": {
+            "clinical_context": {
+              "negation": "affirmed",
+              "uncertainty": "certain",
+              "experiencer": "patient",
+              "temporality": "recent"
+            }
+          }
+        }
+      ],
+      "context_ms": 0.8430993184447289,
+      "pii_ms": 35.021400079131126,
+      "redactions": [],
+      "redacted_text": "近2天有腹泻。"
+    }
+  ]
+}

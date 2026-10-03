@@ -1,0 +1,1072 @@
+{
+  "id": "openmed-transfer-zh-synthetic-v1",
+  "version": "1.0.0",
+  "synthetic": true,
+  "annotation": "人工编写合成 gold，未获临床人员审核；不是医学准确率评测。",
+  "split_policy": "12 development / 12 evaluation；分组固定但均由实现者可见，不是盲测。",
+  "task_boundary": "给定原文提及位置评断言；不评 NER。supported 衡量指定引用是否支持整条陈述。",
+  "source_patterns": [
+    "https://github.com/maziyarpanahi/openmed/blob/master/openmed/clinical/grounding/assertion_grounding.py",
+    "https://github.com/maziyarpanahi/openmed/blob/master/openmed/clinical/brief.py"
+  ],
+  "cases": [
+    {
+      "id": "D01",
+      "split": "development",
+      "input": {
+        "text": "目前没有咳嗽，体温36.8℃。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [
+          {
+            "source_type": "internal",
+            "title": "合成资料摘录",
+            "document_id": "D01-doc",
+            "chunk_id": "D01-chunk",
+            "excerpt": "目前没有咳嗽。"
+          }
+        ],
+        "claims": [
+          {
+            "id": "C1",
+            "text": "目前没有咳嗽",
+            "citation_id": "S1",
+            "evidence_start": 0,
+            "evidence_end": 6
+          },
+          {
+            "id": "C2",
+            "text": "目前咳嗽",
+            "citation_id": "S1",
+            "evidence_start": 0,
+            "evidence_end": 6
+          }
+        ]
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "咳嗽",
+            "status": "refuted"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 9,
+            "end": 14,
+            "text": "36.8℃"
+          }
+        ],
+        "claims": [
+          {
+            "id": "C1",
+            "supported": true
+          },
+          {
+            "id": "C2",
+            "supported": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "D02",
+      "split": "development",
+      "input": {
+        "text": "去年患过肺炎，目前已痊愈。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "肺炎"
+          }
+        ],
+        "sources": [
+          {
+            "source_type": "internal",
+            "title": "合成资料摘录",
+            "document_id": "D02-doc",
+            "chunk_id": "D02-chunk",
+            "excerpt": "去年患过肺炎，目前已痊愈。"
+          }
+        ],
+        "claims": [
+          {
+            "id": "C1",
+            "text": "既往有肺炎",
+            "citation_id": "S1",
+            "evidence_start": 0,
+            "evidence_end": 12
+          }
+        ]
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "肺炎",
+            "status": "historical"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": [
+          {
+            "id": "C1",
+            "supported": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "D03",
+      "split": "development",
+      "input": {
+        "text": "母亲患有糖尿病，患者目前咳嗽3天。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 7,
+            "text": "糖尿病"
+          },
+          {
+            "start": 12,
+            "end": 14,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 7,
+            "text": "糖尿病",
+            "status": "non_patient"
+          },
+          {
+            "start": 12,
+            "end": 14,
+            "text": "咳嗽",
+            "status": "present"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 14,
+            "end": 16,
+            "text": "3天"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "D04",
+      "split": "development",
+      "input": {
+        "text": "如果出现胸痛，请就医。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "胸痛"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "胸痛",
+            "status": "hypothetical"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "D05",
+      "split": "development",
+      "input": {
+        "text": "目前可能有肺炎，需进一步核对。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 5,
+            "end": 7,
+            "text": "肺炎"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 5,
+            "end": 7,
+            "text": "肺炎",
+            "status": "uncertain"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "D06",
+      "split": "development",
+      "input": {
+        "text": "我不清楚是否有药物过敏。",
+        "field": "pmh_allergy",
+        "mentions": [
+          {
+            "start": 7,
+            "end": 11,
+            "text": "药物过敏"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 7,
+            "end": 11,
+            "text": "药物过敏",
+            "status": "unknown"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "D07",
+      "split": "development",
+      "input": {
+        "text": "我没有发热，可能记错了。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "发热"
+          }
+        ],
+        "sources": [],
+        "claims": [],
+        "history": [
+          "昨天测到38.5℃。",
+          "我没有发热，可能记错了。"
+        ],
+        "value": "无发热"
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "发热",
+            "status": "needs_review"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "D08",
+      "split": "development",
+      "input": {
+        "text": "姓名：陈小禾，电话：13800000000；目前发热3天，体温39℃。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 24,
+            "end": 26,
+            "text": "发热"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 24,
+            "end": 26,
+            "text": "发热",
+            "status": "present"
+          }
+        ],
+        "pii": [
+          {
+            "start": 3,
+            "end": 6,
+            "text": "陈小禾",
+            "label": "NAME"
+          },
+          {
+            "start": 10,
+            "end": 21,
+            "text": "13800000000",
+            "label": "PHONE"
+          }
+        ],
+        "protected": [
+          {
+            "start": 26,
+            "end": 28,
+            "text": "3天"
+          },
+          {
+            "start": 31,
+            "end": 34,
+            "text": "39℃"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "D09",
+      "split": "development",
+      "input": {
+        "text": "证件号：000000200001010000；病历号：SYNTH-001；邮箱：patient@example.invalid。",
+        "field": "hpi_associated",
+        "mentions": [],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [],
+        "pii": [
+          {
+            "start": 4,
+            "end": 22,
+            "text": "000000200001010000",
+            "label": "ID"
+          },
+          {
+            "start": 27,
+            "end": 36,
+            "text": "SYNTH-001",
+            "label": "RECORD_ID"
+          },
+          {
+            "start": 40,
+            "end": 63,
+            "text": "patient@example.invalid",
+            "label": "EMAIL"
+          }
+        ],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "D10",
+      "split": "development",
+      "input": {
+        "text": "目前发热，白细胞12.3×10^9/L，CRP 80mg/L。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 2,
+            "end": 4,
+            "text": "发热"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 2,
+            "end": 4,
+            "text": "发热",
+            "status": "present"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 8,
+            "end": 19,
+            "text": "12.3×10^9/L"
+          },
+          {
+            "start": 24,
+            "end": 30,
+            "text": "80mg/L"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "D11",
+      "split": "development",
+      "input": {
+        "text": "目前有咳嗽。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [
+          {
+            "source_type": "internal",
+            "title": "合成资料摘录",
+            "document_id": "D11-doc",
+            "chunk_id": "D11-chunk",
+            "excerpt": "目前有咳嗽。"
+          }
+        ],
+        "claims": [
+          {
+            "id": "C1",
+            "text": "需立即使用抗生素",
+            "citation_id": "S1",
+            "evidence_start": 0,
+            "evidence_end": 5
+          },
+          {
+            "id": "C2",
+            "text": "目前有咳嗽",
+            "citation_id": "S99",
+            "evidence_start": 0,
+            "evidence_end": 5
+          }
+        ]
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "咳嗽",
+            "status": "present"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": [
+          {
+            "id": "C1",
+            "supported": false
+          },
+          {
+            "id": "C2",
+            "supported": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "D12",
+      "split": "development",
+      "input": {
+        "text": "我不记得哪天开始。",
+        "field": "hpi_onset",
+        "mentions": [
+          {
+            "start": 6,
+            "end": 8,
+            "text": "开始"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 6,
+            "end": 8,
+            "text": "开始",
+            "status": "unknown"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "E01",
+      "split": "evaluation",
+      "input": {
+        "text": "近3天咳嗽，但没有胸痛。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "咳嗽"
+          },
+          {
+            "start": 9,
+            "end": 11,
+            "text": "胸痛"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "咳嗽",
+            "status": "present"
+          },
+          {
+            "start": 9,
+            "end": 11,
+            "text": "胸痛",
+            "status": "refuted"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 1,
+            "end": 3,
+            "text": "3天"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "E02",
+      "split": "evaluation",
+      "input": {
+        "text": "父亲患过哮喘。我目前没有喘息。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "哮喘"
+          },
+          {
+            "start": 12,
+            "end": 14,
+            "text": "喘息"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "哮喘",
+            "status": "non_patient"
+          },
+          {
+            "start": 12,
+            "end": 14,
+            "text": "喘息",
+            "status": "refuted"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "E03",
+      "split": "evaluation",
+      "input": {
+        "text": "既往有肺炎，今年出现咳嗽2天。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "肺炎"
+          },
+          {
+            "start": 10,
+            "end": 12,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "肺炎",
+            "status": "historical"
+          },
+          {
+            "start": 10,
+            "end": 12,
+            "text": "咳嗽",
+            "status": "present"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 12,
+            "end": 14,
+            "text": "2天"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "E04",
+      "split": "evaluation",
+      "input": {
+        "text": "不能排除肺炎，目前体温38.2℃。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "肺炎"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "肺炎",
+            "status": "uncertain"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 11,
+            "end": 16,
+            "text": "38.2℃"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "E05",
+      "split": "evaluation",
+      "input": {
+        "text": "我没有否认咳嗽，但无法说清是否真的有。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 5,
+            "end": 7,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 5,
+            "end": 7,
+            "text": "咳嗽",
+            "status": "uncertain"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "E06",
+      "split": "evaluation",
+      "input": {
+        "text": "若出现呼吸困难，应立即寻求帮助。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 3,
+            "end": 7,
+            "text": "呼吸困难"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 3,
+            "end": 7,
+            "text": "呼吸困难",
+            "status": "hypothetical"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": []
+      }
+    },
+    {
+      "id": "E07",
+      "split": "evaluation",
+      "input": {
+        "text": "李晓雨今天咳嗽3天，联系电话：13900000000。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 5,
+            "end": 7,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 5,
+            "end": 7,
+            "text": "咳嗽",
+            "status": "present"
+          }
+        ],
+        "pii": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "李晓雨",
+            "label": "NAME"
+          },
+          {
+            "start": 15,
+            "end": 26,
+            "text": "13900000000",
+            "label": "PHONE"
+          }
+        ],
+        "protected": [
+          {
+            "start": 7,
+            "end": 9,
+            "text": "3天"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "E08",
+      "split": "evaluation",
+      "input": {
+        "text": "姓名：欧阳晨；目前咳嗽2天；病历号：SYNTH-E08。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 9,
+            "end": 11,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 9,
+            "end": 11,
+            "text": "咳嗽",
+            "status": "present"
+          }
+        ],
+        "pii": [
+          {
+            "start": 3,
+            "end": 6,
+            "text": "欧阳晨",
+            "label": "NAME"
+          },
+          {
+            "start": 18,
+            "end": 27,
+            "text": "SYNTH-E08",
+            "label": "RECORD_ID"
+          }
+        ],
+        "protected": [
+          {
+            "start": 11,
+            "end": 13,
+            "text": "2天"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "E09",
+      "split": "evaluation",
+      "input": {
+        "text": "姓名：周安，住址：合成市示例路99号，目前腹泻2天。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 21,
+            "end": 23,
+            "text": "腹泻"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 21,
+            "end": 23,
+            "text": "腹泻",
+            "status": "present"
+          }
+        ],
+        "pii": [
+          {
+            "start": 3,
+            "end": 5,
+            "text": "周安",
+            "label": "NAME"
+          },
+          {
+            "start": 9,
+            "end": 18,
+            "text": "合成市示例路99号",
+            "label": "ADDRESS"
+          }
+        ],
+        "protected": [
+          {
+            "start": 23,
+            "end": 25,
+            "text": "2天"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "E10",
+      "split": "evaluation",
+      "input": {
+        "text": "我不知道有没有过敏，另外现在咳嗽3天。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 7,
+            "end": 9,
+            "text": "过敏"
+          },
+          {
+            "start": 14,
+            "end": 16,
+            "text": "咳嗽"
+          }
+        ],
+        "sources": [],
+        "claims": []
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 7,
+            "end": 9,
+            "text": "过敏",
+            "status": "unknown"
+          },
+          {
+            "start": 14,
+            "end": 16,
+            "text": "咳嗽",
+            "status": "present"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 16,
+            "end": 18,
+            "text": "3天"
+          }
+        ],
+        "claims": []
+      }
+    },
+    {
+      "id": "E11",
+      "split": "evaluation",
+      "input": {
+        "text": "目前没有发热。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "发热"
+          }
+        ],
+        "sources": [
+          {
+            "source_type": "internal",
+            "title": "合成资料摘录",
+            "document_id": "E11-doc",
+            "chunk_id": "E11-chunk",
+            "excerpt": "目前没有发热。"
+          }
+        ],
+        "claims": [
+          {
+            "id": "C1",
+            "text": "发热",
+            "citation_id": "S1",
+            "evidence_start": 4,
+            "evidence_end": 6
+          },
+          {
+            "id": "C2",
+            "text": "目前没有发热",
+            "citation_id": "S1",
+            "evidence_start": 0,
+            "evidence_end": 6
+          }
+        ]
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "发热",
+            "status": "refuted"
+          }
+        ],
+        "pii": [],
+        "protected": [],
+        "claims": [
+          {
+            "id": "C1",
+            "supported": false
+          },
+          {
+            "id": "C2",
+            "supported": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "E12",
+      "split": "evaluation",
+      "input": {
+        "text": "近2天有腹泻。",
+        "field": "hpi_associated",
+        "mentions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "腹泻"
+          }
+        ],
+        "sources": [
+          {
+            "source_type": "internal",
+            "title": "合成资料摘录",
+            "document_id": "E12-doc",
+            "chunk_id": "E12-chunk",
+            "excerpt": "近2天有腹泻。"
+          }
+        ],
+        "claims": [
+          {
+            "id": "C1",
+            "text": "腹泻持续两天",
+            "citation_id": "S1",
+            "evidence_start": 0,
+            "evidence_end": 6
+          }
+        ]
+      },
+      "gold": {
+        "assertions": [
+          {
+            "start": 4,
+            "end": 6,
+            "text": "腹泻",
+            "status": "present"
+          }
+        ],
+        "pii": [],
+        "protected": [
+          {
+            "start": 1,
+            "end": 3,
+            "text": "2天"
+          }
+        ],
+        "claims": [
+          {
+            "id": "C1",
+            "supported": true
+          }
+        ]
+      }
+    }
+  ]
+}
