@@ -22,6 +22,7 @@ import { downloadCaseMaterial, getCaseRecovery, listCases } from '../../api/pati
 import type { CaseRecovery, MedicalCase } from '../../api/patient';
 import CasePreparationPanel from '../components/CasePreparationPanel';
 import PostVisitFeedbackPanel from '../components/PostVisitFeedbackPanel';
+import CaseLinkedReports from '../components/CaseLinkedReports';
 import PatientReportBody from '../../components/PatientReportBody';
 import LabReportCard from '../../components/LabReportCard';
 import { patientText } from '../../state/patientText';
@@ -345,6 +346,7 @@ function CaseDetail({ recovery }: { recovery: CaseRecovery }) {
       </Button>
     </Box>
 
+    <CaseLinkedReports key={recovery.case.id} caseId={recovery.case.id} />
     {/* ── materials accordion ── */}
     {recovery.materials.length > 0 && (
       <Accordion disableGutters sx={{

@@ -9,7 +9,7 @@ import { getToken } from '../../api/client';
 import { ChatNavigationContext, type ChatNavigation } from './chatNavigation';
 
 const pageTitles: Record<string, string> = {
-  '/today': '今日健康', '/chat': 'AI 问诊', '/health': '健康档案', '/followups': '随访计划', '/reminders': '用药提醒', '/cases': '问诊记录',
+  '/today': '今日健康', '/chat': 'AI 问诊', '/health': '健康档案', '/followups': '随访计划', '/reminders': '用药提醒', '/cases': '问诊记录', '/reports': '检查报告',
 };
 
 export default function PatientLayout() {
@@ -25,7 +25,7 @@ export default function PatientLayout() {
       onDeleteSession={id => chatNavigation?.onDeleteSession(id)} busy={chatNavigation?.busy}
       mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} isGuest={isGuest} showSessions={isChat && Boolean(chatNavigation)} />
     <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', '@media print': { display: 'block', overflow: 'visible' } }}>
-      <PatientHeader title={pageTitles[location.pathname] || '医枢'} onOpenNavigation={() => setMobileOpen(true)} isGuest={isGuest} />
+      <PatientHeader title={pageTitles[location.pathname] || (location.pathname.startsWith('/reports/') ? '检查报告' : '医枢')} onOpenNavigation={() => setMobileOpen(true)} isGuest={isGuest} />
       <Box component={isChat ? 'div' : 'main'} sx={{ flex: 1, minHeight: 0, overflow: isChat ? 'hidden' : 'auto', pb: isGuest ? 0 : { xs: 'calc(80px + env(safe-area-inset-bottom))', md: 0 },
         '& > .MuiBox-root > .MuiContainer-root': { maxWidth: 1200, px: { xs: 2, sm: 3, lg: 4 } },
         '& > .MuiBox-root > .MuiContainer-root > .MuiBox-root:first-of-type': { pt: { xs: 3, sm: 4 }, pb: 3 },

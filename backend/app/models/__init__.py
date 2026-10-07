@@ -11,6 +11,7 @@ from app.models.guest_submission import GuestModelSubmission
 from app.models.health_measurement import HealthMeasurement
 from app.models.medical_case import MedicalCase, MedicalDocument
 from app.models.notification import Notification, NotificationPriority, NotificationType
+from app.models.patient_report import PatientReport, PatientReportFile, ReportCaseLink, ReportLifecycleSubmission, ReportManagementOperation, ReportProcessingJob, ReportReviewVersion, ReportUploadSubmission
 from app.models.post_visit_feedback import PatientPostVisitFeedback
 from app.models.rag import Document, DocumentChunk, DocumentReview
 from app.models.user import GuestSession, RoleSwitchLog, User

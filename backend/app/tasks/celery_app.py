@@ -21,6 +21,7 @@ celery_app = Celery(
         "app.tasks.planning",
         "app.tasks.monitoring",
         "app.tasks.documents",
+        "app.tasks.reports",
     ],
 )
 
@@ -38,6 +39,11 @@ celery_app.conf.update(
     # redelivered by the broker while held in the worker's ETA heap.
     broker_transport_options={"visibility_timeout": 2592000},
     beat_schedule={
+        "scan-pending-report-jobs": {
+            "task": "app.tasks.reports.scan_pending_report_jobs",
+            "schedule": crontab(minute="*"),
+            "kwargs": {},
+        },
         "cleanup-audit-logs-daily": {
             "task": "app.tasks.audit.cleanup_old_audit_logs",
             "schedule": crontab(hour=3, minute=0),

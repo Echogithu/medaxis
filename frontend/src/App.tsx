@@ -14,6 +14,7 @@ const HealthProfilePage = lazy(() => import('./patient/pages/HealthProfilePage')
 const FollowUpPage = lazy(() => import('./patient/pages/FollowUpPage'));
 const MedicationReminderPage = lazy(() => import('./patient/pages/MedicationReminderPage'));
 const PatientCasesPage = lazy(() => import('./patient/pages/PatientCasesPage'));
+const PatientReportsPage = lazy(() => import('./patient/pages/PatientReportsPage'));
 import PatientLayout from './patient/layout/PatientLayout';
 const TodayHealthPage = lazy(() => import('./patient/pages/TodayHealthPage'));
 
@@ -90,6 +91,8 @@ function App() {
               <Route path="/followups" element={<RequireRole role="patient"><FollowUpPage /></RequireRole>} />
               <Route path="/reminders" element={<RequireRole role="patient"><MedicationReminderPage /></RequireRole>} />
               <Route path="/cases" element={<RequireRole role="patient"><PatientCasesPage /></RequireRole>} />
+              <Route path="/reports" element={<RequireRole role="patient"><PatientReportsPage /></RequireRole>} />
+              <Route path="/reports/:reportId" element={<RequireRole role="patient"><PatientReportsPage /></RequireRole>} />
             </Route>
 
             {/* 医生端 — 与患者端共享青绿色品牌主题 */}

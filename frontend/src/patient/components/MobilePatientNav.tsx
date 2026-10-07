@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Box, ButtonBase, Drawer, Typography } from '@mui/material';
-import { HomeOutlined, ChatBubbleOutlineRounded, DescriptionOutlined, HealingOutlined, MoreHorizRounded, CalendarMonthOutlined, MedicationOutlined } from '@mui/icons-material';
+import { HomeOutlined, ChatBubbleOutlineRounded, DescriptionOutlined, HealingOutlined, MoreHorizRounded, CalendarMonthOutlined, MedicationOutlined, UploadFileOutlined } from '@mui/icons-material';
 import { carePalette } from '../../theme';
 
 const links = [
@@ -13,6 +13,7 @@ const links = [
 const moreLinks = [
   { path: '/followups', label: '随访计划', icon: <CalendarMonthOutlined /> },
   { path: '/reminders', label: '用药提醒', icon: <MedicationOutlined /> },
+  { path: '/reports', label: '检查报告', icon: <UploadFileOutlined /> },
 ];
 
 export default function MobilePatientNav() {
@@ -36,7 +37,7 @@ export default function MobilePatientNav() {
         {link.icon}<Typography sx={{ fontSize: 11, fontWeight: 600 }}>{link.label}</Typography>
       </ButtonBase>)}
       <ButtonBase aria-label="更多功能" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}
-        sx={{ py: 0.75, gap: 0.25, flexDirection: 'column', borderRadius: '12px', color: moreLinks.some(link => link.path === pathname) ? carePalette.primaryDark : carePalette.muted }}>
+        sx={{ py: 0.75, gap: 0.25, flexDirection: 'column', borderRadius: '12px', color: moreLinks.some(link => pathname.startsWith(link.path)) ? carePalette.primaryDark : carePalette.muted }}>
         <MoreHorizRounded /><Typography sx={{ fontSize: 11, fontWeight: 600 }}>更多</Typography>
       </ButtonBase>
     </Box>

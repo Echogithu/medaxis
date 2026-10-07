@@ -17,6 +17,7 @@ import MedicationIcon from '@mui/icons-material/Medication';
 import MonitorHeartRoundedIcon from '@mui/icons-material/MonitorHeartRounded';
 import FolderSharedOutlinedIcon from '@mui/icons-material/FolderSharedOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import type { ChatSession } from '../types/agent';
 import { logout } from '../api/auth';
 import { getProfile } from '../api/patient';
@@ -157,6 +158,12 @@ export default function Sidebar({
           </ListItem>
           {!isGuest && (
             <>
+              <ListItem disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton selected={currentPath.startsWith('/reports')} aria-current={currentPath.startsWith('/reports') ? 'page' : undefined} onClick={() => { onMobileClose(); navigate('/reports'); }} sx={{ minHeight: 46, borderRadius: '16px', px: 1.75, color: '#64748b', '&:hover': { bgcolor: '#f8fafc' }, '&.Mui-selected': { color: '#0f766e', bgcolor: '#f0fdfa' } }}>
+                  <UploadFileOutlinedIcon sx={{ fontSize: 18, mr: 1.25 }} />
+                  <ListItemText primary="检查报告" slotProps={{ primary: { variant: 'body2', sx: { fontWeight: 650 } } }} />
+                </ListItemButton>
+              </ListItem>
               <ListItem disablePadding sx={{ mb: 0.5 }}>
                 <ListItemButton selected={currentPath.startsWith('/cases')} onClick={() => { onMobileClose(); navigate('/cases'); }} sx={{ minHeight: 46, borderRadius: '16px', px: 1.75, color: '#64748b', '&:hover': { bgcolor: '#f8fafc', color: '#1e293b' }, '&.Mui-selected': { color: '#0f766e', bgcolor: '#f0fdfa', '&:hover': { bgcolor: '#ccfbf1' } } }}>
                   <FolderSharedOutlinedIcon sx={{ fontSize: 18, mr: 1.25 }} />

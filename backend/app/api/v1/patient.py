@@ -24,6 +24,7 @@ from app.schemas.care_plan import CheckInRequest
 from app.api.v1.care_plans import router as care_plan_router, require_patient
 from app.api.v1.health_measurements import router as health_measurement_router
 from app.api.v1.post_visit_actions import router as post_visit_actions_router
+from app.api.v1.patient_reports import router as patient_report_router
 from app.services.post_visit_actions import invalidate_derived
 from app.services.care_plan import complete_task
 from app.services.patient_profile import apply_profile_update, serialize_profile
@@ -39,6 +40,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 router.include_router(health_measurement_router)
 router.include_router(care_plan_router)
 router.include_router(post_visit_actions_router)
+router.include_router(patient_report_router)
 
 
 class PostVisitFeedbackRequest(BaseModel):

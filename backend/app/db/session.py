@@ -14,6 +14,8 @@ settings = get_settings()
 async_engine = create_async_engine(
     settings.async_database_url,
     echo=settings.is_development,
+    # 开发SQL日志同样不能输出报告原件、临床文字或其他敏感参数。
+    hide_parameters=True,
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
