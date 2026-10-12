@@ -1,0 +1,32 @@
+{
+  "annotation_status": "ai_draft_not_clinically_reviewed",
+  "topics": [
+    {"doc":0,"topic":"口服补液失败条件","start":"以下情况提示口服补","end":"2.静脉补液。","queries":["儿童腹泻口服补液失败的表现有哪些","孩子拉得多又一直吐喝不够水哪些表现说明喝补液盐不成功"],"qualifiers":["严重呕吐","脱水未纠正"]},
+    {"doc":0,"topic":"静脉补液适用条件","start":"2.静脉补液。","end":"（1）第1个24h的补液。","queries":["腹泻患儿静脉补液适应证","小孩什么时候不能只靠喝水而需要输液"],"qualifiers":["重度脱水","口服补液脱水无改善"]},
+    {"doc":0,"topic":"腹泻饮食和乳糖条件","start":"（三）饮食治疗。","end":"（四）抗感染治疗。","queries":["儿童急性腹泻饮食母乳乳糖不耐受","宝宝拉肚子能不能继续吃奶什么时候换不含奶糖的奶粉"],"qualifiers":["伴有乳","无\n需严格限制饮食"]},
+    {"doc":0,"topic":"水样便抗菌药例外","start":"2.水样便腹泻者","end":"3.寄生虫所致腹泻病","queries":["水样便腹泻抗菌药物适应证和例外","孩子拉稀都是水是否一定要吃抗生素哪些特殊情况不同"],"qualifiers":["排除霍乱后","重症患儿"]},
+    {"doc":0,"topic":"补锌适用人群","start":"（六）补锌治疗。","end":"（七）微生态制剂。","queries":["腹泻补锌治疗适用地区营养状况和年龄","哪些缺营养的孩子拉肚子能从补充锌受益"],"qualifiers":["锌缺乏高发地区","营养不良患儿"]},
+    {"doc":1,"topic":"低月龄发热风险与疫苗注记","start":"1.2.12 Recognise","end":"1.2.13 Recognise","queries":["fever younger than 3 months temperature 38 high risk vaccinations","不到三个月的小宝宝体温达到三十八度指南如何分风险打疫苗后有什么注记"],"qualifiers":["younger than 3 months","some vaccinations"]},
+    {"doc":1,"topic":"大于六月龄不能只看温度","start":"1.2.11 In children","end":"1.2.12 Recognise","queries":["children older than 6 months temperature alone serious illness","超过半岁的孩子能否仅凭烧到多少度判断是否严重"],"qualifiers":["older than 6 months","do not use"]},
+    {"doc":1,"topic":"发热时长与川崎病评估","start":"1.2.14 Do not use","end":"1.2.15 Recognise","queries":["duration fever 5 days Kawasaki disease assessment","宝宝发烧超过五天需要考虑哪类情况发烧几天能不能单独判断严重性"],"qualifiers":["5 days or longer","Do not use duration"]},
+    {"doc":1,"topic":"退热药目标与不适","start":"1.6.4 Consider","end":"1.6.6 When","queries":["paracetamol ibuprofen distressed not sole aim reducing temperature","孩子发热但并不难受是不是只为了把温度降下来就要给退烧药"],"qualifiers":["appear","sole aim"]},
+    {"doc":1,"topic":"两种退热药同时与交替限制","start":"1.6.6 When","end":"Fever in under 5s:","queries":["paracetamol ibuprofen simultaneously alternating distress persists","两种退烧药能不能一起用哪些情况下才考虑轮换"],"qualifiers":["do not give both agents simultaneously","only consider alternating"]},
+    {"doc":2,"topic":"早期抗病毒治疗时机","start":"（1）流感流行季","end":"（2）发病时间超过","queries":["流感高危病例48小时内抗病毒治疗和病原学检查","容易发展成严重流感的人刚开始不舒服多久用药收益更大用药前查什么"],"qualifiers":["高危因素","48 小时内"]},
+    {"doc":2,"topic":"超过48小时的抗病毒例外","start":"（2）发病时间超过","end":"（3）有传播给","queries":["流感超过48小时重型危重型病原学阳性抗病毒","已经病了两天多是不是就不能再抗病毒了哪些严重病例仍需要考虑"],"qualifiers":["超过 48 小时","病原学阳性"]},
+    {"doc":2,"topic":"同机制抗病毒药联合限制","start":"（5）不建议联合","end":"2.抗流感病毒药物：","queries":["流感相同作用机制抗病毒药联合和增加剂量","能不能把两种同一类抗流感药一起吃或自己加量"],"qualifiers":["不建议联合","相同作用机制"]},
+    {"doc":2,"topic":"流感疫苗年龄与禁忌","start":"接种流感疫苗是预防","end":"优先推荐以下","queries":["流感疫苗接种年龄和接种禁忌","多大的孩子能接种防流感的疫苗是否有不能打的条件"],"qualifiers":["≥6 月龄","无接种禁忌"]},
+    {"doc":2,"topic":"药物预防不能替代疫苗","start":"药物预防不能代替","end":"（三）一般预防措施。","queries":["流感药物预防不能代替疫苗接触后","吃预防流感的药是否就不用打疫苗了接触病人后有何条件"],"qualifiers":["不能代替","高\n危因素"]},
+    {"doc":3,"topic":"大环内酯无反应定义与多种原因","start":"大 环 内 酯 类 药 物 无","end":"重症肺炎支原体肺炎","queries":["MUMPP大环内酯治疗72h仍发热影像无改善原因","孩子用了这类抗生素三天还是烧照片也没变好一定只是耐药吗"],"qualifiers":["72h","异常免疫炎症反应"]},
+    {"doc":3,"topic":"耐药检测与疗效并不完全一致","start":"因此，检测阳性","end":"十二、诊断","queries":["肺炎支原体耐药检测阳性和大环内酯无反应临床判断","化验说药物不敏感或者吃药没好能不能直接认定是真正耐药"],"qualifiers":["有可能并不","不一定均为耐"]},
+    {"doc":3,"topic":"阴性筛查不能排除感染","start":"但敏感性不足","end":"十一、MP 的耐药性","queries":["肺炎支原体免疫胶体金阴性不能排除感染","宝宝的快速检测结果没检出能不能肯定没有支原体感染"],"qualifiers":["可能造成漏检","阴性不能"]},
+    {"doc":3,"topic":"糖皮质激素适用严重程度","start":"使用指征：轻症不推荐","end":"初始剂量：","queries":["儿童支原体肺炎糖皮质激素轻症重症使用指征","支原体肺炎较轻时是否也要用激素用药时注意哪些并发问题"],"qualifiers":["轻症不推荐","重症和危重症"]},
+    {"doc":3,"topic":"支气管镜所见与后遗症","start":"可弯曲支气管镜（简称","end":"九、一般实验室检查","queries":["支原体肺炎支气管镜黏液栓狭窄闭塞后遗症","孩子气道里有黏液堵塞严重时会不会留下长期变窄不通气的问题"],"qualifiers":["MUMPP 和 SMPP","永久性"]}
+  ],
+  "no_answer": [
+    {"query":"这批指南是否给出成人帕金森病脑深部电刺激的手术选择标准","absent_terms":["帕金森","脑深部电刺激"]},
+    {"query":"慢性肾病腹膜透析液交换方案在这些文档哪里","absent_terms":["腹膜透析"]},
+    {"query":"甲状腺癌碘131治疗隔离时间本知识库有依据吗","absent_terms":["甲状腺癌","碘131"]},
+    {"query":"糖尿病胰岛素泵基础率如何调节有对应指南吗","absent_terms":["胰岛素泵"]},
+    {"query":"儿童2027年新发布的支原体肺炎指南更新了什么","absent_terms":["2027"]}
+  ]
+}

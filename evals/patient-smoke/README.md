@@ -2,7 +2,7 @@
 
 Status: **DEFINED_NOT_RUN**｜2026-09-27
 
-2026-09-29 已新增 [T06 DeepSeek 部分成绩单](results/2026-09-29-t06-deepseek-live.json)：SM-01–04 真实模型、25 项映射工程断言与合成内部引用分别记账。目录文件仍保持 `DEFINED_NOT_RUN`，表示固定题集本身不冒充完整 10 案例验收；实际私有知识库文档外发和隔离报告中的外部 URL 仍未验证。
+2026-09-29 本机留有 T06 DeepSeek 部分成绩单，路径 `results/2026-09-29-t06-deepseek-live.json` 被 Git 忽略、不随公开克隆分发；以下只保留范围摘要：SM-01–04 真实模型、25 项映射工程断言与合成内部引用分别记账。目录文件仍保持 `DEFINED_NOT_RUN`，表示固定题集本身不冒充完整 10 案例验收；实际私有知识库文档外发和隔离报告中的外部 URL 仍未验证。
 
 这是作品集约定的第一批 **10 个固定合成案例**，不是已经跑完的分数。用途：把输入、禁止推断、失败语义和现有回归测试钉死，之后用同一口径跑替身演示和真实模型。
 
@@ -12,7 +12,7 @@ Status: **DEFINED_NOT_RUN**｜2026-09-27
 - 空成绩单：[`results.template.json`](results.template.json)
 - 校验/映射：[`run_eval.py`](run_eval.py)
 
-产品入口：[聚焦 PRD](../../docs/product/PORTFOLIO_PRD.md) 第 7 节、[作品集指南](../../docs/portfolio/RESUME_GUIDE.md)「先固定评测集」。
+产品入口：[聚焦 PRD](../../docs/product/PORTFOLIO_PRD.md) 第 7 节、[作品集指南](../../docs/RESUME_GUIDE.md)「先固定评测集」。
 
 ## 案例一览
 
@@ -39,11 +39,13 @@ SM-02 / SM-03 / SM-04 未做专业医学标注，只能评「有没有补造事�
 python evals/patient-smoke/run_eval.py --check --write-template
 ```
 
-跑已映射的工程 pytest（需要 PostgreSQL 测试库，**不要**指向演示库；`conftest.py` 会话结束会 `drop_all`）：
+跑已映射的工程 pytest：先创建独立 PostgreSQL 测试库，替换下列占位用户/密码。三个 URL 必须一致、库名须以 `medaxis_test_` 开头，并显式确认清表；**不要**指向业务或演示库，`conftest.py` 会建表和 `drop_all`。护栏见 [database_safety.py](../../backend/tests/database_safety.py)：
 
 ```powershell
-$env:TEST_DATABASE_URL='postgresql+asyncpg://.../medaxis_eval_suite_isolated'
+$env:TEST_DATABASE_URL='postgresql+asyncpg://TEST_USER:TEST_PASSWORD@127.0.0.1:5433/medaxis_test_eval_suite'
 $env:DATABASE_URL=$env:TEST_DATABASE_URL
+$env:ASYNC_DATABASE_URL=$env:TEST_DATABASE_URL
+$env:MEDAXIS_ALLOW_DESTRUCTIVE_TEST_DB='1'
 python evals/patient-smoke/run_eval.py --pytest
 ```
 

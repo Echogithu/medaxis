@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "scope": "新增合成筛选反例，非真实向量召回、非医学支持gold、非盲测；实现固定后运行，不再据其调参",
+  "cases": [
+    {"id":"F01","query":"专题甲需要哪些治疗时间资料","sources":[{"title":"其他专题","excerpt":"治疗时间需要记录。","score":0.2}],"expected_ids":[]},
+    {"id":"F02","query":"孩子发热的资料","sources":[{"title":"Fever material","excerpt":"Fever observations.","score":0.62}],"expected_ids":["S1"]},
+    {"id":"F03","query":"孩子发热的资料","sources":[{"title":"Unrelated item","excerpt":"Background only.","score":0.21}],"expected_ids":[]},
+    {"id":"F04","query":"奶粉摄入后的记录","sources":[{"title":"营养资料","excerpt":"奶粉摄入与反应记录。","score":0.31}],"expected_ids":["S1"]},
+    {"id":"F05","query":"2031年版专题指南","sources":[{"title":"专题指南2028年版","excerpt":"专题说明。","score":0.8}],"expected_ids":[]},
+    {"id":"F06","query":"2031 edition fever guidance","sources":[{"title":"Fever guidance 2028","excerpt":"Fever text.","score":0.8}],"expected_ids":[]},
+    {"id":"F07","query":"2018年出生的孩子发热","sources":[{"title":"发热资料","excerpt":"发热需记录。","score":0.55}],"expected_ids":["S1"]},
+    {"id":"F08","query":"腹泻相关资料","sources":[{"title":"腹泻资料","excerpt":"腹泻需记录。","score":0.6},{"title":"无关手术资料","excerpt":"需要记录治疗时间。","score":0.23}],"expected_ids":["S1"]},
+    {"id":"F09","query":"中文主题说明","sources":[{"title":"English material","excerpt":"English text.","score":0.2,"model":"uncalibrated-model"}],"expected_ids":["S1"]},
+    {"id":"F10","query":"中文主题说明","sources":[{"title":"English material","excerpt":"English text.","score":0.2,"dimension":12}],"expected_ids":["S1"]},
+    {"id":"F11","query":"中文主题说明","sources":[{"title":"English material","excerpt":"English text.","score":0.2,"fingerprint":"different-query"}],"expected_ids":["S1"]},
+    {"id":"F12","query":"腹泻资料","sources":[{"title":"腹泻资料","excerpt":"腹泻原文。","score":null,"method":"keyword"}],"expected_ids":["S1"]}
+  ]
+}
