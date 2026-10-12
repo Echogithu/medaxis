@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, CircularProgress } from '@mui/material';
+import { Alert, Box, Button, CircularProgress } from '@mui/material';
 import { agentApi } from '../api/agent';
 import { API_BASE, getToken } from '../api/client';
 import type { GuestStatus } from '../types/agent';
@@ -36,6 +36,7 @@ async function resolveIdentity(): Promise<{ owner: string; guestStatus: GuestSta
 export default function ChatHistoryPage() {
   const [identity, setIdentity] = useState<Awaited<ReturnType<typeof resolveIdentity>> | null>(null);
   const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +46,7 @@ export default function ChatHistoryPage() {
       resolveIdentity().then(value => {
         if (!cancelled && currentRevision === revision) setIdentity(value);
       }).catch(() => {
-        if (!cancelled && currentRevision === revision) setError('无法加载会话，请检查网络后刷新重试。已保存的历史记录会保留。');
+        if (!cancelled && currentRevision === revision) setError('无法加载会话，请检查网络后点击“重新加载”。已保存的历史记录会保留。');
       });
     };
     const onStorage = (event: StorageEvent) => {
@@ -57,9 +58,9 @@ export default function ChatHistoryPage() {
     loadIdentity();
     window.addEventListener('storage', onStorage);
     return () => { cancelled = true; window.removeEventListener('storage', onStorage); };
-  }, []);
+  }, [retry]);
 
-  if (error) return <Alert severity="error" sx={{ m: 3, borderRadius: '14px' }}>{error}</Alert>;
+  if (error) return <Alert severity="error" sx={{ m: 3, borderRadius: '14px' }} action={<Button color="inherit" onClick={() => { setError(''); setIdentity(null); setRetry(value => value + 1); }}>重新加载</Button>}>{error}</Alert>;
   if (!identity) return <Box sx={{ display: 'grid', placeItems: 'center', height: '100%', minHeight: 240 }}><CircularProgress aria-label="加载会话历史" /></Box>;
   return <HistoryWorkspace key={identity.owner} {...identity} />;
 }

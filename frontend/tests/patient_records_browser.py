@@ -5,6 +5,7 @@ from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
 from chat_history_browser import BASE, MockAPI, token
+from report_reading_browser import assert_summary_order
 
 
 REPORT = {
@@ -60,7 +61,7 @@ class RecordsAPI(MockAPI):
 
 
 def main():
-    artifact = Path(__file__).resolve().parents[2] / '.ai/tasks/2026-09-30-records-redesign'
+    artifact = Path(os.getenv('REPORT_SCREENSHOT_DIR', str(Path(__file__).resolve().parents[2] / '.ai/tasks/2026-09-30-records-redesign')))
     artifact.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(channel=os.getenv('PLAYWRIGHT_CHANNEL', 'msedge'), headless=True)
@@ -75,20 +76,23 @@ def main():
             page.goto(f'{BASE}/cases')
             page.wait_for_load_state('networkidle')
             expect(page.get_by_text(REPORT['primary_diagnosis'], exact=True)).to_be_visible()
-            expect(page.get_by_text('快速查看', exact=True)).to_have_count(0)
+            expect(page.get_by_text('不是确诊', exact=False)).to_be_visible()
+            assert_summary_order(page)
+            expect(page.get_by_text('一眼看重点', exact=True)).to_have_count(0)
             expect(page.get_by_text(REPORT['red_flags'][0], exact=True)).to_be_visible()
             for precaution in REPORT['contraindications']:
                 expect(page.get_by_text(precaution, exact=True)).to_be_visible()
             expect(page.get_by_text(REPORT['recommended_actions'][3], exact=True)).not_to_be_visible()
+            page.wait_for_function("() => document.getAnimations().filter(animation => animation.animationName === 'casesFadeIn').every(animation => animation.playState === 'finished')")
             page.screenshot(path=str(artifact / 'records-desktop.png'), full_page=True)
             page.get_by_role('button', name='展开全部建议（5 项）', exact=True).click()
             expect(page.get_by_text(REPORT['recommended_actions'][3], exact=True)).to_be_visible()
             page.get_by_role('button', name='收起建议', exact=True).click()
             expect(page.get_by_text(REPORT['recommended_actions'][3], exact=True)).not_to_be_visible()
             page.get_by_role('button', name='展开全部症状要点（5 项）', exact=True).click()
-            page.get_by_role('link', name='[S1]', exact=True).click()
+            page.get_by_role('link', name='引用 S1，查看来源', exact=True).click()
             expect(page.get_by_text('合成参考资料', exact=True)).to_be_visible()
-            page.get_by_role('button', name='参考资料与说明', exact=True).click()
+            page.get_by_role('button', name='参考资料').click()
             page.get_by_role('button', name='收起症状要点', exact=True).click()
             page.get_by_role('button', name='展开全部检查建议（4 项）', exact=True).click()
             expect(page.get_by_text(REPORT['recommended_tests'][3], exact=True)).to_be_visible()
@@ -98,7 +102,7 @@ def main():
             expect(page.get_by_text(REPORT['key_findings'][4], exact=True)).to_be_visible()
             page.emulate_media(media='screen')
             page.get_by_role('button', name='皮肤瘙痒记录', exact=False).click()
-            expect(page.get_by_text('这次问诊暂无总结。', exact=True)).to_be_visible()
+            expect(page.get_by_text('这次问诊还没有总结。', exact=True)).to_be_visible()
             page.get_by_role('button', name='病例 B · 失败切换', exact=False).click()
             expect(page.get_by_role('alert')).to_contain_text('这条问诊记录暂时无法读取')
             expect(page.get_by_text(REPORT['primary_diagnosis'], exact=True)).to_have_count(0)
@@ -108,7 +112,9 @@ def main():
                 page.set_viewport_size({'width': width, 'height': 900})
                 page.goto(f'{BASE}/cases?case_id=demo-case-a')
                 expect(page.get_by_text(REPORT['primary_diagnosis'], exact=True)).to_be_visible()
+                assert_summary_order(page)
                 assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), width
+                page.wait_for_function("() => document.getAnimations().filter(animation => animation.animationName === 'casesFadeIn').every(animation => animation.playState === 'finished')")
                 page.screenshot(path=str(artifact / f'records-{width}.png'), full_page=True)
             page.set_viewport_size({'width': 390, 'height': 844})
             page.get_by_role('button', name='返回问诊记录', exact=True).click()

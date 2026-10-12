@@ -20,6 +20,7 @@ import { flexRowGap1 } from '../../styles/sxUtils';
 import { PROVIDER_DOMAINS } from '../../config/providers';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { MobileTableScrollHint } from '../MobileTableScrollHint';
+import { mobileActionTableSx } from '../mobileActionTableSx';
 
 
 const emptyForm: LLMProviderCreate = {
@@ -287,7 +288,7 @@ export default function LLMProvidersPage() {
   return (
     <Box>
       <PageHeader
-        title="LLM 供应商管理"
+        title="AI 模型配置"
         subtitle="配置模型接入、默认模型与连通性。"
         actions={<Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAdd}>新增供应商</Button>}
       />
@@ -306,13 +307,13 @@ export default function LLMProvidersPage() {
 
       <MobileTableScrollHint />
       <TableContainer component={Paper} variant="outlined" elevation={0}>
-            <Table size="small" sx={{ minWidth: 1200 }}>
+            <Table size="small" sx={{ minWidth: 1200, ...mobileActionTableSx }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
                   <TableCell>名称</TableCell>
                   <TableCell>提供商</TableCell>
                   <TableCell>平台</TableCell>
-                  <TableCell>Base URL</TableCell>
+                  <TableCell>接口地址（Base URL）</TableCell>
                   <TableCell>默认模型</TableCell>
                   <TableCell>模型类型</TableCell>
                   <TableCell>状态</TableCell>
@@ -339,7 +340,7 @@ export default function LLMProvidersPage() {
                       <TableRow key={testKey} hover>
                         <TableCell sx={{ fontWeight: 500 }}>{p.name}</TableCell>
                         <TableCell><Chip label={p.provider} size="small" /></TableCell>
-                        <TableCell>{p.platform || 'global'}</TableCell>
+                        <TableCell>{p.platform || '全部平台'}</TableCell>
                         <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.base_url}</TableCell>
                         <TableCell>{p.default_model}</TableCell>
                         <TableCell>
@@ -373,14 +374,15 @@ export default function LLMProvidersPage() {
                               </Tooltip>
                             ) : (
                               <Tooltip title="测试连通性">
-                                <IconButton size="small" onClick={() => handleTest(p)}><TestIcon fontSize="small" /></IconButton>
+                                <Typography variant="caption">尚未测试</Typography>
                               </Tooltip>
                             )}
                           </Box>
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton size="small" onClick={() => handleOpenEdit(p)}><EditIcon fontSize="small" /></IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleDelete(p)}><DeleteIcon fontSize="small" /></IconButton>
+                          <Tooltip title="测试连接"><IconButton size="small" aria-label={`测试连接：${p.name}`} disabled={testingId === p.id} onClick={() => handleTest(p)}><TestIcon fontSize="small" /></IconButton></Tooltip>
+                          <IconButton size="small" aria-label={`编辑：${p.name}`} onClick={() => handleOpenEdit(p)}><EditIcon fontSize="small" /></IconButton>
+                          <IconButton size="small" color="error" aria-label={`删除：${p.name}`} onClick={() => handleDelete(p)}><DeleteIcon fontSize="small" /></IconButton>
                         </TableCell>
                       </TableRow>
                     );

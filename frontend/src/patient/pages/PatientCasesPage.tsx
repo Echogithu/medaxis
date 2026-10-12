@@ -42,7 +42,7 @@ const statusLabels: Record<string, string> = {
 const CASE_PAGE_SIZE = 10;
 
 const recordStages = [
-  { id: 'summary', title: '本次问诊总结', hint: '回顾病情与建议' },
+  { id: 'summary', title: '这次问诊总结', hint: '回顾病情与建议' },
   { id: 'preparation', title: '准备去就诊', hint: '整理资料与问题' },
   { id: 'visit', title: '记录就诊结果', hint: '看诊后补充记录' },
 ] as const;
@@ -292,10 +292,10 @@ function CaseDetail({ recovery }: { recovery: CaseRecovery }) {
             fontFamily: careFonts.serif, fontWeight: 750,
             fontSize: { xs: 15, sm: 16.5 }, letterSpacing: '-0.02em',
           }}>
-            本次问诊总结
+            这次问诊总结
           </Typography>
         </Box>
-        <Chip size="small" label="AI 辅助整理"
+        <Chip size="small" label="AI 整理"
           sx={{
             height: 24, color: '#3d766d', bgcolor: '#f0fdfa',
             border: '1px solid #dceee6', fontSize: { xs: 10.5, sm: 11 }, fontWeight: 650,
@@ -303,14 +303,14 @@ function CaseDetail({ recovery }: { recovery: CaseRecovery }) {
       </Box>
       {recovery.report
         ? <PatientReportBody report={recovery.report} presentation="record" />
-        : <Alert severity="info" sx={{ borderRadius: '14px' }}>这次问诊暂无总结。</Alert>}
+        : <Alert severity="info" sx={{ borderRadius: '14px' }}>这次问诊还没有总结。</Alert>}
       <Box sx={{
         display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1.5, mt: 2.5, pt: 2,
         borderTop: '1px solid #f1f5f9',
       }}>
         <Button variant="contained" endIcon={<ArrowForwardIosRoundedIcon sx={{ fontSize: '13px !important' }} />}
           onClick={() => selectStage('preparation')} disabled={!recovery.report}>
-          下一步：准备去就诊
+          下一步：准备就诊
         </Button>
       </Box>
     </Box>
@@ -326,7 +326,7 @@ function CaseDetail({ recovery }: { recovery: CaseRecovery }) {
       {recovery.report
         ? <CasePreparationPanel key={recovery.case.id} caseId={recovery.case.id} />
         : <Alert severity="info" sx={{ borderRadius: '14px' }}>
-            这次问诊暂无总结，暂时无法整理就诊摘要。你仍可直接记录实际就诊结果。
+            这次问诊还没有总结，暂时无法整理就诊摘要。你仍可直接记录实际就诊结果。
           </Alert>}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2, justifyContent: 'space-between' }}>
         <Button onClick={() => selectStage('summary')} sx={{ color: carePalette.primaryDark }}>返回问诊总结</Button>

@@ -120,12 +120,12 @@ def main():
 
             page.goto(BASE + '/health')
             expect(page.get_by_role('heading', name='健康档案', exact=True)).to_be_visible()
-            page.get_by_role('button', name='编辑', exact=True).click()
+            page.get_by_role('button', name='编辑档案', exact=True).click()
             expect(page.get_by_label('姓名', exact=True)).to_have_value('林然')
             page.get_by_role('button', name='取消', exact=True).click()
             screenshot(page, 'health-desktop.png')
             page.goto(BASE + '/followups')
-            expect(page.get_by_text('本周照护计划', exact=True)).to_be_visible()
+            expect(page.get_by_role('heading', name='本周照护计划', exact=True)).to_be_visible()
             page.get_by_role('button', name='新建随访计划', exact=True).click()
             expect(page.get_by_role('dialog', name='新建随访计划')).to_be_visible()
             page.get_by_role('button', name='关闭', exact=True).click()
@@ -142,9 +142,9 @@ def main():
             for redundant in ['这里只显示已安排', '当前已加载记录中', '可在问诊记录中保存就诊结果']:
                 assert redundant not in text, redundant
             screenshot(page, 'reminders-empty-desktop.png')
-            page.get_by_role('link', name='查看问诊记录', exact=True).click()
-            expect(page).to_have_url(BASE + '/cases')
-            expect(page.get_by_text('暂无问诊记录', exact=True)).to_be_visible()
+            page.get_by_role('link', name='查看用药清单', exact=True).click()
+            expect(page).to_have_url(BASE + '/health')
+            expect(page.get_by_role('heading', name='健康档案', exact=True)).to_be_visible()
 
             api.failed = True
             page.goto(BASE + '/today')

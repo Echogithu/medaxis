@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, startTransition } from 'react';
+import { useEffect, useState, startTransition } from 'react';
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Select, Switch,
@@ -11,13 +11,15 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import SearchIcon from '@mui/icons-material/Search';
 import { listDoctors, verifyDoctor, updateUser } from '../../api/admin';
 import type { UserItem, UserAdminUpdate } from '../../types/admin';
+import AdminListPager from '../components/AdminListPager';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { MobileTableScrollHint } from '../MobileTableScrollHint';
+import { mobileActionTableSx } from '../mobileActionTableSx';
 
 
 const STATUS_TABS = [
   { value: 'all', label: '全部' },
-  { value: 'pending', label: '待审核' },
+  { value: 'pending', label: '未认证' },
   { value: 'verified', label: '已认证' },
   { value: 'rejected', label: '未通过' },
 ];
@@ -37,6 +39,10 @@ export default function DoctorVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const pageSize = 20;
 
   // Tabs: all | pending | verified | rejected
   const [tab, setTab] = useState('all');
@@ -65,7 +71,7 @@ export default function DoctorVerificationPage() {
       setError('');
     });
 
-    const params: Record<string, unknown> = { role: 'doctor', limit: 100 };
+    const params: Record<string, unknown> = { skip: (page - 1) * pageSize, limit: pageSize + 1 };
     if (search) params.search = search;
 
     if (tab === 'pending') {
@@ -79,10 +85,10 @@ export default function DoctorVerificationPage() {
 
     listDoctors(params)
       .then((data) => {
-        if (!cancelled) setDoctors(data);
+        if (!cancelled) { setDoctors(data.slice(0, pageSize)); setHasMore(data.length > pageSize); }
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError((e as Error).message);
+        if (!cancelled) { setError((e as Error).message); setDoctors([]); setHasMore(false); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -91,44 +97,10 @@ export default function DoctorVerificationPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, search]);
+  }, [tab, search, page, refresh]);
 
-  // 手动刷新
-  const handleRefresh = useCallback(() => {
-    const cancelled = false;
-
-    startTransition(() => {
-      setLoading(true);
-      setError('');
-    });
-
-    const params: Record<string, unknown> = { role: 'doctor', limit: 100 };
-    if (search) params.search = search;
-
-    if (tab === 'pending') {
-      params.is_verified = false;
-    } else if (tab === 'verified') {
-      params.is_verified = true;
-    } else if (tab === 'rejected') {
-      params.status = 'inactive';
-      params.is_verified = false;
-    }
-
-    listDoctors(params)
-      .then((data) => {
-        if (!cancelled) setDoctors(data);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError((e as Error).message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-  }, [tab, search]);
-  const handleResetFilters = () => {
-    setSearch('');
-    setTab('all');
-  };
+  const handleRefresh = () => setRefresh(value => value + 1);
+  const handleResetFilters = () => { setSearch(''); setTab('all'); setPage(1); };
 
   const handleOpenVerify = async (u: UserItem, action: 'approve' | 'reject') => {
     setVerifyUser(u);
@@ -198,19 +170,12 @@ export default function DoctorVerificationPage() {
     }
   };
 
-  const counts = {
-    all: doctors.length,
-    pending: doctors.filter((d) => !d.is_verified && d.status !== 'inactive').length,
-    verified: doctors.filter((d) => d.is_verified).length,
-    rejected: doctors.filter((d) => d.status === 'inactive' && !d.is_verified).length,
-  };
-
   return (
     <Box>
-      <PageHeader title="医生认证" subtitle={`共 ${doctors.length} 位医生`} />
+      <PageHeader title="医生认证" subtitle={loading ? '正在读取医生…' : `本页 ${doctors.length} 位医生`} />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+        <Alert severity="error" sx={{ mb: 2 }} action={<Button disabled={loading} onClick={handleRefresh}>重新加载</Button>} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
@@ -229,7 +194,7 @@ export default function DoctorVerificationPage() {
               fullWidth
               placeholder="搜索邮箱或姓名..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               slotProps={{
                 input: {
                   endAdornment: <SearchIcon fontSize="small" color="action" />,
@@ -249,21 +214,22 @@ export default function DoctorVerificationPage() {
           </Grid>
         </Grid>
 
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary" variant="scrollable" scrollButtons="auto">
+        <Tabs value={tab} onChange={(_, v) => { setTab(v); setPage(1); }} textColor="primary" indicatorColor="primary" variant="scrollable" scrollButtons="auto">
           {STATUS_TABS.map((t) => (
             <Tab
               key={t.value}
               value={t.value}
-              label={`${t.label} (${counts[t.value as keyof typeof counts]})`}
+              label={t.label}
             />
           ))}
         </Tabs>
+        {tab === 'pending' && <Typography variant="caption">未认证包括待审核和未通过，请查看每位医生的认证状态。</Typography>}
       </Paper>
 
       {/* Table */}
       <MobileTableScrollHint />
       <TableContainer component={Paper} variant="outlined" elevation={0}>
-            <Table size="small" sx={{ minWidth: 900 }}>
+            <Table size="small" sx={{ minWidth: 900, ...mobileActionTableSx }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
                   <TableCell>姓名 / 邮箱</TableCell>
@@ -363,6 +329,7 @@ export default function DoctorVerificationPage() {
               </TableBody>
             </Table>
       </TableContainer>
+      <AdminListPager page={page} count={doctors.length} pageSize={pageSize} hasMore={hasMore} loading={loading || Boolean(error)} onChange={setPage} />
 
       {/* Verify Dialog */}
       <Dialog open={verifyOpen} onClose={() => setVerifyOpen(false)} maxWidth="sm" fullWidth>

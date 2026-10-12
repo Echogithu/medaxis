@@ -102,7 +102,7 @@ const NAV_ITEMS = [
   { path: '/admin/audit-logs', label: '审计日志', icon: <HistoryOutlinedIcon /> },
   { path: '/admin/notifications', label: '站内信', icon: <NotificationsNoneOutlinedIcon /> },
   { path: '/admin/email', label: '邮件管理', icon: <EmailOutlinedIcon /> },
-  { path: '/admin/providers', label: 'LLM 供应商', icon: <SmartToyOutlinedIcon /> },
+  { path: '/admin/providers', label: 'AI 模型配置', icon: <SmartToyOutlinedIcon /> },
   { path: '/admin/settings', label: '系统设置', icon: <SettingsOutlinedIcon /> },
 ];
 

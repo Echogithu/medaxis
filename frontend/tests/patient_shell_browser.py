@@ -86,8 +86,8 @@ def main():
             expect(page.get_by_text('合成过敏源', exact=True)).to_have_css('color', 'rgb(190, 18, 60)')
             expect(page.get_by_text('慢性病', exact=True)).to_have_css('color', 'rgb(29, 78, 216)')
             expect(page.get_by_text('严重程度：中度', exact=True)).to_have_css('color', 'rgb(154, 52, 18)')
-            expect(page.get_by_text('有效（正在使用）', exact=True)).to_have_css('color', 'rgb(17, 94, 89)')
-            expect(page.get_by_text('已停用', exact=True)).to_have_css('color', 'rgb(71, 85, 105)')
+            expect(page.get_by_role('heading', name='正在服用（1 项）', exact=True)).to_be_visible()
+            expect(page.get_by_role('heading', name='已停用（1 项）', exact=True)).to_be_visible()
             screenshot(page, 'health-desktop.png')
             api.profile['allergies'] = []
             for state, label, color in [

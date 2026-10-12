@@ -57,7 +57,7 @@ export default function ConsultationSidebar({ messages, report, onOpenReport, on
       <ContextCard title="安全提示" icon={<WarningAmberRoundedIcon />} warning badge={context.urgent ? '需关注' : '通用提醒'}>
         <ContextList items={context.safety} warning />
       </ContextCard>
-      <ContextCard title="建议下一步" icon={<CheckRoundedIcon />}>
+      <ContextCard title="接下来可以做什么" icon={<CheckRoundedIcon />}>
         {context.actions.length ? <ContextList items={context.actions} /> : <Typography sx={{ fontSize: 12, color: carePalette.muted, lineHeight: 1.8 }}>
           {context.summary.length ? '继续回答问诊问题，完成后查看本次建议。' : '先描述症状、持续时间，或上传检查报告。'}
         </Typography>}

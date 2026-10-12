@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
-  Avatar, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, Grid, IconButton, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  Avatar, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormHelperText, Grid, IconButton, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -57,19 +57,23 @@ function sectionState(profile: PatientProfile, section: ProfileSection): RecordS
   return profile.section_states?.[section] ?? (records?.length ? 'present' : 'not_recorded');
 }
 
-function SectionHeading({ title, section, profile, editing, onChange }: {
+function SectionHeading({ title, section, profile, editing, onChange, validate = false }: {
   title: string; section: ProfileSection; profile: PatientProfile; editing: boolean;
   onChange: (section: ProfileSection, state: RecordState) => void;
+  validate?: boolean;
 }) {
   const stateLabelId = useId();
+  const records = section === 'allergies' ? profile.allergies : section === 'conditions' ? profile.chronic_diseases : profile.medications;
+  const invalid = validate && (sectionState(profile, section) === 'present') !== Boolean(records?.length);
   return <Box sx={{ mb: 2 }}>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between', mb: 0.5 }}>
       <Typography variant="h6" sx={{ color: carePalette.ink, fontWeight: 600 }}>{title}</Typography>
-      {editing ? <FormControl size="small" sx={{ minWidth: 140 }}>
+      {editing ? <FormControl size="small" error={invalid} sx={{ minWidth: 140 }}>
         <InputLabel id={stateLabelId}>{title}记录状态</InputLabel>
         <Select labelId={stateLabelId} label={`${title}记录状态`} value={sectionState(profile, section)} onChange={event => onChange(section, event.target.value as RecordState)}>
           {Object.entries(STATES).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
         </Select>
+        {invalid && <FormHelperText>{records?.length ? '已有条目，请选择“有记录”' : '请添加条目，或选择其他记录状态'}</FormHelperText>}
       </FormControl> : <Chip size="small" label={STATES[sectionState(profile, section)]} sx={{ ...stateTones[sectionState(profile, section)], alignSelf: 'flex-start' }} />}
     </Stack>
     <Typography variant="caption" color="text.secondary">{sourceText(profile.section_metadata?.[section])}</Typography>
@@ -77,16 +81,17 @@ function SectionHeading({ title, section, profile, editing, onChange }: {
 }
 
 export default function HealthProfilePage() {
+  const demo = useDemoMode();
+  const reportReady = !(demo?.enabled && !demo.report_center_ready);
+  const reportPath = reportReady ? '/reports' : '/cases';
   const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [draft, setDraft] = useState<PatientProfile | null>(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const demo = useDemoMode();
-  const reportReady = !(demo?.enabled && !demo.report_center_ready);
-  const reportPath = reportReady ? '/reports' : '/cases';
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [showValidation, setShowValidation] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [reload, setReload] = useState(0);
   const [newAllergy, setNewAllergy] = useState('');
@@ -137,16 +142,22 @@ export default function HealthProfilePage() {
 
   async function save() {
     if (!draft || !profile || saving) return;
+    setShowValidation(true);
     setSaveError(''); setConflict(false);
+    const focusInvalid = () => requestAnimationFrame(() => {
+      const field = document.querySelector<HTMLElement>('#profile-editor .Mui-error input, #profile-editor .Mui-error [role="combobox"]');
+      field?.scrollIntoView({ block: 'center' });
+      field?.focus({ preventScroll: true });
+    });
     const groups = [['allergies', draft.allergies], ['conditions', draft.chronic_diseases], ['medications', draft.medications]] as const;
     if (groups.some(([section, items]) => (sectionState(draft, section) === 'present') !== Boolean(items?.length))) {
-      setSaveError('有条目时请选择“有记录”；无条目时请选择“明确无”“未知”或“未填写”。'); return;
+      setSaveError('有条目时请选择“有记录”；无条目时请选择“明确无”“未知”或“未填写”。'); focusInvalid(); return;
     }
     if (draft.chronic_diseases?.some(item => !item.name.trim()) || draft.medications?.some(item => !item.name.trim())) {
-      setSaveError('请填写疾病和药物名称，或删除空白条目；当前修改仍保留。'); return;
+      setSaveError('请填写疾病和药物名称，或删除空白条目；当前修改仍保留。'); focusInvalid(); return;
     }
     if (draft.chronic_diseases?.some(item => item.diagnosed_date && item.diagnosed_date > todayInProfileTimezone())) {
-      setSaveError('确诊日期不能晚于今天；当前修改仍保留。'); return;
+      setSaveError('确诊日期不能晚于今天；当前修改仍保留。'); focusInvalid(); return;
     }
     setSaving(true);
     try {
@@ -172,8 +183,8 @@ export default function HealthProfilePage() {
   const display = editing ? draft : profile;
 
   const editor = <>
-    {saveError && <Alert severity="error" sx={{ mb: 2 }} action={conflict ? <Button onClick={reloadProfile}>重新加载并退出编辑</Button> : undefined}>{saveError}</Alert>}
-    <Box component="fieldset" disabled={saving} sx={{ p: 0, m: 0, border: 0, minWidth: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2.5, alignItems: 'start', '& > .MuiCard-root': { mb: 0 }, '& > .MuiCard-root:first-of-type, & > .MuiCard-root:last-of-type': { gridColumn: '1 / -1' } }}>
+    {saveError && <Alert severity="error" sx={{ mb: 2, position: 'sticky', top: 0, zIndex: 2 }} action={conflict ? <Button onClick={reloadProfile}>重新加载并退出编辑</Button> : undefined}>{saveError}</Alert>}
+    <Box id="profile-editor" component="fieldset" disabled={saving} sx={{ p: 0, m: 0, border: 0, minWidth: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2.5, alignItems: 'start', '& > .MuiCard-root': { mb: 0 }, '& > .MuiCard-root:first-of-type, & > .MuiCard-root:last-of-type': { gridColumn: '1 / -1' } }}>
       <Card sx={{ mb: 2, borderRadius: 3 }}><CardContent>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>基础信息</Typography>
         <Grid container spacing={2}>
@@ -191,7 +202,7 @@ export default function HealthProfilePage() {
         </Grid>
       </CardContent></Card>
       <Card sx={{ mb: 2, borderRadius: 3 }}><CardContent>
-        <SectionHeading title="过敏史" section="allergies" profile={display} editing={editing} onChange={changeState} />
+        <SectionHeading title="过敏史" section="allergies" profile={display} editing={editing} onChange={changeState} validate={showValidation} />
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{display.allergies?.map((item, index) => <Chip key={`${item}-${index}`} label={item} onDelete={editing ? () => removeRecord('allergies', index) : undefined}
           sx={{ ...tagTones.rose, maxWidth: '100%', height: 'auto', '& .MuiChip-label': { py: 0.75, whiteSpace: 'normal', overflowWrap: 'anywhere' } }} />)}</Stack>
         {editing && <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
@@ -204,19 +215,19 @@ export default function HealthProfilePage() {
         </Box>}
       </CardContent></Card>
       <Card sx={{ mb: 2, borderRadius: 3 }}><CardContent>
-        <SectionHeading title="慢性病／特殊疾病" section="conditions" profile={display} editing={editing} onChange={changeState} />
+        <SectionHeading title="慢性病／特殊疾病" section="conditions" profile={display} editing={editing} onChange={changeState} validate={showValidation} />
         <Stack spacing={2}>{display.chronic_diseases?.map((item, index) => <Box key={item.id ?? index} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
           {editing ? <>
             <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 2 }}><Typography>疾病记录 {index + 1}</Typography><IconButton aria-label={`删除疾病记录 ${index + 1}`} onClick={() => removeRecord('conditions', index)}><DeleteIcon /></IconButton></Stack>
             <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="疾病名称" value={item.name} onChange={event => changeDisease(index, { name: event.target.value, code: '' })} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="疾病名称" error={showValidation && !item.name.trim()} helperText={showValidation && !item.name.trim() ? "请填写疾病名称，或删除这一条" : undefined} value={item.name} onChange={event => changeDisease(index, { name: event.target.value, code: '' })} /></Grid>
               <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth><InputLabel id={`disease-common-${index}`}>常见疾病（可选）</InputLabel><Select labelId={`disease-common-${index}`} label="常见疾病（可选）" value={COMMON_DISEASES.some(option => option.code === item.code) ? item.code : ''} onChange={event => {
                 const option = COMMON_DISEASES.find(value => value.code === event.target.value);
                 changeDisease(index, option ? { code: option.code, name: option.name } : { code: '' });
               }}><MenuItem value="">自行填写</MenuItem>{COMMON_DISEASES.map(option => <MenuItem key={option.code} value={option.code}>{option.name}</MenuItem>)}</Select></FormControl></Grid>
               <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth><InputLabel id={`disease-category-${index}`}>疾病分类</InputLabel><Select labelId={`disease-category-${index}`} label="疾病分类" value={item.category ?? 'chronic'} onChange={event => changeDisease(index, { category: event.target.value as DiseaseRecord['category'] })}><MenuItem value="chronic">慢性病</MenuItem><MenuItem value="special">特殊疾病</MenuItem></Select></FormControl></Grid>
               <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth><InputLabel id={`disease-severity-${index}`}>严重程度</InputLabel><Select labelId={`disease-severity-${index}`} label="严重程度" value={item.severity ?? 'unknown'} onChange={event => changeDisease(index, { severity: event.target.value as DiseaseRecord['severity'] })}>{Object.entries(SEVERITIES).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</Select></FormControl></Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="date" label="确诊日期（可留空）" slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: todayInProfileTimezone() } }} value={item.diagnosed_date ?? ''} onChange={event => changeDisease(index, { diagnosed_date: event.target.value || null })} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="date" label="确诊日期（可留空）" error={showValidation && Boolean(item.diagnosed_date && item.diagnosed_date > todayInProfileTimezone())} helperText={showValidation && item.diagnosed_date && item.diagnosed_date > todayInProfileTimezone() ? "日期不能晚于今天" : undefined} slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: todayInProfileTimezone() } }} value={item.diagnosed_date ?? ''} onChange={event => changeDisease(index, { diagnosed_date: event.target.value || null })} /></Grid>
               <Grid size={{ xs: 12 }}><TextField fullWidth multiline minRows={2} label="备注说明" value={item.notes ?? ''} slotProps={{ htmlInput: { maxLength: 1000 } }} onChange={event => changeDisease(index, { notes: event.target.value })} /></Grid>
             </Grid>
           </> : <>
@@ -229,17 +240,17 @@ export default function HealthProfilePage() {
         {editing && <Button startIcon={<AddIcon />} onClick={addDisease} sx={{ mt: 2 }}>添加疾病</Button>}
       </CardContent></Card>
       <Card id="profile-medications-editor" sx={{ borderRadius: 3 }}><CardContent>
-        <SectionHeading title="用药记录" section="medications" profile={display} editing={editing} onChange={changeState} />
+        <SectionHeading title="用药记录" section="medications" profile={display} editing={editing} onChange={changeState} validate={showValidation} />
         <Stack spacing={2}>{display.medications?.map((item, index) => <Box key={item.id ?? index} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
           {editing ? <>
             <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 2 }}><Typography>用药记录 {index + 1}</Typography><IconButton aria-label={`删除用药记录 ${index + 1}`} onClick={() => removeRecord('medications', index)}><DeleteIcon /></IconButton></Stack>
             <Grid container spacing={2}>
-              {([{ field: 'name', label: '药物名称' }, { field: 'dosage', label: '剂量' }, { field: 'frequency', label: '频率' }] as const).map(({ field, label }) => <Grid key={field} size={{ xs: 12, sm: 6 }}><TextField fullWidth label={label} value={item[field]} onChange={event => changeMedication(index, { [field]: event.target.value })} /></Grid>)}
-              <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth><InputLabel id={`medication-status-${index}`}>用药状态</InputLabel><Select labelId={`medication-status-${index}`} label="用药状态" value={item.status ?? 'active'} onChange={event => changeMedication(index, { status: event.target.value as MedicationRecord['status'] })}><MenuItem value="active">有效（正在使用）</MenuItem><MenuItem value="stopped">已停用</MenuItem></Select></FormControl></Grid>
+              {([{ field: 'name', label: '药物名称' }, { field: 'dosage', label: '剂量' }, { field: 'frequency', label: '频率' }] as const).map(({ field, label }) => <Grid key={field} size={{ xs: 12, sm: 6 }}><TextField fullWidth label={label} error={showValidation && field === "name" && !item.name.trim()} helperText={showValidation && field === "name" && !item.name.trim() ? "请填写药物名称，或删除这一条" : undefined} value={item[field]} onChange={event => changeMedication(index, { [field]: event.target.value })} /></Grid>)}
+              <Grid size={{ xs: 12, sm: 6 }}><FormControl fullWidth><InputLabel id={`medication-status-${index}`}>用药状态</InputLabel><Select labelId={`medication-status-${index}`} label="用药状态" value={item.status ?? 'active'} onChange={event => changeMedication(index, { status: event.target.value as MedicationRecord['status'] })}><MenuItem value="active">正在服用</MenuItem><MenuItem value="stopped">已停用</MenuItem></Select></FormControl></Grid>
               <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="date" label="开始日期（可留空）" slotProps={{ inputLabel: { shrink: true } }} value={item.start_date ?? ''} onChange={event => changeMedication(index, { start_date: event.target.value || null })} /></Grid>
             </Grid>
           </> : <>
-            <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap', gap: 0.5 }}><Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>{item.name}</Typography><Chip size="small" label={item.status === 'stopped' ? '已停用' : '有效（正在使用）'} sx={item.status === 'stopped' ? tagTones.slate : tagTones.teal} /></Stack>
+            <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap', gap: 0.5 }}><Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>{item.name}</Typography><Chip size="small" label={item.status === 'stopped' ? '已停用' : '正在服用'} sx={item.status === 'stopped' ? tagTones.slate : tagTones.teal} /></Stack>
             <Typography variant="body2">剂量：{item.dosage || '未填写'} · 频率：{item.frequency || '未填写'}</Typography>
             <Typography variant="body2">开始日期：{item.start_date || '未知／未填写'}</Typography>
           </>}
@@ -254,7 +265,7 @@ export default function HealthProfilePage() {
     {editing && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>请按原处方填写用药；标记停用仅记录事实。</Typography>}
   </>;
   const openEditor = (medications = false) => {
-    setDraft(profile); setEditing(true); setSaveError(''); setConflict(false); setNewAllergy('');
+    setDraft(profile); setEditing(true); setSaveError(''); setShowValidation(false); setConflict(false); setNewAllergy('');
     if (medications) setTimeout(() => document.getElementById('profile-medications-editor')?.scrollIntoView({ block: 'start' }), 250);
   };
   const age = profile.age_years != null ? `${profile.age_years}岁${profile.age_months ? ` ${profile.age_months}个月` : ''}` : '年龄未填写';
@@ -287,11 +298,20 @@ export default function HealthProfilePage() {
           </Box>)}</Stack>
         </CardContent></Card>
         <Card><CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}><Box sx={{ flex: 1 }}><SectionHeading title="当前用药清单" section="medications" profile={profile} editing={false} onChange={changeState} /></Box><Button size="small" sx={{ flexShrink: 0 }} onClick={() => openEditor(true)}>编辑清单 →</Button></Stack>
-          <Box sx={{ overflowX: 'auto' }}><Table size="small" aria-label="用药清单" sx={{ minWidth: 500, '& td, & th': { py: 1.75, px: 1.25 } }}>
-            <TableHead sx={{ bgcolor: '#f6f8f7' }}><TableRow>{['药物名称', '剂量', '频率', '开始日期'].map(label => <TableCell key={label} sx={{ color: carePalette.muted }}>{label}</TableCell>)}</TableRow></TableHead>
-            <TableBody>{profile.medications?.map((item, index) => <TableRow key={item.id || index}><TableCell><Typography sx={{ fontWeight: 600 }}>{item.name}</Typography><Chip size="small" label={item.status === 'stopped' ? '已停用' : '有效（正在使用）'} sx={{ mt: .5, ...(item.status === 'stopped' ? tagTones.slate : tagTones.teal) }} /><Typography variant="caption" sx={{ display: 'block', mt: .5 }}>{sourceText(item)}</Typography></TableCell><TableCell>{item.dosage || '未填写'}</TableCell><TableCell>{item.frequency || '未填写'}</TableCell><TableCell>{item.start_date || '未知／未填写'}</TableCell></TableRow>)}</TableBody>
-          </Table></Box>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}><Box sx={{ flex: 1 }}><SectionHeading title="用药记录" section="medications" profile={profile} editing={false} onChange={changeState} /></Box><Button size="small" sx={{ flexShrink: 0 }} onClick={() => openEditor(true)}>编辑清单 →</Button></Stack>
+          {(['active', 'stopped'] as const).map(status => {
+            const medications = (profile.medications || []).filter(item => (item.status === 'stopped' ? 'stopped' : 'active') === status);
+            return <Box key={status} component="section" aria-label={status === 'active' ? '正在服用' : '已停用'} sx={{ mb: 2 }}>
+              <Typography component="h3" variant="subtitle2" sx={{ mb: 1 }}>{status === 'active' ? '正在服用' : '已停用'}（{medications.length} 项）</Typography>
+              {!medications.length && <Typography variant="body2" color="text.secondary">{status === 'active' ? '没有正在服用的记录' : '没有停用记录'}</Typography>}
+              <Stack spacing={1.5}>{medications.map((item, index) => <Box key={item.id || index} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, overflowWrap: 'anywhere' }}>
+                <Typography sx={{ fontWeight: 600 }}>{item.name}</Typography>
+                <Typography variant="body2" sx={{ mt: .75 }}>剂量：{item.dosage || '未填写'} · 频率：{item.frequency || '未填写'}</Typography>
+                <Typography variant="body2">开始日期：{item.start_date || '未知／未填写'}</Typography>
+                <Typography variant="caption" sx={{ display: 'block', mt: .75 }}>{sourceText(item)}</Typography>
+              </Box>)}</Stack>
+            </Box>;
+          })}
           <Typography variant="caption" sx={{ display: 'block', mt: 2 }}>清单与用药提醒分别管理，请按原处方核对。</Typography>
         </CardContent></Card>
       </Stack>

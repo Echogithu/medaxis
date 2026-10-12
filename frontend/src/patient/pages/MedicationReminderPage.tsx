@@ -174,7 +174,8 @@ export default function MedicationReminderPage() {
           <Card sx={{ textAlign: 'center', py: 7, px: 3 }}>
             <Box sx={{ width: 56, height: 56, mx: 'auto', mb: 2, display: 'grid', placeItems: 'center', borderRadius: '18px', bgcolor: carePalette.amberSoft, color: carePalette.amber }}><MedicationOutlinedIcon sx={{ fontSize: 28 }} /></Box>
             <Typography sx={{ fontWeight: 600, color: warmText, mb: 2 }}>暂无用药提醒</Typography>
-            <Button component={RouterLink} to="/cases">查看问诊记录</Button>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>用药清单与提醒分别管理；请按原处方核对。</Typography>
+            <Button component={RouterLink} to="/health">查看用药清单</Button>
           </Card>
         )}
 

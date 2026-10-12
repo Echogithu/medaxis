@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, Button, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, Dialog, DialogTitle, DialogContent,
   DialogActions, TextField, FormControl, InputLabel, Select, MenuItem,
-  CircularProgress, Alert, Pagination, Grid, Card, CardContent,
+  CircularProgress, Alert, Grid, Card, CardContent,
   IconButton, Tooltip,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -12,6 +12,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import type { AuditLogItem, AuditLogStats, AuditActionType, AuditResourceType } from '../../types/admin';
 import { listAuditLogs, getAuditLogStats } from '../../api/admin';
+import AdminListPager from '../components/AdminListPager';
 import { PageHeader } from "../../components/layout/PageHeader";
 import { MobileTableScrollHint } from '../MobileTableScrollHint';
 
@@ -69,13 +70,15 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const requestRevision = useRef(0);
   const pageSize = 20;
 
   const [stats, setStats] = useState<AuditLogStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
   const [filters, setFilters] = useState({
+    user_id: '',
     action: '',
     resource_type: '',
     date_from: '',
@@ -87,27 +90,31 @@ export default function AuditLogsPage() {
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
 
   const fetchLogs = useCallback(async () => {
+    const revision = ++requestRevision.current;
     setLoading(true);
     setError(null);
     try {
       const res = await listAuditLogs({
+        user_id: filters.user_id || undefined,
         action: filters.action || undefined,
         resource_type: filters.resource_type || undefined,
         date_from: filters.date_from || undefined,
         date_to: filters.date_to || undefined,
         success: filters.success === '' ? undefined : filters.success === 'true',
         skip: (page - 1) * pageSize,
-        limit: pageSize,
+        limit: pageSize + 1,
       });
-      setLogs(res);
-      setTotal(res.length);
-      if (res.length === pageSize) setTotal(page * pageSize + 1);
+      if (revision !== requestRevision.current) return;
+      setLogs(res.slice(0, pageSize));
+      setHasMore(res.length > pageSize);
     } catch (err) {
+      if (revision !== requestRevision.current) return;
       setError(err instanceof Error ? err.message : '获取审计日志失败');
+      setLogs([]); setHasMore(false);
     } finally {
-      setLoading(false);
+      if (revision === requestRevision.current) setLoading(false);
     }
-  }, [page, filters.action, filters.resource_type, filters.date_from, filters.date_to, filters.success]);
+  }, [page, filters.user_id, filters.action, filters.resource_type, filters.date_from, filters.date_to, filters.success]);
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
@@ -186,6 +193,7 @@ export default function AuditLogsPage() {
       </Grid>
 
       {/* Filters */}
+      <TextField label="操作人 ID" size="small" value={filters.user_id} onChange={e => { setFilters(f => ({ ...f, user_id: e.target.value })); setPage(1); }} helperText="输入用户 ID，查找该账号的操作" sx={{ mb: 2 }} />
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={2} sx={{ alignItems: 'center' }}>
           <Grid size={{ xs: 12, sm: 3 }}>
@@ -194,7 +202,7 @@ export default function AuditLogsPage() {
               <Select
                 value={filters.action}
                 label="操作类型"
-                onChange={(e) => setFilters((f) => ({ ...f, action: e.target.value }))}
+                onChange={(e) => { setFilters((f) => ({ ...f, action: e.target.value })); setPage(1); }}
               >
                 <MenuItem value="">全部</MenuItem>
                 {ACTION_OPTIONS.map((a) => (
@@ -209,7 +217,7 @@ export default function AuditLogsPage() {
               <Select
                 value={filters.resource_type}
                 label="资源类型"
-                onChange={(e) => setFilters((f) => ({ ...f, resource_type: e.target.value }))}
+                onChange={(e) => { setFilters((f) => ({ ...f, resource_type: e.target.value })); setPage(1); }}
               >
                 <MenuItem value="">全部</MenuItem>
                 {RESOURCE_OPTIONS.map((r) => (
@@ -225,7 +233,7 @@ export default function AuditLogsPage() {
               size="small"
               fullWidth
               value={filters.date_from}
-              onChange={(e) => setFilters((f) => ({ ...f, date_from: e.target.value }))}
+              onChange={(e) => { setFilters((f) => ({ ...f, date_from: e.target.value })); setPage(1); }}
               slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
@@ -236,7 +244,7 @@ export default function AuditLogsPage() {
               size="small"
               fullWidth
               value={filters.date_to}
-              onChange={(e) => setFilters((f) => ({ ...f, date_to: e.target.value }))}
+              onChange={(e) => { setFilters((f) => ({ ...f, date_to: e.target.value })); setPage(1); }}
               slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
@@ -246,7 +254,7 @@ export default function AuditLogsPage() {
               <Select
                 value={filters.success}
                 label="状态"
-                onChange={(e) => setFilters((f) => ({ ...f, success: e.target.value }))}
+                onChange={(e) => { setFilters((f) => ({ ...f, success: e.target.value })); setPage(1); }}
               >
                 <MenuItem value="">全部</MenuItem>
                 <MenuItem value="true">成功</MenuItem>
@@ -334,12 +342,7 @@ export default function AuditLogsPage() {
       )}
 
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-        <Pagination
-          count={Math.ceil(total / pageSize)}
-          page={page}
-          onChange={(_, p) => setPage(p)}
-          color="primary"
-        />
+<AdminListPager page={page} count={logs.length} pageSize={pageSize} hasMore={hasMore} loading={loading || Boolean(error)} onChange={setPage} />
       </Box>
 
       {/* Detail Dialog */}

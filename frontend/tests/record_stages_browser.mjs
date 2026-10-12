@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_NODE_MODULE || 'playwright');
 const base = process.env.CHAT_TEST_URL || 'http://127.0.0.1:3018';
-const output = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.ai/tasks/2026-09-30-record-stages');
+const output = process.env.REPORT_SCREENSHOT_DIR || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.ai/tasks/2026-09-30-record-stages');
 const cases = [
   { id: 'stage-a', chief_complaint: '餐后腹部不适与腹泻', title: '合成 A', status: 'pending_review', created_at: '2026-09-30T02:00:00Z' },
   { id: 'stage-empty', chief_complaint: '暂无总结的合成记录', title: '合成 B', status: 'pending_review' },
@@ -31,8 +31,10 @@ try {
     const request = route.request();
     const url = new URL(request.url());
     let data = {};
-    if (url.pathname.endsWith('/auth/me')) data = { id: 'synthetic-stage-patient', role: 'patient' };
+    if (url.pathname.endsWith('/demo/status')) data = { enabled: false, limit: 0, used: 0, remaining: 0, report_center_ready: true };
+    else if (url.pathname.endsWith('/auth/me')) data = { id: 'synthetic-stage-patient', role: 'patient' };
     else if (url.pathname.endsWith('/patient/cases')) data = cases;
+    else if (url.pathname.startsWith('/api/v1/patient/cases/') && url.pathname.endsWith('/reports')) data = { items: [], total: 0, page: 1, limit: 10 };
     else if (url.pathname.endsWith('/stage-failed/recovery')) return route.fulfill({ status: 500, json: { detail: '合成失败' } });
     else if (url.pathname.endsWith('/recovery')) {
       const current = cases.find(item => url.pathname.includes(`/${item.id}/`));
@@ -59,17 +61,18 @@ try {
   };
   await page.goto(`${base}/cases?case_id=stage-a`);
   await page.waitForLoadState('networkidle');
-  for (const title of ['本次问诊总结', '准备去就诊', '记录就诊结果']) assert.equal(await stageButton(title).isVisible(), true);
-  await selected('本次问诊总结');
+  await stageButton('这次问诊总结').waitFor();
+  for (const title of ['这次问诊总结', '准备去就诊', '记录就诊结果']) assert.equal(await stageButton(title).isVisible(), true);
+  await selected('这次问诊总结');
   const initialHistoryLength = await page.evaluate(() => history.length);
-  await stageButton('本次问诊总结').click();
+  await stageButton('这次问诊总结').click();
   assert.equal(await page.evaluate(() => history.length), initialHistoryLength);
   assert.equal(await page.getByText(report.primary_diagnosis, { exact: true }).isVisible(), true);
   assert.equal(await page.getByLabel('就诊时间', { exact: true }).isVisible(), false);
   assert.equal(saves, 0);
   mkdirSync(output, { recursive: true });
   await page.screenshot({ path: path.join(output, 'stages-desktop.png') });
-  await page.getByRole('button', { name: '下一步：准备去就诊', exact: true }).click();
+  await page.getByRole('button', { name: '下一步：准备就诊', exact: true }).click();
   await selected('准备去就诊');
   assert.equal(new URL(page.url()).searchParams.get('stage'), 'preparation');
   assert.equal(await page.getByText(report.primary_diagnosis, { exact: true }).isVisible(), false);
@@ -81,12 +84,12 @@ try {
   await selected('记录就诊结果');
   await page.getByLabel('就诊科室', { exact: true }).fill('合成科室');
   await page.getByLabel('就诊情况', { exact: true }).fill('未保存的合成就诊内容');
-  await stageButton('本次问诊总结').click();
+  await stageButton('这次问诊总结').click();
   await stageButton('记录就诊结果').click();
   assert.equal(await page.getByLabel('就诊情况', { exact: true }).inputValue(), '未保存的合成就诊内容');
   assert.equal(saves, 0);
   await page.goBack();
-  await selected('本次问诊总结');
+  await selected('这次问诊总结');
   await page.goForward();
   await selected('记录就诊结果');
   assert.equal(await page.getByLabel('就诊情况', { exact: true }).inputValue(), '未保存的合成就诊内容');
@@ -114,7 +117,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const bounds = await navigation.boundingBox();
     assert.ok(bounds.y >= 0 && bounds.y + bounds.height < 900, `${width}: navigation must be visible initially`);
-    for (const title of ['本次问诊总结', '准备去就诊', '记录就诊结果']) assert.equal(await stageButton(title).isVisible(), true);
+    for (const title of ['这次问诊总结', '准备去就诊', '记录就诊结果']) assert.equal(await stageButton(title).isVisible(), true);
     if (width === 390) await page.screenshot({ path: path.join(output, 'stages-mobile.png') });
     await page.locator('main').evaluate(element => { element.scrollTop = element.scrollHeight; });
     const sticky = await navigation.boundingBox();
@@ -124,10 +127,10 @@ try {
 
   await stageButton('记录就诊结果').click();
   await page.getByRole('list', { name: '问诊记录列表', exact: true }).getByRole('button', { name: /暂无总结的合成记录/ }).click();
-  await page.getByText('这次问诊暂无总结。', { exact: true }).waitFor();
-  await selected('本次问诊总结');
+  await page.getByText('这次问诊还没有总结。', { exact: true }).waitFor();
+  await selected('这次问诊总结');
   assert.equal(new URL(page.url()).searchParams.has('stage'), false);
-  assert.equal(await page.getByRole('button', { name: '下一步：准备去就诊', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: '下一步：准备就诊', exact: true }).isDisabled(), true);
   await stageButton('准备去就诊').click();
   await page.getByRole('alert').filter({ hasText: '暂时无法整理就诊摘要' }).waitFor();
   await stageButton('记录就诊结果').click();

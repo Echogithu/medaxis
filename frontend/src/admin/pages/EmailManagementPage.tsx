@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Paper, Typography, Button, TextField, Dialog, DialogTitle, DialogContent,
   DialogActions, FormControl, InputLabel, Select, MenuItem, Chip, IconButton,
@@ -76,6 +76,9 @@ export default function EmailManagementPage() {
   const [logsPage, setLogsPage] = useState(0);
   const [logsPageSize, setLogsPageSize] = useState(20);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logsSearch, setLogsSearch] = useState('');
+  const [logsStatus, setLogsStatus] = useState('');
+  const logsRequest = useRef(0);
 
   const [presets, setPresets] = useState<EmailProviderPreset[]>([]);
   const [selectedPreset, setSelectedPreset] = useState<EmailProviderPreset | null>(null);
@@ -94,7 +97,7 @@ export default function EmailManagementPage() {
     }
   };
 
-  const showError = (msg: string) => { setError(msg); setTimeout(() => setError(null), 5000); };
+  const showError = (msg: string) => { setError(msg); };
   const showSuccess = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(null), 5000); };
 
   const fetchConfigs = useCallback(async () => {
@@ -116,14 +119,19 @@ export default function EmailManagementPage() {
   }, []);
 
   const fetchLogs = useCallback(async () => {
+    const revision = ++logsRequest.current;
     setLogsLoading(true);
+    setError(null);
     try {
-      const res = await listEmailLogs({ page: logsPage + 1, page_size: logsPageSize });
-      setLogs(res.items);
-      setLogsTotal(res.total);
-    } catch (e: any) { showError(e.message); }
-    finally { setLogsLoading(false); }
-  }, [logsPage, logsPageSize]);
+      const res = await listEmailLogs({ page: logsPage + 1, page_size: logsPageSize, status: logsStatus || undefined, search: logsSearch || undefined });
+      if (revision === logsRequest.current) { setLogs(res.items); setLogsTotal(res.total); }
+    } catch (e: unknown) {
+      if (revision === logsRequest.current) {
+        setError(e instanceof Error ? e.message : '发送历史加载失败，请重新加载');
+        setLogs([]); setLogsTotal(0);
+      }
+    } finally { if (revision === logsRequest.current) setLogsLoading(false); }
+  }, [logsPage, logsPageSize, logsStatus, logsSearch]);
 
   const fetchPresets = useCallback(async () => {
     try {
@@ -347,6 +355,12 @@ export default function EmailManagementPage() {
       {/* === Logs Tab === */}
       {tab === 2 && (
         <Box>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+            <TextField label="收件人或主题" size="small" value={logsSearch} onChange={e => { setLogsSearch(e.target.value); setLogsPage(0); }} />
+            <FormControl size="small" sx={{ minWidth: 140 }}><InputLabel id="email-log-status-label">发送状态</InputLabel><Select labelId="email-log-status-label" label="发送状态" value={logsStatus} onChange={e => { setLogsStatus(e.target.value); setLogsPage(0); }}><MenuItem value="">全部</MenuItem><MenuItem value="failed">失败</MenuItem><MenuItem value="sent">已发送</MenuItem></Select></FormControl>
+            <Button onClick={() => { setLogsSearch(''); setLogsStatus(''); setLogsPage(0); }}>重置筛选</Button>
+            <Button disabled={logsLoading} onClick={() => void fetchLogs()}>重新加载</Button>
+          </Box>
           <MobileTableScrollHint />
           <TableContainer component={Paper} variant="outlined" elevation={0}>
             <Table size="small" sx={{ minWidth: 900 }}>

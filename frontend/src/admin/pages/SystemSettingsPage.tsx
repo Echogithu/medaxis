@@ -131,10 +131,7 @@ export default function SystemSettingsPage() {
         if (!cancelled) {
           setSettings(data);
           const cats = Array.from(new Set(data.map((s) => s.category)));
-          if (cats.length > 0 && !cats.includes(activeTab)) {
-            const first = CATEGORY_ORDER.find((c) => cats.includes(c)) || cats[0];
-            setActiveTab(first);
-          }
+          setActiveTab(previous => cats.includes(previous) ? previous : CATEGORY_ORDER.find(c => cats.includes(c)) || cats[0] || 'general');
         }
       })
       .catch((e: unknown) => {
@@ -147,7 +144,7 @@ export default function SystemSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab]);
+  }, []);
 
   // 手动刷新
   const handleRefresh = useCallback(() => {
@@ -163,10 +160,7 @@ export default function SystemSettingsPage() {
         if (!cancelled) {
           setSettings(data);
           const cats = Array.from(new Set(data.map((s) => s.category)));
-          if (cats.length > 0 && !cats.includes(activeTab)) {
-            const first = CATEGORY_ORDER.find((c) => cats.includes(c)) || cats[0];
-            setActiveTab(first);
-          }
+          setActiveTab(previous => cats.includes(previous) ? previous : CATEGORY_ORDER.find(c => cats.includes(c)) || cats[0] || 'general');
         }
       })
       .catch((e: unknown) => {
@@ -175,7 +169,7 @@ export default function SystemSettingsPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-  }, [activeTab]);
+  }, []);
 
   const handleChange = (key: string, val: string) => {
     setSettings((prev) => prev.map((s) => (s.key === key ? { ...s, value: val } : s)));
@@ -348,17 +342,17 @@ export default function SystemSettingsPage() {
                       <Typography
                         variant="subtitle2"
                         sx={{
-                          fontFamily: 'monospace',
+                          fontFamily: 'inherit',
                           fontWeight: 600,
                           color: 'text.primary',
                           wordBreak: 'break-all',
                         }}
                       >
-                        {s.key}
+                        {s.description || s.key}
                       </Typography>
                       <Chip
                         size="small"
-                        label={s.value_type}
+                        label={({ string: '文字', number: '数字', boolean: '开关', select: '选项' } as Record<string, string>)[s.value_type] || s.value_type}
                         sx={{
                           fontSize: '0.7rem',
                           height: 20,
@@ -367,11 +361,7 @@ export default function SystemSettingsPage() {
                       />
                     </Box>
 
-                    {s.description && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                        {s.description}
-                      </Typography>
-                    )}
+                    <Box component="details" sx={{ mb: 1.5, color: 'text.secondary', fontSize: 12 }}><summary>查看技术信息</summary><code>{s.key} · {s.value_type}</code></Box>
 
                     <SettingInput setting={s} onChange={(val) => handleChange(s.key, val)} />
 

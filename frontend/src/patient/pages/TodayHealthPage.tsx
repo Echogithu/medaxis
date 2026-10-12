@@ -21,6 +21,7 @@ const heading = { display: 'flex', alignItems: 'center', justifyContent: 'space-
 export default function TodayHealthPage() {
   const [data, setData] = useState<OverviewData | null>(null);
   const [reload, setReload] = useState(0);
+  const [showAllToday, setShowAllToday] = useState(false);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const update = () => setNow(new Date());
@@ -90,10 +91,11 @@ export default function TodayHealthPage() {
               {careLoaded && !partial && <Typography sx={{ color: carePalette.primaryDark, fontWeight: 600 }}>{Math.round(completed / todayItems.length * 100)}%</Typography>}</Box>
             <LinearProgress aria-label="今日照护完成进度" variant="determinate" value={completed / todayItems.length * 100} sx={{ height: 6, borderRadius: 3, bgcolor: '#f1f5f9', mb: 2 }} />
           </>}
-          <Stack spacing={1}>{todayItems.slice(0, 4).map(item => <Button key={item.id} component={RouterLink} to={item.path} sx={{ justifyContent: 'flex-start', gap: 1.25, px: 0.5, color: item.done ? carePalette.muted : carePalette.ink, textAlign: 'left' }}>
+          <Stack spacing={1}>{(showAllToday ? todayItems : todayItems.slice(0, 4)).map(item => <Button key={item.id} component={RouterLink} to={item.path} sx={{ justifyContent: 'flex-start', gap: 1.25, px: 0.5, color: item.done ? carePalette.muted : carePalette.ink, textAlign: 'left' }}>
             <Box sx={{ width: 24, height: 24, flexShrink: 0, borderRadius: '8px', display: 'grid', placeItems: 'center', bgcolor: item.done ? carePalette.mint : '#f1f5f9', color: carePalette.primaryDark }}>{item.done ? <CheckRounded sx={{ fontSize: 16 }} /> : <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: item.failed ? carePalette.danger : carePalette.primary }} />}</Box>
             <Typography variant="body2" sx={{ overflowWrap: 'anywhere', textDecoration: item.done ? 'line-through' : 'none' }}>{item.time && `${item.time} · `}{patientText(item.title)}</Typography>
           </Button>)}</Stack>
+          {todayItems.length > 4 && <Button size="small" onClick={() => setShowAllToday(value => !value)}>{showAllToday ? '收起当天安排' : `查看其余 ${todayItems.length - 4} 项`}</Button>}
           {!todayItems.length && <Box sx={{ py: 2.5 }}><CalendarMonthOutlined sx={{ fontSize: 32, color: '#94a3b8', mb: 1 }} /><Typography color="text.secondary">{!careLoaded ? '照护安排暂时无法加载' : partial ? '查看完整照护安排' : '今天暂无照护安排'}</Typography></Box>}
           <Button component={RouterLink} to="/followups" size="small" endIcon={<ArrowForwardRounded />} sx={{ mt: 1 }}>查看随访计划</Button>
           <Button component={RouterLink} to="/reminders" size="small" sx={{ mt: 1 }}>用药提醒</Button>

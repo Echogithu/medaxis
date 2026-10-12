@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, startTransition } from 'react';
+import { useEffect, useState, startTransition } from 'react';
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Divider,
@@ -11,8 +11,10 @@ import SearchIcon from '@mui/icons-material/Search';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { listUsers, updateUser, kickUser } from '../../api/admin';
 import type { UserItem, UserAdminUpdate } from '../../types/admin';
+import AdminListPager from '../components/AdminListPager';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { MobileTableScrollHint } from '../MobileTableScrollHint';
+import { mobileActionTableSx } from '../mobileActionTableSx';
 
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
@@ -44,6 +46,10 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const pageSize = 20;
 
   // Filters
   const [search, setSearch] = useState('');
@@ -77,13 +83,14 @@ export default function UsersPage() {
       search: search || undefined,
       role: roleFilter || undefined,
       status: statusFilter || undefined,
-      limit: 100,
+      skip: (page - 1) * pageSize,
+      limit: pageSize + 1,
     })
       .then((data) => {
-        if (!cancelled) setUsers(data);
+        if (!cancelled) { setUsers(data.slice(0, pageSize)); setHasMore(data.length > pageSize); }
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError((e as Error).message);
+        if (!cancelled) { setError((e as Error).message); setUsers([]); setHasMore(false); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -92,38 +99,15 @@ export default function UsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [search, roleFilter, statusFilter]);
+  }, [search, roleFilter, statusFilter, page, refresh]);
   const handleResetFilters = () => {
     setSearch('');
     setRoleFilter('');
     setStatusFilter('');
+    setPage(1);
   };
 
-  // 手动刷新
-  const handleRefresh = useCallback(() => {
-    const cancelled = false;
-
-    startTransition(() => {
-      setLoading(true);
-      setError('');
-    });
-
-    listUsers({
-      search: search || undefined,
-      role: roleFilter || undefined,
-      status: statusFilter || undefined,
-      limit: 100,
-    })
-      .then((data) => {
-        if (!cancelled) setUsers(data);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError((e as Error).message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-  }, [search, roleFilter, statusFilter]);
+  const handleRefresh = () => setRefresh(value => value + 1);
 
   const handleOpenEdit = (u: UserItem) => {
     setEditingUser(u);
@@ -185,10 +169,10 @@ export default function UsersPage() {
 
   return (
     <Box>
-      <PageHeader title="用户管理" subtitle={`共 ${users.length} 位用户`} />
+      <PageHeader title="用户管理" subtitle={loading ? '正在读取用户…' : `本页 ${users.length} 位用户`} />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+        <Alert severity="error" sx={{ mb: 2 }} action={<Button disabled={loading} onClick={handleRefresh}>重新加载</Button>} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
@@ -207,7 +191,7 @@ export default function UsersPage() {
               fullWidth
               placeholder="搜索邮箱或姓名..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               slotProps={{
                 input: {
                   endAdornment: <SearchIcon fontSize="small" color="action" />,
@@ -218,7 +202,7 @@ export default function UsersPage() {
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl size="small" fullWidth>
               <InputLabel>角色</InputLabel>
-              <Select value={roleFilter} label="角色" onChange={(e) => setRoleFilter(e.target.value)}>
+              <Select value={roleFilter} label="角色" onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}>
                 <MenuItem value="">全部</MenuItem>
                 <MenuItem value="patient">患者</MenuItem>
                 <MenuItem value="doctor">医生</MenuItem>
@@ -229,7 +213,7 @@ export default function UsersPage() {
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl size="small" fullWidth>
               <InputLabel>状态</InputLabel>
-              <Select value={statusFilter} label="状态" onChange={(e) => setStatusFilter(e.target.value)}>
+              <Select value={statusFilter} label="状态" onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
                 <MenuItem value="">全部</MenuItem>
                 <MenuItem value="active">正常</MenuItem>
                 <MenuItem value="inactive">禁用</MenuItem>
@@ -253,7 +237,7 @@ export default function UsersPage() {
         elevation={0}
         sx={{ borderRadius: '8px', boxShadow: 'none', overflowX: 'auto' }}
       >
-      <Table size="small" sx={{ minWidth: 1080 }}>
+      <Table size="small" sx={{ minWidth: 1080, ...mobileActionTableSx }}>
         <TableHead>
           <TableRow>
             <TableCell>姓名 / 邮箱</TableCell>
@@ -353,6 +337,7 @@ export default function UsersPage() {
         </TableBody>
       </Table>
       </TableContainer>
+      <AdminListPager page={page} count={users.length} pageSize={pageSize} hasMore={hasMore} loading={loading || Boolean(error)} onChange={setPage} />
 
       {/* Edit Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

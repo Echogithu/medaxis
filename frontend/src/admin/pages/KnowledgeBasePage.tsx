@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, Button, TextField, Dialog, DialogTitle, DialogContent,
   DialogActions, FormControl, InputLabel, Select, MenuItem, Switch,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Chip, IconButton, Tabs, Tab, Tooltip, CircularProgress,
-  Alert, Pagination, FormControlLabel, Grid, Autocomplete,
+  Alert, FormControlLabel, Grid, Autocomplete,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -12,6 +12,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import type { DocumentItem, DocumentCreate, DocumentUpdate, DocumentType } from '../../types/admin';
+import AdminListPager from '../components/AdminListPager';
 import { PageHeader } from "../../components/layout/PageHeader";
 import { MobileTableScrollHint } from '../MobileTableScrollHint';
 import {
@@ -38,8 +39,10 @@ export default function KnowledgeBasePage() {
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const requestRevision = useRef(0);
   const pageSize = 10;
+  const [reviewStatus, setReviewStatus] = useState('');
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<DocumentItem | null>(null);
@@ -55,36 +58,41 @@ export default function KnowledgeBasePage() {
   const currentDocType = DOC_TYPE_OPTIONS[tabs.tab];
 
   const fetchDocs = useCallback(async () => {
+    const revision = ++requestRevision.current;
     setLoading(true);
     setError(null);
     try {
       const res = await listDocuments({
         doc_type: currentDocType,
+        status: reviewStatus || undefined,
         search: tabs.search || undefined,
         is_active: tabs.isActive ?? undefined,
         skip: (tabs.page - 1) * pageSize,
-        limit: pageSize,
+        limit: pageSize + 1,
       });
-      setDocs(res);
-      setTotal(res.length);
-      if (res.length === pageSize) {
-        setTotal(tabs.page * pageSize + 1);
-      }
+      if (revision !== requestRevision.current) return;
+      setDocs(res.slice(0, pageSize));
+      setHasMore(res.length > pageSize);
+
     } catch (err) {
+      if (revision !== requestRevision.current) return;
       setError(err instanceof Error ? err.message : '获取文档失败');
+      setDocs([]); setHasMore(false);
     } finally {
-      setLoading(false);
+      if (revision === requestRevision.current) setLoading(false);
     }
-  }, [tabs.tab, tabs.page, tabs.search, tabs.isActive, currentDocType]);
+  }, [tabs.tab, tabs.page, tabs.search, tabs.isActive, currentDocType, reviewStatus]);
 
   useEffect(() => {
     fetchDocs();
   }, [fetchDocs]);
 
   const handleTabChange = (_: React.SyntheticEvent, newTab: number) => {
+    setReviewStatus('');
     setTabs({ tab: newTab, page: 1, search: '', isActive: null });
   };
   const handleResetFilters = () => {
+    setReviewStatus('');
     setTabs((prev) => ({ ...prev, page: 1, search: '', isActive: null }));
   };
 
@@ -229,6 +237,9 @@ export default function KnowledgeBasePage() {
               </Select>
             </FormControl>
           </Grid>
+          <Grid size={{ xs: 6, md: 2 }}><FormControl fullWidth size="small"><InputLabel id="knowledge-review-status-label">审核状态</InputLabel><Select labelId="knowledge-review-status-label" label="审核状态" value={reviewStatus} onChange={e => { setReviewStatus(e.target.value); setTabs(t => ({ ...t, page: 1 })); }}>
+            <MenuItem value="">全部</MenuItem><MenuItem value="pending">待审核</MenuItem><MenuItem value="agent_reviewed">AI 已初审</MenuItem><MenuItem value="approved">已通过</MenuItem><MenuItem value="rejected">未通过</MenuItem><MenuItem value="revision_requested">需修改</MenuItem>
+          </Select></FormControl></Grid>
           <Grid size={{ xs: 6, md: 2 }}>
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchDocs} fullWidth>
               刷新
@@ -293,12 +304,7 @@ export default function KnowledgeBasePage() {
         </Table>
       </TableContainer>
 
-      {total > pageSize && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Pagination count={Math.ceil(total / pageSize)} page={tabs.page}
-            onChange={(_, p) => setTabs(t => ({ ...t, page: p }))} />
-        </Box>
-      )}
+      <AdminListPager page={tabs.page} count={docs.length} pageSize={pageSize} hasMore={hasMore} loading={loading || Boolean(error)} onChange={p => setTabs(t => ({ ...t, page: p }))} />
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>

@@ -40,7 +40,9 @@ class MockAPI:
         path = unquote(url.path)
         self.requests.append((path, query, request.headers, request.post_data))
         data = {}
-        if path.endswith('/auth/me'):
+        if path.endswith('/demo/status'):
+            data = {'enabled': False, 'limit': 0, 'used': 0, 'remaining': 0, 'report_center_ready': True}
+        elif path.endswith('/auth/me'):
             jwt = request.headers['authorization'].split()[1]
             sub = json.loads(base64.urlsafe_b64decode(jwt.split('.')[1] + '=='))['sub']
             data = {'id': sub, 'role': 'patient'}
@@ -89,6 +91,9 @@ class MockAPI:
                 {'id': 'demo-case-a', 'title': '病例 A · 演示报告', 'status': 'pending_review', 'created_at': '2026-09-26T00:00:00Z'},
                 {'id': 'demo-case-b', 'title': '病例 B · 失败切换', 'status': 'pending_review', 'created_at': '2026-09-25T00:00:00Z'},
             ]
+        elif path.startswith('/api/v1/patient/cases/') and path.endswith('/reports'):
+            # 总结页同时读取关联报告；空列表也需要符合分页接口契约。
+            data = {'items': [], 'total': 0, 'page': 1, 'limit': 10}
         elif path.endswith('/patient/cases/demo-case-a/recovery'):
             data = {
                 'case': {'id': 'demo-case-a', 'title': '病例 A · 演示报告', 'status': 'pending_review', 'created_at': '2026-09-26T00:00:00Z'},

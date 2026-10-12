@@ -31,6 +31,8 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: '#F59E0B',
   low: '#6B7280',
 };
+const TYPE_LABELS: Record<string, string> = { system: '系统', announcement: '公告', direct: '私信', reminder: '提醒' };
+const PRIORITY_LABELS: Record<string, string> = { high: '高', medium: '中', low: '低' };
 
 export default function NotificationsPage() {
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -188,10 +190,10 @@ export default function NotificationsPage() {
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-          <TextField label="搜索" size="small" value={search} onChange={(e) => setSearch(e.target.value)} sx={{ minWidth: 200 }} />
+          <TextField label="搜索" size="small" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} sx={{ minWidth: 200 }} />
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>类型</InputLabel>
-            <Select value={filterType} label="类型" onChange={(e) => setFilterType(e.target.value)}>
+            <Select value={filterType} label="类型" onChange={(e) => { setFilterType(e.target.value); setPage(0); }}>
               <MenuItem value="">全部</MenuItem>
               <MenuItem value="system">系统</MenuItem>
               <MenuItem value="announcement">公告</MenuItem>
@@ -201,7 +203,7 @@ export default function NotificationsPage() {
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>优先级</InputLabel>
-            <Select value={filterPriority} label="优先级" onChange={(e) => setFilterPriority(e.target.value)}>
+            <Select value={filterPriority} label="优先级" onChange={(e) => { setFilterPriority(e.target.value); setPage(0); }}>
               <MenuItem value="">全部</MenuItem>
               <MenuItem value="high">高</MenuItem>
               <MenuItem value="medium">中</MenuItem>
@@ -210,13 +212,13 @@ export default function NotificationsPage() {
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>状态</InputLabel>
-            <Select value={filterRead} label="状态" onChange={(e) => setFilterRead(e.target.value)}>
+            <Select value={filterRead} label="状态" onChange={(e) => { setFilterRead(e.target.value); setPage(0); }}>
               <MenuItem value="">全部</MenuItem>
               <MenuItem value="read">已读</MenuItem>
               <MenuItem value="unread">未读</MenuItem>
             </Select>
           </FormControl>
-          <Button variant="text" onClick={() => { setSearch(''); setFilterType(''); setFilterPriority(''); setFilterRead(''); setPage(1); }}>
+          <Button variant="text" onClick={() => { setSearch(''); setFilterType(''); setFilterPriority(''); setFilterRead(''); setPage(0); }}>
             重置筛选
           </Button>
         </Box>
@@ -242,10 +244,10 @@ export default function NotificationsPage() {
               {items.map((item) => (
                 <TableRow key={item.id} sx={!item.is_read ? { bgcolor: 'action.selected' } : {}}>
                   <TableCell>
-                    <Chip label={item.notification_type} size="small" sx={{ color: '#fff', bgcolor: TYPE_COLORS[item.notification_type] || '#888' }} />
+                    <Chip label={TYPE_LABELS[item.notification_type] || item.notification_type} size="small" sx={{ color: '#fff', bgcolor: TYPE_COLORS[item.notification_type] || '#888' }} />
                   </TableCell>
                   <TableCell>
-                    <Chip label={item.priority} size="small" sx={{ color: '#fff', bgcolor: PRIORITY_COLORS[item.priority] || '#888' }} />
+                    <Chip label={PRIORITY_LABELS[item.priority] || item.priority} size="small" sx={{ color: '#fff', bgcolor: PRIORITY_COLORS[item.priority] || '#888' }} />
                   </TableCell>
                   <TableCell>
                     {item.broadcast && <CampaignIcon fontSize="small" sx={{ mr: 0.5, color: '#F59E0B', verticalAlign: 'middle' }} />}

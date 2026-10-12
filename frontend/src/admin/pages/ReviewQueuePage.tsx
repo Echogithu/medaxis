@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, Button, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, Dialog, DialogTitle, DialogContent,
-  DialogActions, TextField, Rating, CircularProgress, Alert, Pagination,
+  DialogActions, TextField, Rating, CircularProgress, Alert,
   Card, CardContent, Divider, Grid,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -12,6 +12,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import type { ReviewQueueItem, DocumentReviewLog, ReviewAction } from '../../types/admin';
 import { listReviewQueue, reviewDocument, getDocumentReviewHistory } from '../../api/admin';
 import { flexRowBetween, flexRowGap1 } from '../../styles/sxUtils';
+import AdminListPager from '../components/AdminListPager';
 import { PageHeader } from "../../components/layout/PageHeader";
 import { MobileTableScrollHint } from '../MobileTableScrollHint';
 
@@ -30,7 +31,8 @@ export default function ReviewQueuePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const requestRevision = useRef(0);
   const pageSize = 10;
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -41,20 +43,24 @@ export default function ReviewQueuePage() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchQueue = useCallback(async () => {
+    const revision = ++requestRevision.current;
     setLoading(true);
     setError(null);
     try {
       const res = await listReviewQueue({
         skip: (page - 1) * pageSize,
-        limit: pageSize,
+        limit: pageSize + 1,
       });
-      setItems(res);
-      setTotal(res.length);
-      if (res.length === pageSize) setTotal(page * pageSize + 1);
+      if (revision !== requestRevision.current) return;
+      setItems(res.slice(0, pageSize));
+      setHasMore(res.length > pageSize);
+
     } catch (err) {
+      if (revision !== requestRevision.current) return;
       setError(err instanceof Error ? err.message : '获取审核队列失败');
+      setItems([]); setHasMore(false);
     } finally {
-      setLoading(false);
+      if (revision === requestRevision.current) setLoading(false);
     }
   }, [page]);
 
@@ -153,11 +159,7 @@ export default function ReviewQueuePage() {
         </Table>
       </TableContainer>
 
-      {total > pageSize && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Pagination count={Math.ceil(total / pageSize)} page={page} onChange={(_, p) => setPage(p)} />
-        </Box>
-      )}
+      <AdminListPager page={page} count={items.length} pageSize={pageSize} hasMore={hasMore} loading={loading || Boolean(error)} onChange={setPage} />
 
       {/* Review Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>

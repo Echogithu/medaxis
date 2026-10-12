@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Box, TextField, IconButton, Chip, Paper } from '@mui/material';
+import { Alert, Box, TextField, IconButton, Chip, Paper, Typography } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import ImageIcon from '@mui/icons-material/Image';
@@ -19,6 +19,7 @@ interface Props {
 export default function ChatInput({ onSend, disabled = false, quickReplies, onQuickReply, onFileUpload, placeholder }: Props) {
   const [text, setText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [fileError, setFileError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,19 +40,25 @@ export default function ChatInput({ onSend, disabled = false, quickReplies, onQu
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
+    const rejected: string[] = [];
+    setFileError('');
     if (files && onFileUpload) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.size <= 10 * 1024 * 1024) {
           onFileUpload(file);
+        } else {
+          rejected.push(file.name);
         }
       }
     }
+    if (rejected.length) setFileError(`文件太大：${rejected.join('、')}。请选择 10MB 以内的文件，再重新上传。`);
     if (e.target) e.target.value = '';
   };
 
   return (
     <Box>
+      {fileError && <Alert severity="error" sx={{ mb: 1 }} onClose={() => setFileError('')}>{fileError}</Alert>}
       {quickReplies && quickReplies.length > 0 && (
         <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap', mb: 1.25, px: { xs: 0.25, sm: 0.5 } }}>
           {quickReplies.map((reply) => (
@@ -106,6 +113,7 @@ export default function ChatInput({ onSend, disabled = false, quickReplies, onQu
           <Box component="span" className="send-face" sx={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: '10px', bgcolor: carePalette.primaryDark, transition: 'background-color 160ms ease' }}><SendIcon sx={{ fontSize: 16 }} /></Box>
         </IconButton>
       </Paper>
+      <Typography variant="caption" sx={{ display: 'block', mt: .5, color: carePalette.muted }}>每个文件不超过 10MB</Typography>
     </Box>
   );
 }
