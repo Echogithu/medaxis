@@ -1,6 +1,6 @@
 # 本地与生产配置
 
-> 本页说明仓库内的 Compose 和 Nginx 配置，不声明生产环境当前运行状态。静态核对日期：**2026-09-29**。
+> 本页说明当前工作区的 Compose 和 Nginx 配置，不声明生产环境已部署。静态核对日期：**2026-10-06**；本轮未构建镜像、迁移或重启服务。
 
 ## 本地 Docker Compose
 
@@ -17,9 +17,9 @@
 
 PostgreSQL 与 Redis 使用命名卷。backend 将 app 目录以只读方式挂载；frontend 使用镜像内构建产物。
 
-启动前复制 .env.example 为 .env 并填写必要配置：
+首次启动时复制 .env.example 为 .env 并填写必要配置；已有 .env 时保留，不覆盖密钥与现有连接。
 
-首次启动和带有迁移脚本的代码更新，须先按[根 README 的快速启动步骤](../../README.md)初始化或升级数据库，再启动应用。以下命令用于已经完成迁移的本地栈；重启容器不会自动执行 Alembic 迁移，`/health` 返回正常也不表示表结构已与代码同步。
+首次启动和带有迁移脚本的代码更新，须先按[根 README 的启动步骤](../../README.md#本地启动)初始化或升级数据库，再启动应用。以下命令用于已经完成迁移的本地栈；重启容器不会自动执行 Alembic 迁移，`/health` 返回正常也不表示表结构已与代码同步。
 
 ~~~sh
 docker compose config -q
@@ -47,11 +47,17 @@ docker compose --profile external-search ps searxng
 
 ## 独立开发服务器
 
-如需热重载，可只通过 Compose 启动 PostgreSQL 和 Redis，再从本机启动 backend 与 Vite。后端数据库地址必须指向宿主机映射端口；容器内服务名 postgres/redis 只适用于 Compose 网络。完整步骤见[根 README](../../README.md)。
+如需热重载，可只通过 Compose 启动 PostgreSQL 和 Redis，再从本机启动 backend 与 Vite。后端数据库地址必须指向宿主机映射端口；容器内服务名 postgres/redis 只适用于 Compose 网络。命令分别见[后端运行说明](./backend.md#本地运行与测试)和[前端运行说明](../../frontend/README.md#快速开始)。
 
 Vite 默认使用 3000，正好与 Compose 前端映射冲突；不要在不调整端口的情况下同时启动两者。
 
-## 生产配置文件
+## 面试演示与公网入口
+
+普通模式与专用演示模式使用同一应用。演示模式只允许绑定的普通患者身份，关闭访客/公开注册并计数限制模型请求；报告中心需另行迁移，健康检查成功不能代替模块就绪。准备脚本不执行迁移、不清零额度，运行与恢复说明见[INTERVIEW_DEMO.md](../INTERVIEW_DEMO.md)。
+
+2026-10-06 的最近记录中，原 Docker 容器提供本地演示，Funnel 尚未开启；本次文档核对未重新查询公网状态。已有静态 Site 也不等于完整应用部署，不能把静态作品链接写成真实后端入口。恢复个人模式前必须关闭公网入口并核对状态。
+
+## 生产配置文件（仓库配置）
 
 docker-compose.prod.yml 定义八个容器服务：PostgreSQL、Redis、backend、Celery worker、Celery beat、frontend、Valkey 和 SearXNG。PostgreSQL/Redis/Valkey 不直接绑定宿主机端口；backend 与 frontend 仅绑定 127.0.0.1。外部 Nginx 配置位于 nginx/nginx.conf，处理公网入口、API 代理、SSE 和静态前端转发。
 

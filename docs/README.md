@@ -1,13 +1,22 @@
 # MedAxis 文档索引
 
-本索引按用途组织项目文档。文件位置保持不变，便于现有相对链接继续工作。
+本索引按用途组织项目文档。作品集指南已统一到 `docs/RESUME_GUIDE.md`，相关引用同步更新；其余文档保留原位置。
+
+> 2026-10-06 已校准工程说明与主要功能状态。工程文档描述当前工作区代码；产品规格定义行为，历史审查/成绩单只代表其注明日期与样本。未提交源码、未迁移模块与本机私有过程材料不能当作公开克隆已具备的能力。
 
 ## 从这里开始
+
+**全项目产品入口（2026-10-09）：** [MedAxis 产品文档集](./product/medaxis/README.md) · [全项目 PRD](./product/medaxis/PRD.md) · [图文阅读版](./product/medaxis/index.html)。覆盖患者、医生、管理端及 AI/报告链路；整稿 REVIEW，当前实现、历史证据和规划分开记录，不替代原专项规格或上线验收。
 
 1. 阅读[项目 README](../README.md)，了解项目边界和本地启动方式。
 2. 阅读[系统架构](./engineering/architecture.md)，了解入口、模块和主要数据流。
 3. 按改动范围查看[后端](./engineering/backend.md)、[前端](./engineering/frontend.md)、[数据库](./engineering/database.md)或[部署配置](./engineering/deployment.md)。
 4. 产品范围和现状审查见[患者侧聚焦 PRD](./product/PORTFOLIO_PRD.md)、[审查型 PRD](./product/PRD.md)及[患者侧闭环独立审查](./product/PATIENT_DEMO_CLOSURE_REVIEW.md)。
+
+## 演示与素材
+
+- [面试演示说明](./INTERVIEW_DEMO.md)：专用合成账号、请求额度、带日期的运行证据及恢复前置条件；不是已公开部署证明。
+- [展示素材说明](./media/README.md)：2026-10-09 录制的合成 API/SSE 预置重放，1 个 GIF 与 9 张 PNG；不证明真实模型、检索或业务持久化。
 
 ## 工程参考
 
@@ -29,6 +38,10 @@
 | [DOCTOR_PRD.md](./product/DOCTOR_PRD.md) | 医生端定向咨询、患者回复联通、认证撤销、机构授权病例库与科研导出；Q1–Q3已确认，整稿为 REVIEW |
 | [VISIT_PREPARATION_SPEC.md](./product/VISIT_PREPARATION_SPEC.md) | 2026-09-30 就医准备的三块信息层级、通用科室参考和验证边界 |
 | [CONSULTATION_OPTIMIZATION_ACCEPTANCE.md](./product/CONSULTATION_OPTIMIZATION_ACCEPTANCE.md) | 问诊题量、信息复用、阶段缺口、来源预算与引用排序的验收步骤 |
+| [EVALUATION_PROTOCOL.md](./product/EVALUATION_PROTOCOL.md) | 测试集分层、原文gold标注、逐次优化证据与可复跑的固定回归记录入口 |
+| [RAG_BASELINE_ACCEPTANCE.md](./product/RAG_BASELINE_ACCEPTANCE.md) | 2026-10-07 第二阶段看板、45题原文证据草稿、真实向量/PostgreSQL检索基线及恢复验收 |
+| [SEMANTIC_RECALL_ACCEPTANCE.md](./product/SEMANTIC_RECALL_ACCEPTANCE.md) | 2026-10-08 第三阶段独立语义召回、两轮同题实验、收益/退步；用户重启后运行态已核验，页面/专业验收待执行 |
+| [SOURCE_AUTHORITY_ACCEPTANCE.md](./product/SOURCE_AUTHORITY_ACCEPTANCE.md) | 2026-10-08 第六阶段4份官方出处补录、旧45/新20检索对照；新无答案误召回保留，页面/专业验收待执行 |
 | [CONSULTATION_OPTIMIZATION_COMPARISON.md](./product/CONSULTATION_OPTIMIZATION_COMPARISON.md) | 修改前后固定重放与真实模型小样本：收益、成本和证据边界 |
 | [CONSULTATION_REGRESSION_FIX.md](./product/CONSULTATION_REGRESSION_FIX.md) | 2026-10-03 来源丢失、内部标识和必要缺口未补问的修复、前后对比及验收 |
 | [SOURCE_EMPTY_RUNTIME_FIX.md](./product/SOURCE_EMPTY_RUNTIME_FIX.md) | 2026-10-03 真实检索候选筛成零来源的复现、报告证据门禁及真实产物验收 |
@@ -37,7 +50,7 @@
 | [HEALTH_PROFILE_SPEC.md](./product/HEALTH_PROFILE_SPEC.md) | 健康档案补充链路、疾病分类、来源与时间、兼容及验收；部署环境迁移待执行 |
 | [FOLLOWUP_PLAN_SPEC.md](./product/FOLLOWUP_PLAN_SPEC.md) | 患者手动随访创建、确认、执行与生命周期，来源和提醒联动边界及验收 |
 | [POST_VISIT_AI_ACTIONS_SPEC.md](./product/POST_VISIT_AI_ACTIONS_SPEC.md) | 诊后记录脱敏预览、逐次同意、AI候选确认、随访/用药排程与来源失效联动 |
-| [PATIENT_REPORTS_REQUIREMENTS.md](./product/PATIENT_REPORTS_REQUIREMENTS.md) | 患者独立检查报告归档、脱敏同意、核对管理、关联与验收；REVIEW，隐私方式已确认，尚未开发 |
+| [PATIENT_REPORTS_REQUIREMENTS.md](./product/PATIENT_REPORTS_REQUIREMENTS.md) | 患者独立报告归档、同意整理、核对、引用、去重与回收站；IMPLEMENTING，代码及历史切片证据存在，完整功能和当前演示库部署验收未完成 |
 | [PATIENT_DEMO_CLOSURE_PLAN.md](./product/PATIENT_DEMO_CLOSURE_PLAN.md) | 合成数据演示闭环的范围、结果与未验证项 |
 | [PATIENT_DEMO_CLOSURE_REVIEW.md](./product/PATIENT_DEMO_CLOSURE_REVIEW.md) | 患者侧独立审查、验证范围和剩余风险 |
 | [PRD.md](./product/PRD.md) | 完整需求与实现差距的历史审查；旧问题须回查当前源码 |
@@ -48,7 +61,8 @@
 
 ## 作品集材料
 
-- [RESUME_GUIDE.md](./portfolio/RESUME_GUIDE.md)：AI 工程师/产品经理的技术证据、优化顺序与简历表达。
+- [AI_PRODUCT_MANAGER_REVIEW.md](./AI_PRODUCT_MANAGER_REVIEW.md)：2026-10-05 当前工作区审查、岗位对照、验证边界与面试准备清单。
+- [RESUME_GUIDE.md](./RESUME_GUIDE.md)：AI 工程师/产品经理的技术证据、优化顺序与简历表达。
 
 ## 历史提案与执行交接
 

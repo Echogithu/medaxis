@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "scenario": "demo/scenario.json",
+  "scenario_sha256": "34a26544bb20c894570428edc40dd71df509aeab57c23277dda040dcc54ea265",
+  "frontend_source_sha256": "c1c71e485441b5b584edbf70270dd4c84bdd0ecf75c735c28dad83885f06fb4a",
+  "recorded_at": "2026-10-09T01:53:48.624433+00:00",
+  "display_clock": "2026-10-08",
+  "mode": "local_api_sse_replay",
+  "real_model_calls": 0,
+  "real_database_writes": 0,
+  "api_requests": 83,
+  "unknown_api_routes": [],
+  "blocked_local_requests": [],
+  "browser_errors": [],
+  "blocked_external_hosts": [
+    "fonts.googleapis.com"
+  ],
+  "gif_steps": [
+    "01 说清哪里不舒服：用自己的话描述症状",
+    "02 补充两点信息：程度与伴随情况",
+    "03 按问题补充：保留本人回答",
+    "04 看懂问诊总结：可能的原因与下一步",
+    "05 打开参考资料：查看原文与未知项",
+    "06 回到同一条病例：再次找回问诊资料",
+    "07 就医前核对：本人陈述与未知信息分开",
+    "08 准备给医生看的摘要：保留原话与待问问题",
+    "09 延续到日常记录：查看今天要做什么"
+  ],
+  "assets": [
+    {
+      "file": "consultation.png",
+      "width": 1280,
+      "height": 900,
+      "bytes": 111733,
+      "sha256": "55ae1b7689c5715385b631bda353e01d9698a56475bea068a7f71555be29a34d"
+    },
+    {
+      "file": "evidence-report.png",
+      "width": 1280,
+      "height": 900,
+      "bytes": 149165,
+      "sha256": "dc05523c217f2f7d298a31013638ca298369cf30c2d88c62b3cc56e8a406d0b5"
+    },
+    {
+      "file": "reference-source.png",
+      "width": 1280,
+      "height": 900,
+      "bytes": 93583,
+      "sha256": "af736fbf8c691326b2e47db58917a9a59209b76d54b5e2681a72e4ea8828bd83"
+    },
+    {
+      "file": "case-preparation.png",
+      "width": 1280,
+      "height": 900,
+      "bytes": 98752,
+      "sha256": "7ee83cce1d90a787299e88723bb1eb55907be5a883a11d5e57ea1a3f496d41ed"
+    },
+    {
+      "file": "today-health.png",
+      "width": 1280,
+      "height": 900,
+      "bytes": 149617,
+      "sha256": "eb23452d22470afb8ae2e61c1510435ae690cbef0556492fbee4862f002d2d89"
+    },
+    {
+      "file": "health-records.png",
+      "width": 1280,
+      "height": 900,
+      "bytes": 130377,
+      "sha256": "9c1ea9c19586bf065069728950a45472da864bf9244a4a4fe1642b5578b16fc4"
+    },
+    {
+      "file": "followup-plans.png",
+      "width": 1280,
+      "height": 900,
+      "bytes": 102737,
+      "sha256": "4ebcfa8de56ccb5eece8924ddef5d2afd7078dbf997b26019e8f984948c5408e"
+    },
+    {
+      "file": "patient-journey.gif",
+      "width": 1080,
+      "height": 825,
+      "bytes": 745945,
+      "sha256": "ddf2950f41e5168bb56f6922d4be45b866b18b7d2cb16411e3c15e3f35f30bef",
+      "frames": 9,
+      "duration_ms": 22200
+    },
+    {
+      "file": "followups-mobile.png",
+      "width": 390,
+      "height": 844,
+      "bytes": 52750,
+      "sha256": "766ad5103062cdad86c8d6e5a7b9a66ce5ec2919b39a26b1df9be2740866b8e7"
+    },
+    {
+      "file": "health-mobile.png",
+      "width": 390,
+      "height": 844,
+      "bytes": 55244,
+      "sha256": "f56592091b2216c1023713acab43a11af02da358b515fb20e73c590fd9f6b671"
+    }
+  ]
+}

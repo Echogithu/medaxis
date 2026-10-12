@@ -1,8 +1,12 @@
 # MedAxis 双岗位作品集与简历优化指南
 
+> 2026-10-12 今日投递：直接使用[有实测数据的项目成稿](D:/CAI-Projects/medaxis/docs/MEDAXIS_RESUME_READY.md)。其中历史检索对照、候选配对和新题资产已重新离线核对；下文早期架构建议保留为历史，当前检索实现及可用数字以新稿和所链接证据为准。新40题的正式模型比较仍未完成。
+
 > Status: REVIEW｜2026-09-27｜面向 AI Agent／大模型应用工程师、AI 产品经理。
 >
-> 基于本次源码静态核对与既有验收文档。历史测试没有在本轮复跑。产品范围唯一入口为[聚焦版 PRD](../product/PORTFOLIO_PRD.md)；本文件只负责技术证据、优化取舍和简历表达。
+> 基于本次源码静态核对与既有验收文档。历史测试没有在本轮复跑。产品范围唯一入口为[聚焦版 PRD](product/PORTFOLIO_PRD.md)；本文件只负责技术证据、优化取舍和简历表达。
+
+> 2026-10-06 文档复核：技术讲法仍适用，正文的测试数量保留历史日期。当前通用科室参考、档案/手动计划/诊后安排及报告代码进度见[文档索引](README.md)，专用合成账号和真实 AI 短对话验证见[演示说明](INTERVIEW_DEMO.md)。完整真实模型问诊、用户价值和医生协作仍待验证。
 
 ## 1. 能否写进简历
 
@@ -19,14 +23,14 @@
 
 | 主题 | 当前事实与入口 | 可以讲 | 不应写 |
 |---|---|---|---|
-| 问诊编排 | [orchestrator.py:303](../../backend/app/services/orchestrator.py#L303)：Track1 → 搜索 → Track2 顺序 await | 分阶段信息采集、检索增强、去重与问诊状态管理 | 已实现三轨并行、并行收益 X% |
-| Tool Use | [agents.py:362](../../backend/app/services/agents.py#L362)：最多 5 轮，最后一轮禁止继续调工具；[registry.py:14](../../backend/app/tools/registry.py#L14) | 有界工具调用、参数约束、结果回填、调用轨迹 | 无上限自主 Agent、通用 DAG 调度 |
-| 结构化输出 | [agents.py:58](../../backend/app/services/agents.py#L58)、[llm.py:431](../../backend/app/services/llm.py#L431) | Schema 校验、原生结构化输出与文本解析回退；失败路径设计 | 全部工具输出都被同一 schema 严格校验、医疗正确性保证 |
-| RAG | [rag.py:136](../../backend/app/services/rag.py#L136)：ILIKE 候选 → JSONB embedding 余弦排序 → 可选 reranker | 实现分阶段检索，并能指出关键词候选限制语义召回 | 全库向量召回、已实现 pgvector 向量索引、GraphRAG、无数据的召回提升 |
-| 病例幂等 | [patient_case_persistence.py:23](../../backend/app/services/patient_case_persistence.py#L23) | 来源会话行锁、归属校验、复用病例、失败回滚；首轮和续答复用服务 | 已证明所有并发下 exactly-once、仅靠函数名证明可靠 |
-| 来源与版本 | [case_preparation.py:24](../../backend/app/services/case_preparation.py#L24)、[patient.py:523](../../backend/app/api/v1/patient.py#L523) | 来源快照/指纹、患者事实和 AI 推断分离、修订检查、409 冲突及待重评 | 患者点确认即医学确认、链接有名字即证据可靠 |
-| 对象权限与恢复 | [patient.py:215](../../backend/app/api/v1/patient.py#L215)、[PatientCasesPage.tsx:102](../../frontend/src/patient/pages/PatientCasesPage.tsx#L102) | 患者病例所有权、跨病例材料拒绝、异步页面防串号、已保存状态恢复 | 全平台权限完整验收、无限历史跨端同步 |
-| 诊后反馈 | [patient.py:669](../../backend/app/api/v1/patient.py#L669)、[PostVisitFeedbackPanel.tsx:97](../../frontend/src/patient/components/PostVisitFeedbackPanel.tsx#L97) | 同病例自报、版本历史和修订冲突 | 医生签署、自动随访执行、真实医院协作落地 |
+| 问诊编排 | [orchestrator.py](../backend/app/services/orchestrator.py)：Track1 → 按需检索 → 有结果时进入 Track2，顺序 await | 分阶段信息采集、检索增强、去重与问诊状态管理 | 已实现三轨并行、并行收益 X% |
+| Tool Use | [agents.py](../backend/app/services/agents.py)：最多 5 轮，最后一轮禁止继续调工具；[registry.py](../backend/app/tools/registry.py) | 有界工具调用、参数约束、结果回填、调用轨迹 | 无上限自主 Agent、通用 DAG 调度 |
+| 结构化输出 | [agents.py](../backend/app/services/agents.py)、[llm.py](../backend/app/services/llm.py) | Schema 校验、原生结构化输出与文本解析回退；失败路径设计 | 全部工具输出都被同一 schema 严格校验、医疗正确性保证 |
+| RAG | [rag.py](../backend/app/services/rag.py)：ILIKE 候选 → JSONB embedding 余弦排序 → 可选 reranker | 实现分阶段检索，并能指出关键词候选限制语义召回 | 全库向量召回、已实现 pgvector 向量索引、GraphRAG、无数据的召回提升 |
+| 病例幂等 | [patient_case_persistence.py](../backend/app/services/patient_case_persistence.py) | 来源会话行锁、归属校验、复用病例、失败回滚；首轮和续答复用服务 | 已证明所有并发下 exactly-once、仅靠函数名证明可靠 |
+| 来源与版本 | [case_preparation.py](../backend/app/services/case_preparation.py)、[patient.py](../backend/app/api/v1/patient.py) | 来源快照/指纹、患者事实和 AI 推断分离、修订检查、409 冲突及待重评 | 患者点确认即医学确认、链接有名字即证据可靠 |
+| 对象权限与恢复 | [patient.py](../backend/app/api/v1/patient.py)、[PatientCasesPage.tsx](../frontend/src/patient/pages/PatientCasesPage.tsx) | 患者病例所有权、跨病例材料拒绝、异步页面防串号、已保存状态恢复 | 全平台权限完整验收、无限历史跨端同步 |
+| 诊后反馈 | [patient.py](../backend/app/api/v1/patient.py)、[PostVisitFeedbackPanel.tsx](../frontend/src/patient/components/PostVisitFeedbackPanel.tsx) | 同病例自报、版本历史和修订冲突 | 医生签署、自动随访执行、真实医院协作落地 |
 
 特别注意：代码存在不同意图与多个 Agent 类，不代表所有路由都可用；主展示选择已核对的患者 SSE 流程。不同路径的降级行为也不同，不能把统一 LLM 封装描述成已实现跨供应商自动容灾。
 
@@ -38,11 +42,11 @@
 
 在隔离环境使用合成数据，实际走首轮→补问→报告→病例→准备→反馈→重登。保留模型/提示词版本、来源对象关系、阶段耗时与失败原因。配置连通测试成功不能替代实际问诊成功。
 
-产出：可复跑操作说明、一份运行记录、2–3 分钟演示视频。替身演示和真实模型演示分开标注。测试库与演示库必须分离；[既有独立审查](../product/PATIENT_DEMO_CLOSURE_REVIEW.md) 已指出 fixture 会清表。
+产出：可复跑操作说明、一份运行记录、2–3 分钟演示视频。替身演示和真实模型演示分开标注。测试库与演示库必须分离；[既有独立审查](product/PATIENT_DEMO_CLOSURE_REVIEW.md) 已指出 fixture 会清表。
 
 ### 第二优先 A：工程师方向做评测与一项有收益的优化
 
-1. **先固定评测集。** 冒烟 10 题已写入 [evals/patient-smoke](../../evals/patient-smoke/README.md)（SM-01 完整信息、SM-02 缺过敏、SM-03 缺起病、SM-04 矛盾、SM-05 解析失败、SM-06 模型超时、SM-07 保存失败、SM-08 旧版本、SM-09 跨患者、SM-10 清缓存恢复）。这是题集定义，不是已运行数量；扩大到 30–50 题前不要改口径。覆盖完整/缺失/矛盾信息、解析或模型失败、追问、来源变化。领域正确性需适当的专业标注，未审核的题只能评工程行为。
+1. **先固定评测集。** 冒烟 10 题已写入 [evals/patient-smoke](../evals/patient-smoke/README.md)（SM-01 完整信息、SM-02 缺过敏、SM-03 缺起病、SM-04 矛盾、SM-05 解析失败、SM-06 模型超时、SM-07 保存失败、SM-08 旧版本、SM-09 跨患者、SM-10 清缓存恢复）。这是题集定义，不是已运行数量；扩大到 30–50 题前不要改口径。覆盖完整/缺失/矛盾信息、解析或模型失败、追问、来源变化。领域正确性需适当的专业标注，未审核的题只能评工程行为。
 2. **拆开质量指标。** 分别测问诊有效性、结构化成功率、事实忠实性、检索 Recall@k/排序质量、引用支持率和无依据降级。避免把“报告生成成功”算成“诊断正确”。保留开发集与未参与调优的留出集。
 3. **优先检验检索瓶颈。** 当前先 ILIKE 再排序，未进入候选的语义相关文本无法被 rerank 找回。使用同一语料/题集比较现链路、独立语义候选与融合候选、是否 rerank；记录质量、延迟和成本后再决定是否改索引/召回方案。此处是待实验假设，不是已证明的新架构收益。
 4. **再做有限并发。** 当前 Track2 使用 Track1 信息，不应盲目三路并行。若主诉搜索不依赖 Track1，可实验并发启动搜索与 Track1，明确取消、超时和剩余任务收尾；只有质量不退化且耗时实测改善才采用。
@@ -112,6 +116,6 @@
 
 ## 6. 历史证据使用规则
 
-[患者侧闭环计划](../product/PATIENT_DEMO_CLOSURE_PLAN.md)记录原验收范围与结果：后端 92 passed、前端 9 passed，以及类型检查/构建通过；全仓 lint 未通过。[后续独立审查](../product/PATIENT_DEMO_CLOSURE_REVIEW.md)另记录定向 32 passed、前端 9 passed，并指出复跑说明及证据边界问题。这些是不同测试范围的历史记录，不能相加成“124 个用例”，也不代表本次新跑或真实模型质量。
+[患者侧闭环计划](product/PATIENT_DEMO_CLOSURE_PLAN.md)记录原验收范围与结果：后端 92 passed、前端 9 passed，以及类型检查/构建通过；全仓 lint 未通过。[后续独立审查](product/PATIENT_DEMO_CLOSURE_REVIEW.md)另记录定向 32 passed、前端 9 passed，并指出复跑说明及证据边界问题。这些是不同测试范围的历史记录，不能相加成“124 个用例”，也不代表本次新跑或真实模型质量。
 
-生成替身和 Redis 锁替身位于 [patient_demo_server.py:100](../../backend/tests/patient_demo_server.py#L100)。工程闭环中的认证、API 和持久化真实执行，但并发、真实模型、完整上传及服务重启仍需单独验证。面试中展示源码与原始日志比只说“92 个测试通过”更有说服力。
+生成替身和 Redis 锁替身位于 [patient_demo_server.py](../backend/tests/patient_demo_server.py)。工程闭环中的认证、API 和持久化真实执行，但并发、真实模型、完整上传及服务重启仍需单独验证。面试中展示源码与原始日志比只说“92 个测试通过”更有说服力。

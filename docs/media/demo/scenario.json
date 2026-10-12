@@ -1,0 +1,477 @@
+{
+  "meta": {
+    "version": 1,
+    "scenario_id": "headache-visit-preparation",
+    "audience": "招聘方 / 面试官",
+    "synthetic": true,
+    "recording_mode": "local_api_sse_replay",
+    "as_of": "2026-10-08",
+    "title": "把两天的头痛，整理成看医生时能讲清楚的资料",
+    "note": "人物、病史、症状、计划和回答均为预置合成资料；公开参考链接单独列明。没有真实模型、实时检索、业务库写入或临床验收。",
+    "source_checked_at": "2026-10-08"
+  },
+  "user": {
+    "id": "33333333-3333-4333-8333-333333333333",
+    "role": "patient",
+    "full_name": "林晓（演示）",
+    "email": "linxiao@example.test",
+    "status": "active"
+  },
+  "profile": {
+    "id": "33333333-3333-4333-8333-333333333333",
+    "name": "林晓（演示）",
+    "email": "linxiao@example.test",
+    "gender": "female",
+    "age_years": 34,
+    "age_months": 0,
+    "height": 165,
+    "weight": 58,
+    "phone": null,
+    "revision": 1,
+    "updated_at": "2026-10-06T07:30:00Z",
+    "allergies": [],
+    "chronic_diseases": [
+      {
+        "id": "rhinitis-history",
+        "name": "过敏性鼻炎",
+        "category": "chronic",
+        "severity": "mild",
+        "diagnosed_date": "2022-03-20",
+        "notes": "本人记忆：换季时容易鼻塞，既往就诊资料待核对。",
+        "source": "patient_reported",
+        "updated_at": "2026-10-06T07:30:00Z"
+      }
+    ],
+    "medications": [
+      {
+        "id": "past-loratadine",
+        "name": "氯雷他定（既往记录）",
+        "dosage": "具体剂量未记录",
+        "frequency": "本人回忆：按需服用",
+        "status": "stopped",
+        "start_date": "2026-09-28",
+        "source": "patient_reported",
+        "updated_at": "2026-10-06T07:30:00Z"
+      }
+    ],
+    "section_states": {
+      "allergies": "unknown",
+      "conditions": "present",
+      "medications": "present"
+    },
+    "section_metadata": {
+      "allergies": {
+        "source": "patient_reported",
+        "updated_at": "2026-10-06T07:30:00Z"
+      },
+      "conditions": {
+        "source": "patient_reported",
+        "updated_at": "2026-10-06T07:30:00Z"
+      },
+      "medications": {
+        "source": "patient_reported",
+        "updated_at": "2026-10-06T07:30:00Z"
+      }
+    }
+  },
+  "chief_complaint": "这两天办公后头痛，太阳穴两边发紧，休息后会好一些。最近睡得比较晚。想知道就医时该怎么讲清楚。",
+  "interview": {
+    "session_id": "readme-headache-session",
+    "opening": "我先帮你把症状说清楚。还需要确认两点，方便医生了解情况。",
+    "questions": [
+      {
+        "question_id": "severity",
+        "question": "这次头痛有多影响你做事？",
+        "type": "choice",
+        "options": [
+          "轻微，能照常做事",
+          "影响做事，需要停下来",
+          "非常难受",
+          "不确定"
+        ],
+        "colloquial_phase": "症状情况",
+        "reason": "了解这次不适对日常活动的影响。"
+      },
+      {
+        "question_id": "associated",
+        "question": "有没有发热、呕吐，或视力和说话的变化？",
+        "type": "choice",
+        "options": [
+          "没有这些情况",
+          "有发热或呕吐",
+          "有视力或说话变化",
+          "不确定"
+        ],
+        "colloquial_phase": "还要确认的情况",
+        "reason": "保留本人对伴随情况的描述。"
+      }
+    ],
+    "answers": [
+      "轻微，能照常做事",
+      "没有这些情况"
+    ]
+  },
+  "report": {
+    "primary_diagnosis": "可能与紧张性头痛有关，还需要医生确认。[S1]",
+    "confidence": "low",
+    "severity": "mild",
+    "referral_needed": false,
+    "key_findings": [
+      "头痛断断续续 2 天，主要在两侧太阳穴，像被箍着。",
+      "程度轻微，能够照常工作；休息后会缓解。",
+      "本人表示没有发热、呕吐或视力和说话变化。"
+    ],
+    "recommended_actions": [
+      "记录出现时间、持续多久以及伴随变化，带给医生看。[S2]",
+      "整理近期睡眠和既往用药情况，方便就医时核对。",
+      "若反复出现或逐渐加重，请及时就诊。[S2]"
+    ],
+    "recommended_tests": [
+      "是否需要检查，请由接诊医生结合面诊判断。"
+    ],
+    "red_flags": [
+      "如果头痛突然特别剧烈，或出现说话困难、肢体无力、视力下降，请立即寻求急诊帮助。[S2]"
+    ],
+    "contraindications": [
+      "不要把这份总结当作确诊或处方；具体用药需与医生或药师核对。"
+    ],
+    "follow_up_timeline": "继续记录变化；若持续不缓解或加重，及时就诊。",
+    "interview_is_sufficient": false,
+    "interview_stop_reason": "budget_reached",
+    "interview_information_gaps": [
+      "既往是否有类似头痛：尚未确认",
+      "最近一次血压及用药情况：尚未确认"
+    ],
+    "knowledge_citations": [
+      {
+        "citation_id": "S1",
+        "source_type": "external",
+        "title": "NHS：紧张性头痛的常见表现",
+        "excerpt": "feeling like something is pressing on your head or being tightened around it",
+        "url": "https://www.nhs.uk/conditions/tension-headaches/",
+        "source_engine": "showcase_preloaded",
+        "is_trusted": false,
+        "relevance_method": "unassessed",
+        "relevance_reason": "公开资料预置示例；未执行本次实时检索或评分。",
+        "used_in_report": true
+      },
+      {
+        "citation_id": "S2",
+        "source_type": "external",
+        "title": "NHS：头痛记录与何时寻求帮助",
+        "excerpt": "Keeping a headache diary might help you work out what triggers your headaches.",
+        "url": "https://www.nhs.uk/symptoms/headaches/",
+        "source_engine": "showcase_preloaded",
+        "is_trusted": false,
+        "relevance_method": "unassessed",
+        "relevance_reason": "公开资料预置示例；不能由链接存在推断个体适用性。",
+        "used_in_report": true
+      }
+    ],
+    "disclaimer": "合成展示案例，内容预置；不是实时模型输出，也不是诊断或处方。"
+  },
+  "cases": [
+    {
+      "id": "44444444-4444-4444-8444-444444444444",
+      "title": "办公后头痛 · 症状整理",
+      "chief_complaint": "这两天办公后头痛，太阳穴两边发紧，休息后会好一些。最近睡得比较晚。想知道就医时该怎么讲清楚。",
+      "description": "持续两天，太阳穴两侧发紧；准备把变化讲清楚。",
+      "status": "pending_review",
+      "created_at": "2026-10-08T01:15:00Z"
+    },
+    {
+      "id": "55555555-5555-4555-8555-555555555555",
+      "title": "换季鼻塞 · 既往记录",
+      "chief_complaint": "换季时鼻塞，整理既往就医资料。",
+      "description": "历史症状记录，用于展示病例找回；暂无问诊总结。",
+      "status": "in_progress",
+      "created_at": "2026-10-06T07:30:00Z"
+    }
+  ],
+  "preparation": {
+    "package_id": "66666666-6666-4666-8666-666666666666",
+    "case_id": "44444444-4444-4444-8444-444444444444",
+    "version": 1,
+    "revision": 1,
+    "state": "ready_for_review",
+    "is_stale": false,
+    "source_fingerprint": "showcase-preset-v1",
+    "known_facts": [
+      {
+        "id": "patient-fact-1",
+        "label": "哪里不舒服",
+        "value": "太阳穴两侧发紧，像被箍着",
+        "display_value": "太阳穴两侧发紧，像被箍着",
+        "source_type": "patient_reported",
+        "source_id": "showcase-message-1",
+        "confirmed": false,
+        "active": true,
+        "assertion_status": "reported"
+      },
+      {
+        "id": "patient-fact-2",
+        "label": "持续多久",
+        "value": "断断续续 2 天",
+        "display_value": "断断续续 2 天",
+        "source_type": "patient_reported",
+        "source_id": "showcase-message-1",
+        "confirmed": false,
+        "active": true,
+        "assertion_status": "reported"
+      },
+      {
+        "id": "patient-fact-3",
+        "label": "程度和变化",
+        "value": "轻微，能够照常工作；休息后缓解",
+        "display_value": "轻微，能够照常工作；休息后缓解",
+        "source_type": "patient_reported",
+        "source_id": "showcase-message-2",
+        "confirmed": false,
+        "active": true,
+        "assertion_status": "reported"
+      },
+      {
+        "id": "patient-fact-4",
+        "label": "伴随情况",
+        "value": "本人表示没有发热、呕吐或视力和说话变化",
+        "display_value": "本人表示没有发热、呕吐或视力和说话变化",
+        "source_type": "patient_reported",
+        "source_id": "showcase-message-3",
+        "confirmed": false,
+        "active": true,
+        "assertion_status": "reported"
+      }
+    ],
+    "unknown_facts": [
+      {
+        "id": "unknown.previous_headache",
+        "label": "以前是否有过类似头痛",
+        "value": "未知",
+        "record_state": "unknown",
+        "source_type": "patient_reported",
+        "source_id": "showcase-unknown-1"
+      },
+      {
+        "id": "unknown.blood_pressure",
+        "label": "最近一次血压",
+        "value": "未填写",
+        "record_state": "not_recorded",
+        "source_type": "patient_reported",
+        "source_id": "showcase-unknown-2"
+      }
+    ],
+    "unresolved_facts": [],
+    "department": {
+      "status": "needs_confirmation",
+      "recommendation": null,
+      "reason": "先把症状讲清楚，再与接诊人员确认合适的门诊。",
+      "evidence_ids": [],
+      "scope_note": "合成案例不提供个性化分诊。",
+      "references": []
+    },
+    "preparation_items": [
+      {
+        "id": "headache-notes",
+        "title": "带上这两天的症状记录",
+        "reason": "帮助说明时间和变化。",
+        "source_file_ids": [],
+        "status": "ready"
+      },
+      {
+        "id": "previous-records",
+        "title": "整理既往就医和用药记录",
+        "reason": "方便与医生核对。",
+        "source_file_ids": [],
+        "status": "pending"
+      }
+    ],
+    "source_index": [
+      {
+        "id": "showcase-conversation",
+        "source_type": "patient_reported",
+        "name": "本次问诊中的本人陈述",
+        "verified_citation": false,
+        "note": "预置合成对话，用于演示核对流程。"
+      }
+    ],
+    "unverified_knowledge_sources": [],
+    "patient_questions": [
+      "目前还需要补充哪些信息？",
+      "如果再次出现头痛，我该记录哪些变化？"
+    ],
+    "summary": {
+      "case_title": "办公后头痛 · 症状整理",
+      "patient_facts": [
+        {
+          "id": "patient-fact-1",
+          "label": "哪里不舒服",
+          "value": "太阳穴两侧发紧，像被箍着",
+          "display_value": "太阳穴两侧发紧，像被箍着",
+          "source_type": "patient_reported",
+          "source_id": "showcase-message-1",
+          "confirmed": false,
+          "active": true,
+          "assertion_status": "reported"
+        },
+        {
+          "id": "patient-fact-2",
+          "label": "持续多久",
+          "value": "断断续续 2 天",
+          "display_value": "断断续续 2 天",
+          "source_type": "patient_reported",
+          "source_id": "showcase-message-1",
+          "confirmed": false,
+          "active": true,
+          "assertion_status": "reported"
+        },
+        {
+          "id": "patient-fact-3",
+          "label": "程度和变化",
+          "value": "轻微，能够照常工作；休息后缓解",
+          "display_value": "轻微，能够照常工作；休息后缓解",
+          "source_type": "patient_reported",
+          "source_id": "showcase-message-2",
+          "confirmed": false,
+          "active": true,
+          "assertion_status": "reported"
+        },
+        {
+          "id": "patient-fact-4",
+          "label": "伴随情况",
+          "value": "本人表示没有发热、呕吐或视力和说话变化",
+          "display_value": "本人表示没有发热、呕吐或视力和说话变化",
+          "source_type": "patient_reported",
+          "source_id": "showcase-message-3",
+          "confirmed": false,
+          "active": true,
+          "assertion_status": "reported"
+        }
+      ],
+      "unknown_facts": [
+        {
+          "id": "unknown.previous_headache",
+          "label": "以前是否有过类似头痛",
+          "value": "未知",
+          "record_state": "unknown",
+          "source_type": "patient_reported",
+          "source_id": "showcase-unknown-1"
+        },
+        {
+          "id": "unknown.blood_pressure",
+          "label": "最近一次血压",
+          "value": "未填写",
+          "record_state": "not_recorded",
+          "source_type": "patient_reported",
+          "source_id": "showcase-unknown-2"
+        }
+      ],
+      "unresolved_facts": [],
+      "ai_inference": [
+        "可能与紧张性头痛有关，还需要医生确认。[S1]"
+      ],
+      "materials": [],
+      "source_index": [
+        {
+          "id": "showcase-conversation",
+          "source_type": "patient_reported",
+          "name": "本次问诊中的本人陈述",
+          "verified_citation": false,
+          "note": "预置合成对话，用于演示核对流程。"
+        }
+      ],
+      "unverified_knowledge_sources": [],
+      "disclaimer": "患者核对不等于医生确认；合成资料仅用于界面展示。"
+    },
+    "patient_corrections": [],
+    "created_at": "2026-10-08T01:15:00Z",
+    "updated_at": "2026-10-08T01:15:00Z"
+  },
+  "plans": [
+    {
+      "id": "77777777-7777-4777-8777-777777777777",
+      "title": "头痛变化记录与就医准备",
+      "description": "自己安排的记录计划，用于演示；不是医生医嘱。",
+      "goals": [
+        "把症状的时间和变化讲清楚",
+        "就医前整理要问的问题"
+      ],
+      "status": "active",
+      "effective_status": "active",
+      "revision": 1,
+      "source_type": "patient_reported",
+      "source_case_id": "44444444-4444-4444-8444-444444444444",
+      "source_case_title": "办公后头痛 · 症状整理",
+      "start_date": "2026-10-08",
+      "end_date": "2026-10-15",
+      "confirmed_at": "2026-10-08T01:15:00Z",
+      "updated_at": "2026-10-08T01:15:00Z",
+      "timezone": "Asia/Shanghai",
+      "can_execute": true,
+      "progress_percent": 33,
+      "tasks": [
+        {
+          "id": "symptom-note",
+          "description": "记录今天头痛出现的时间和变化",
+          "type": "self_check",
+          "due_date": "2026-10-08",
+          "status": "completed",
+          "completed_at": "2026-10-08T01:15:00Z",
+          "completion_notes": "上午办公后有些发紧，休息后减轻。",
+          "last_value": null
+        },
+        {
+          "id": "prepare-questions",
+          "description": "整理想问医生的两个问题",
+          "type": "follow_up",
+          "due_date": "2026-10-09",
+          "status": "pending"
+        },
+        {
+          "id": "update-note",
+          "description": "补充近期睡眠和既往用药信息",
+          "type": "self_check",
+          "due_date": "2026-10-10",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "88888888-8888-4888-8888-888888888888",
+      "title": "换季鼻塞资料整理",
+      "description": "本人安排，保留既往记录的来源。",
+      "goals": [
+        "找回之前的就医记录"
+      ],
+      "status": "active",
+      "effective_status": "active",
+      "revision": 1,
+      "source_type": "patient_reported",
+      "source_case_id": "55555555-5555-4555-8555-555555555555",
+      "source_case_title": "换季鼻塞 · 既往记录",
+      "start_date": "2026-10-06",
+      "end_date": "2026-10-12",
+      "confirmed_at": "2026-10-06T07:30:00Z",
+      "updated_at": "2026-10-06T07:30:00Z",
+      "timezone": "Asia/Shanghai",
+      "can_execute": true,
+      "progress_percent": 0,
+      "tasks": [
+        {
+          "id": "allergy-check",
+          "description": "确认不清楚的过敏史",
+          "type": "self_check",
+          "due_date": "2026-10-08",
+          "status": "pending"
+        },
+        {
+          "id": "old-medicine",
+          "description": "整理之前服用过的药物记录",
+          "type": "self_check",
+          "due_date": "2026-10-11",
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "reminders": []
+}
