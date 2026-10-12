@@ -430,6 +430,8 @@ export default function ChatPage({ initialSession, sessions, guestStatus, onSave
         if (!pendingSessionRef.current?.sessionId) setChatMode('idle');
       } finally {
         setIsStreaming(false);
+        // 普通回复或生成失败没有待回答会话，恢复输入；临床卡片和已生成报告保留各自状态。
+        if (!pendingSessionRef.current?.sessionId && !structured) setChatMode('idle');
         await refreshGuestStatus();
       }
     },

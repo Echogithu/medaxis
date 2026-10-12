@@ -10,6 +10,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import type { WorkflowStep } from '../types/agent';
 import { carePalette } from '../theme';
+import { workflowStatus } from '../state/workflowStatus';
 
 interface Props {
   steps: WorkflowStep[];
@@ -57,7 +58,15 @@ export default function AgentWorkflow({ steps, isStreaming }: Props) {
 
   if (!steps || steps.length === 0) return null;
 
-  const allDone = !isStreaming;
+  const status = workflowStatus(steps, isStreaming);
+  const allDone = status === 'completed';
+  const failed = status === 'error';
+  const statusLabel = {
+    error: '协作失败，请重试',
+    running: '🔄 多 Agent 协作中...',
+    completed: '✅ 多 Agent 协作完成',
+    stopped: '等待后续处理',
+  }[status];
 
   return (
     <Box sx={{ mt: 1, mb: 0.5 }}>
@@ -82,10 +91,10 @@ export default function AgentWorkflow({ steps, isStreaming }: Props) {
       >
         <Chip
           size="small"
-          label={allDone ? '✅ 多 Agent 协作完成' : '🔄 多 Agent 协作中...'}
+          label={statusLabel}
           sx={{
-            bgcolor: allDone ? 'rgba(25,141,119,0.10)' : 'rgba(23,143,130,0.10)',
-            color: allDone ? '#198d77' : warmPrimary,
+            bgcolor: failed ? 'rgba(211,47,47,0.08)' : allDone ? 'rgba(25,141,119,0.10)' : 'rgba(23,143,130,0.10)',
+            color: failed ? 'error.main' : allDone ? '#198d77' : warmPrimary,
             fontSize: '0.7rem',
             height: 22,
             fontWeight: 600,

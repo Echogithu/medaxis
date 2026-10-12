@@ -324,7 +324,8 @@ async def test_stream_reports_generation_failure_instead_of_direct_diagnosis(mon
 
 
 @pytest.mark.asyncio
-async def test_stream_saves_case_before_report_and_returns_case_id(monkeypatch):
+@pytest.mark.parametrize("intent", ["diagnosis", "consultation"])
+async def test_stream_saves_case_before_report_and_returns_case_id(monkeypatch, intent):
     from app.api.v1 import agents as api
     from app.db import redis_client
 
@@ -336,10 +337,11 @@ async def test_stream_saves_case_before_report_and_returns_case_id(monkeypatch):
         "confidence": "low",
         "severity": "unknown",
         "red_flags": [],
+        "knowledge_citations": [{"citation_id": "S1", "title": "合成来源", "excerpt": "可核对的合成原文"}],
     }
     state = SimpleNamespace(red_flags_detected=[], is_sufficient=True, asked_questions=[])
     master = SimpleNamespace(
-        master=SimpleNamespace(classify_intent=AsyncMock(return_value={"intent": "diagnosis"})),
+        master=SimpleNamespace(classify_intent=AsyncMock(return_value={"intent": intent})),
         _create_session=AsyncMock(return_value=SimpleNamespace(id=session_id, context={})),
     )
     diagnostic = SimpleNamespace(
@@ -364,7 +366,10 @@ async def test_stream_saves_case_before_report_and_returns_case_id(monkeypatch):
     events = "".join([chunk async for chunk in stream.body_iterator])
 
     assert save_case.await_count == 1
+    assert save_case.await_args.kwargs["report"]["knowledge_citations"] == report["knowledge_citations"]
     assert events.index("event: structured") < events.index("event: complete")
+    structured = json.loads(events.split("event: structured\ndata: ", 1)[1].split("\n\n", 1)[0])
+    assert structured["knowledge_citations"] == report["knowledge_citations"]
     complete = json.loads(events.split("event: complete")[-1].split("data: ", 1)[1])
     assert complete["case_id"] == str(case_id)
     assert save_case.await_args.kwargs["source_session_id"] == session_id
@@ -375,7 +380,8 @@ async def test_stream_saves_case_before_report_and_returns_case_id(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_stream_does_not_publish_report_when_case_persistence_fails(monkeypatch):
+@pytest.mark.parametrize("intent", ["diagnosis", "consultation"])
+async def test_stream_does_not_publish_report_when_case_persistence_fails(monkeypatch, intent):
     from app.api.v1 import agents as api
     from app.db import redis_client
 
@@ -384,7 +390,7 @@ async def test_stream_does_not_publish_report_when_case_persistence_fails(monkey
     report = {"primary_diagnosis": "合成演示报告", "confidence": "low"}
     state = SimpleNamespace(red_flags_detected=[], is_sufficient=True, asked_questions=[])
     master = SimpleNamespace(
-        master=SimpleNamespace(classify_intent=AsyncMock(return_value={"intent": "diagnosis"})),
+        master=SimpleNamespace(classify_intent=AsyncMock(return_value={"intent": intent})),
         _create_session=AsyncMock(return_value=SimpleNamespace(id=session_id, context={})),
     )
     diagnostic = SimpleNamespace(

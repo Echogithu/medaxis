@@ -250,6 +250,14 @@ class Track1Agent:
             # 请求病史和结构化档案已在入口限长；不能再截掉过敏/停用等语义。
             lines.append(f"\n## 既往史\n{patient_history}")
         lines.append("\n## 已有信息及原文出处\n" + _information_context(state))
+        if state.question_texts:
+            # 未知也已经回答；保留题意与稳定标识，避免模型换 key 后误判为未问。
+            asked = [{"question_id": qid, "information_key": state.question_phase_keys.get(qid) or _extract_phase_key(qid),
+                      "question": state.question_texts[qid], "answer": state.raw_answers.get(qid),
+                      "status": state.information_status(state.question_phase_keys.get(qid) or qid)}
+                     for qid in state.asked_questions if qid in state.question_texts]
+            lines.append("\n## 已问问题与原始回答（未知不能换标识重问）\n"
+                         + json.dumps(asked, ensure_ascii=False, separators=(",", ":")))
         lines.append("\n## 采集边界\n只确认本次主诉需要的信息，不按病史维度清单补齐。未记录不等于必须询问；未知不等于否认。")
         lines.append("\n## 信息标识\n复用以下固定 information_key，不因改写问题而换标识（不是必问清单）："
                      + ", ".join(p.value for p in PHASE_ORDER)
@@ -390,12 +398,15 @@ class InterviewOrchestrator:
         # if question generation fails; parallel search is a separate optimization.
         track1_questions, diffs, red_flags, reasoning = await self.track1.generate(state, patient_history)
         track1_questions = self._deduplicate(track1_questions, state)
+        # 两种去重均在补生成判断前执行；语义重复被删除也需要一次有界恢复机会。
+        track1_questions = await self._semantic_dedup(track1_questions, state)
         required_gaps = self._unasked_gaps(state)
         if not track1_questions and required_gaps:
             # 最多补生成一次；失败不能转成带缺口的成功报告。
             recovered, recovered_diffs, recovered_flags, recovered_reason = await self.track1.generate(
                 state, patient_history, required_gaps=required_gaps)
             track1_questions = self._deduplicate(recovered, state)
+            track1_questions = await self._semantic_dedup(track1_questions, state)
             if not track1_questions:
                 raise InterviewGenerationError("仍有必要信息未询问，补问生成失败，请重试。")
             diffs, red_flags, reasoning = recovered_diffs or diffs, recovered_flags or red_flags, recovered_reason or reasoning
@@ -423,6 +434,7 @@ class InterviewOrchestrator:
         # Phase 2: Track2 generates with Track1 dimensions visible
         track2_questions = await self.track2.generate(state, search_results, diffs) if search_results else []
         track2_questions = [q for q in track2_questions if q.reason.strip()]
+        track2_questions = await self._semantic_dedup(self._deduplicate(track2_questions, state), state)
 
         for k in list(state.collected_info.keys()):
             if state.collected_info[k] == "asked_by_track1":
@@ -478,8 +490,7 @@ class InterviewOrchestrator:
         if filtered_out:
             deduped = [q for q in deduped if q.question_id not in filtered_out]
 
-        # Phase 4: LLM-driven synthesis decision
-        deduped = await self._semantic_dedup(deduped, state)
+        # 两轨候选已分别完成语义去重；不对同一批题重复发起模型调用。
 
         meaningful = {key: [row["quote"] for row in rows]
                       for key, rows in state.known_information.items()

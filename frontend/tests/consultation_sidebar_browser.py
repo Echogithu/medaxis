@@ -62,7 +62,7 @@ def main():
             ready(page)
             rail = page.get_by_role('complementary', name='问诊辅助信息')
             expect(rail).to_be_visible()
-            for title in ['本次问诊摘要', '安全提示', '建议下一步', '需要专业帮助？']:
+            for title in ['本次问诊摘要', '安全提示', '接下来可以做什么', '需要专业帮助？']:
                 expect(rail.get_by_role('heading', name=title, exact=True)).to_be_visible()
             expect(rail).not_to_contain_text('135/85')
             send(page, '合成主诉：最近一周头痛')
@@ -80,7 +80,7 @@ def main():
             rail_box = rail.bounding_box()
             assert main_box['x'] + main_box['width'] <= rail_box['x']
             rail.get_by_role('button', name='查看完整总结与来源').click()
-            expect(page.get_by_role('dialog')).to_contain_text('本次问诊总结')
+            expect(page.get_by_role('dialog')).to_contain_text('这次问诊总结')
             page.get_by_role('button', name='关闭问诊总结', exact=True).click()
             page.screenshot(path=str(artifacts / 'medaxis-consultation-sidebar-desktop.png'))
             rail.get_by_role('button', name='转接真实医生').click()

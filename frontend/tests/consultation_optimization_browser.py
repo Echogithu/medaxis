@@ -40,7 +40,7 @@ def main():
             for width in [1440, 390, 320]:
                 page.set_viewport_size({"width": width, "height": 1000})
                 page.get_by_role("button", name="查看问诊总结", exact=True).last.click()
-                dialog = page.get_by_role("dialog", name="本次问诊总结")
+                dialog = page.get_by_role("dialog", name="这次问诊总结")
                 expect(dialog.get_by_text("用药情况：患者尚未确认", exact=True)).to_be_visible()
                 # 等待弹窗淡入结束，避免截图把正常入场动画误呈现为半透明报告。
                 page.wait_for_function("""() => {
@@ -66,7 +66,7 @@ def main():
                 body = dialog.get_by_role("region", name="问诊总结正文")
                 assert body.evaluate("el => el.scrollWidth <= el.clientWidth"), width
                 page.screenshot(path=str(artifacts / f"consultation-sources-{width}.png"))
-                dialog.get_by_role("button", name="补充信息并追问", exact=True).click()
+                dialog.get_by_role("button", name="补充情况，继续问", exact=True).click()
                 expect(dialog).not_to_be_visible()
                 expect(page.locator("textarea:visible")).to_be_focused()
             page.locator("textarea:visible").fill("合成补充信息：用药情况仍待确认")
@@ -91,11 +91,11 @@ def main():
             page.evaluate("saved => localStorage.setItem('medaxis.chat-history.v1:user:reading-test', JSON.stringify(saved))", legacy)
             page.reload()
             page.get_by_role("button", name="查看问诊总结", exact=True).last.click()
-            dialog = page.get_by_role("dialog", name="本次问诊总结")
+            dialog = page.get_by_role("dialog", name="这次问诊总结")
             expect(dialog.get_by_text("大便的性状与次数", exact=True)).to_be_visible()
             expect(dialog.get_by_text("近期饮食及接触情况", exact=True)).to_be_visible()
             assert "adv_" not in dialog.inner_text()
-            dialog.get_by_text("参考资料与说明", exact=True).click()
+            dialog.get_by_text("参考资料", exact=True).click()
             expect(dialog.get_by_role("article", name="参考资料 S2", exact=True)).to_be_visible()
             expect(dialog.get_by_role("article", name="参考资料 S4", exact=True)).to_be_visible()
             assert "但报告正文没有引用它们" not in dialog.inner_text()

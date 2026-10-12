@@ -1246,7 +1246,8 @@ async def route_stream(
                         lab_reports = await _load_session_lab_reports(db, ctx, query_sid)
                         if lab_reports:
                             _inject_lab_context(messages, lab_reports)
-                    if intent == "diagnosis":
+                    # 综合咨询同样需要问诊、证据检索与可保存报告，不能降为无引用的普通聊天。
+                    if intent in {"diagnosis", "consultation"}:
                         # ─── Interview phase: collect info before diagnosis ───
                         # Create a session to persist interview state (if not already loaded)
                         if not session_id:
@@ -1254,7 +1255,7 @@ async def route_stream(
                                 new_session = await master._create_session(
                                     user_id=uuid.UUID(actual_patient_id) if actual_patient_id else None,
                                     session_type=AgentSessionType.DIAGNOSIS,
-                                    intent="diagnosis",
+                                    intent=intent,
                                 )
                                 if new_session:
                                     session_id = str(new_session.id)
@@ -1391,15 +1392,25 @@ async def route_stream(
 
                     else:
                         # 其他意图走通用 LLM 流
+                        has_response_text = False
                         try:
                             async for chunk in llm.chat_stream(
                                 messages=messages,
                                 system_prompt=system_prompt,
                                 max_tokens=2048,
                             ):
+                                if chunk.strip():
+                                    has_response_text = True
                                 yield f"event: text\ndata: {json.dumps({'text': chunk})}\n\n"
                         except Exception as e:
                             yield _patient_llm_error_event(e, "general_chat")
+                            return
+                        if not has_response_text:
+                            yield _patient_error_event(
+                                "LLM_EMPTY_RESPONSE",
+                                "AI 暂未生成有效回复，请保留当前内容后重试。",
+                                "general_chat",
+                            )
                             return
 
                 yield f"event: complete\ndata: {json.dumps({'message': '✅ 响应完成', 'case_id': completed_case_id})}\n\n"
