@@ -35,6 +35,7 @@ def seed_report():
         'key_findings': [f'第 {i} 项合成发现，数值保留 38.5°C。' for i in range(1, 9)],
         'recommended_actions': ['合成建议：与医生讨论[S1]', '合成建议：记录变化[S5]'],
         'recommended_tests': ['合成检查一', '合成检查二'],
+        'contraindications': ['合成注意事项：请与医生核对。'],
         'follow_up_timeline': '合成时间说明，仅用于回归。',
         'knowledge_citations': citations,
     })
@@ -53,6 +54,14 @@ def seed_report():
 
 def at_top(page, region):
     page.wait_for_function('el => el.scrollTop < 2', arg=region.element_handle())
+
+
+def assert_summary_order(container):
+    primary = container.get_by_text('可能是什么问题', exact=True)
+    assert primary.evaluate("el => el.closest('section') === el.closest('section').parentElement.firstElementChild")
+    precautions = container.get_by_role('heading', name='还要注意什么', exact=True)
+    assert precautions.evaluate("el => el.closest('section').parentElement.previousElementSibling?.getAttribute('role') === 'alert'")
+    expect(container.get_by_role('alert').filter(has_text='请先注意这些情况')).to_be_visible()
 
 
 def main():
@@ -86,8 +95,14 @@ def main():
             print('PASS: 长聊天向上返回与回到最新消息互不混淆')
 
             page.get_by_role('button', name='查看问诊总结', exact=True).last.click()
-            dialog = page.get_by_role('dialog', name='本次问诊总结')
+            dialog = page.get_by_role('dialog', name='这次问诊总结')
             body = dialog.get_by_role('region', name='问诊总结正文')
+            assert_summary_order(dialog)
+            expect(dialog.get_by_role('alert')).to_contain_text(REPORT['red_flags'][0])
+            expect(dialog.get_by_text('不是确诊', exact=False)).to_be_visible()
+            expect(dialog.get_by_text('AI 对这个判断的把握：有限', exact=True)).to_be_visible()
+            assert dialog.get_by_role('heading', name='接下来可以做什么', exact=True).evaluate(
+                "el => Boolean(el.compareDocumentPosition(Array.from(el.closest('article').querySelectorAll('h3')).find(node => node.textContent === '这次了解到的情况')) & Node.DOCUMENT_POSITION_FOLLOWING)")
             expect(dialog.locator('xpath=..')).to_have_css('opacity', '1')
             expect(dialog.get_by_role('button', name='回到总结顶部')).to_have_count(0)
             page.screenshot(path=str(artifacts / 'medaxis-report-summary-desktop.png'))
@@ -95,7 +110,7 @@ def main():
             card4 = dialog.get_by_role('article', name='参考资料 S4')
             expect(card4).to_be_visible()
             expect(card4).to_be_focused()
-            expect(dialog.get_by_text('5 条来源', exact=True)).to_be_visible()
+            expect(dialog.get_by_text('5 份资料', exact=True)).to_be_visible()
             expect(dialog.get_by_role('button', name='回到总结顶部')).to_be_visible()
             expect(dialog.get_by_role('article', name='参考资料 S1').get_by_text('[S1] 内部知识库', exact=True)).to_be_visible()
             expect(dialog.get_by_role('article', name='参考资料 S5').get_by_text('[S5] 外部来源', exact=True)).to_be_visible()
@@ -108,7 +123,7 @@ def main():
             page.set_viewport_size({'width': 1440, 'height': 1000})
             print('PASS: 内部知识库/外部来源标注明确，1024/1440/1920 按钮紧邻报告右侧')
             assert dialog.locator('a[href^="javascript:"]').count() == 0
-            dialog.get_by_role('button', name='收起更多来源', exact=True).click()
+            dialog.get_by_role('button', name='收起更多资料', exact=True).click()
             expect(card4).not_to_be_visible()
             card1 = dialog.get_by_role('article', name='参考资料 S1')
             expect(card1.get_by_text(DOCUMENT_ID, exact=True)).not_to_be_visible()
@@ -141,6 +156,9 @@ def main():
                 page.set_viewport_size({'width': width, 'height': 844})
                 page.get_by_role('button', name='查看问诊总结', exact=True).last.click()
                 expect(dialog.locator('xpath=..')).to_have_css('opacity', '1')
+                assert_summary_order(dialog)
+                expect(dialog.get_by_role('alert')).to_contain_text(REPORT['red_flags'][0])
+                page.screenshot(path=str(artifacts / f'medaxis-report-summary-{width}.png'))
                 dialog.get_by_role('link', name='引用 S4，查看来源').click()
                 expect(card4).to_be_visible()
                 expect(card4).to_be_focused()
@@ -156,7 +174,11 @@ def main():
                 dialog.get_by_role('button', name='关闭问诊总结').click()
             page.set_viewport_size({'width': 1440, 'height': 1000})
             page.goto(f'{BASE}/cases?case_id=demo-case-a')
-            references = page.get_by_role('button', name=re.compile('参考资料与说明'))
+            expect(page.get_by_role('heading', name='接下来可以做什么', exact=True)).to_be_visible()
+            assert_summary_order(page)
+            page.wait_for_function("() => document.getAnimations().filter(animation => animation.animationName === 'casesFadeIn').every(animation => animation.playState === 'finished')")
+            page.screenshot(path=str(artifacts / 'medaxis-case-summary-desktop.png'))
+            references = page.get_by_role('button', name=re.compile('参考资料'))
             references.click()
             expect(page.get_by_role('article', name='参考资料 S1')).to_be_visible()
             expect(page.get_by_role('article', name='参考资料 S4')).not_to_be_visible()

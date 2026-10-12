@@ -32,16 +32,16 @@ export default function DiagnosisCard({
         background: 'linear-gradient(180deg, #178f82 0%, #e58a68 100%)',
       },
     }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1.75 }}>
-        <Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.25, mb: 2 }}>
+        <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ fontFamily: careFonts.serif, fontWeight: 800, fontSize: 16.5, letterSpacing: '-0.02em' }}>
-            本次问诊总结
+            这次问诊总结
           </Typography>
-          <Typography variant="caption" sx={{ color: carePalette.muted }}>可保存后带去就诊时参考</Typography>
+          <Typography variant="body2" sx={{ color: carePalette.muted, mt: 0.4 }}>保存后，就诊时可以给医生看</Typography>
         </Box>
         {onOpen && (
-          <Button size="small" variant="outlined" startIcon={<DescriptionOutlinedIcon />} onClick={onOpen} sx={{ minHeight: 34, borderColor: '#d5e4df', color: carePalette.primaryDark }}>
-            完整查看
+          <Button size="small" variant="outlined" startIcon={<DescriptionOutlinedIcon />} onClick={onOpen} sx={{ minHeight: 40, flexShrink: 0, borderColor: '#d5e4df', color: carePalette.primaryDark }}>
+            查看完整总结
           </Button>
         )}
       </Box>

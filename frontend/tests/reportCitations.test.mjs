@@ -24,6 +24,24 @@ test('统一评估来源按相关性排序，旧分数不混排且编号不变',
   assert.equal(citationState.citationRelevanceLabel(sources[2]), '相关性待核对');
 });
 
+test('问题覆盖排序保留编号，部分覆盖不冒充完整或报告支持', () => {
+  const rows = [
+    { citation_id: 'S7', relevance_method: 'query_requirements', relevance: .5, relevance_query_fingerprint: 'q',
+      query_coverage: { status: 'partial_answer' }, excerpt: '甲条件。', url: 'https://example.org/source' },
+    { citation_id: 'S9', relevance_method: 'query_requirements', relevance: 1, relevance_query_fingerprint: 'q',
+      query_coverage: { status: 'answers' }, excerpt: '甲乙条件。' },
+    { citation_id: 'S3', relevance_method: 'query_requirements', relevance: null, relevance_query_fingerprint: 'q',
+      query_coverage: { status: 'unknown' } },
+  ];
+  assert.deepEqual(citationState.sortReportCitations(rows).map(row => row.citation_id), ['S9', 'S7', 'S3']);
+  assert.equal(citationState.citationRelevanceLabel(rows[0]), '模型判断：部分覆盖问题要点');
+  assert.equal(citationState.citationRelevanceLabel(rows[2]), '问题覆盖情况待核对');
+  assert.equal(rows[0].excerpt, '甲条件。');
+  assert.equal(citationEvidenceLabel([], rows[0]), '尚无逐条核对记录');
+  const mixed = [rows[0], { citation_id: 'S1', relevance_method: 'keyword', relevance: .9 }];
+  assert.deepEqual(citationState.sortReportCitations(mixed).map(row => row.citation_id), ['S7', 'S1']);
+});
+
 test('only allows HTTP and HTTPS citation links', () => {
   assert.equal(isSafeCitationUrl('https://www.who.int/example'), true);
   assert.equal(isSafeCitationUrl('http://example.org/source'), true);
@@ -50,4 +68,17 @@ test('原文核对使用Unicode字符位置，缺失或伪造状态不能显示�
   assert.equal(evidenceMatchesExcerpt({ ...row, claim: '发热。' }, citation), false);
   assert.equal(citationEvidenceLabel([], citation), '尚无逐条核对记录');
   assert.equal(citationEvidenceLabel([row, { ...row, status: 'needs_review' }], citation), '原文一致 1 条 · 待核对 1 条');
+});
+
+test('补充前后文提示核对锚点和完整摘录，坏的旧元信息不崩溃', () => {
+  const source = { citation_id: 'S1', source_type: 'internal', title: '合成资料', document_id: 'doc', chunk_id: 'a',
+    excerpt: '🩺完整原文。', context_metadata: { document_id: 'doc', anchor_chunk_id: 'a', chunk_ids: ['a', 'b'],
+      start: 10, end: 16, method: 'anchor_neighbors' } };
+  assert.equal(citationState.citationHasExpandedContext(source), true);
+  assert.equal(citationState.citationHasExpandedContext({ ...source, context_metadata: { method: 'anchor_neighbors' } }), false);
+  assert.equal(citationState.citationHasExpandedContext({ ...source, context_metadata: { ...source.context_metadata, anchor_chunk_id: 'wrong' } }), false);
+  const report = { primary_diagnosis: '待核对[S1]', knowledge_retrieval_count: 1 };
+  const recovered = citationState.recoverReportSources(report, [{ workflowSteps: [{ type: 'tool_result', toolName: 'search_medical_knowledge', toolResult: { sources: [source] } }] }]);
+  assert.deepEqual(recovered.knowledge_citations[0].context_metadata, source.context_metadata);
+  assert.equal(recovered.knowledge_citations[0].excerpt, source.excerpt);
 });

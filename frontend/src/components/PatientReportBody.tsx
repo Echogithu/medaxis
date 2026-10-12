@@ -33,9 +33,9 @@ const severityCopy: Record<string, { label: string; color: string; background: s
 };
 
 const confidenceCopy: Record<string, string> = {
-  high: '参考把握较高',
-  medium: '参考把握一般',
-  low: '参考把握有限',
+  high: 'AI 对这个判断的把握：较高',
+  medium: 'AI 对这个判断的把握：一般',
+  low: 'AI 对这个判断的把握：有限',
 };
 
 function ReportSection({ icon, title, hint, children }: { icon: ReactNode; title: string; hint?: string; children: ReactNode }) {
@@ -49,12 +49,12 @@ function ReportSection({ icon, title, hint, children }: { icon: ReactNode; title
         }}>
           {icon}
         </Box>
-        <Typography id={headingId} component="h3" sx={{ fontFamily: careFonts.serif, fontWeight: 700, fontSize: { xs: 16, sm: 16.5 }, letterSpacing: '-0.02em' }}>
+        <Typography id={headingId} component="h3" sx={{ fontFamily: careFonts.serif, fontWeight: 750, fontSize: { xs: 17, sm: 18 }, lineHeight: 1.5, letterSpacing: '-0.02em' }}>
           {title}
         </Typography>
       </Box>
       {hint && (
-        <Typography variant="caption" sx={{ display: 'block', mb: 1.1, ml: { xs: 0, sm: 4.5 }, color: carePalette.muted }}>
+        <Typography variant="body2" sx={{ display: 'block', mb: 1.4, ml: { xs: 0, sm: 4.5 }, color: carePalette.muted, lineHeight: 1.7 }}>
           {hint}
         </Typography>
       )}
@@ -131,7 +131,7 @@ function NumberedList({
           }}>
             {index + 1}
           </Box>
-          <Typography sx={{ color: carePalette.ink, fontSize: { xs: summarize ? 14 : 15.5, sm: summarize ? 14.5 : 15 }, lineHeight: 1.8, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          <Typography sx={{ color: carePalette.ink, fontSize: { xs: 15, sm: 15.5 }, lineHeight: 1.8, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
             <CitationText text={item} anchors={anchors} onNavigate={onNavigate} />
           </Typography>
         </Box>
@@ -161,7 +161,7 @@ function QuickReadCard({
   return (
     <Box sx={{
       minWidth: 0,
-      flex: '1 1 170px',
+      flex: { xs: '0 1 auto', sm: '1 1 0' },
       p: { xs: 1.35, sm: 1.5 },
       border: `1px solid ${toneStyles.border}`,
       borderRadius: '14px',
@@ -171,11 +171,11 @@ function QuickReadCard({
         <Box aria-hidden="true" sx={{ display: 'grid', placeItems: 'center', '& svg': { fontSize: 17 } }}>{icon}</Box>
         <Typography sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.02em' }}>{label}</Typography>
       </Box>
-      <Typography sx={{ color: carePalette.ink, fontSize: { xs: 15, sm: 15.5 }, lineHeight: 1.55, fontWeight: 700 }}>
+      <Typography sx={{ color: carePalette.ink, fontSize: tone === 'positive' ? 15.5 : 14, lineHeight: 1.6, fontWeight: tone === 'positive' ? 750 : 600 }}>
         {value}
       </Typography>
       {detail && (
-        <Typography sx={{ mt: 0.25, color: carePalette.muted, fontSize: 12.5, lineHeight: 1.55 }}>
+        <Typography sx={{ mt: 0.4, color: carePalette.muted, fontSize: 13, lineHeight: 1.65 }}>
           {detail}
         </Typography>
       )}
@@ -246,45 +246,11 @@ export default function PatientReportBody({
   const severityStyle = severityCopy[severity] || null;
   const referralNeeded = data.referral_needed === true;
   const referralReason = patientText(data.referral_reason);
-  const disclaimer = patientText(data.disclaimer) || '本次总结由 AI 生成，用于帮助你整理情况，不能替代面诊、检查或处方。';
+  const disclaimer = patientText(data.disclaimer) || 'AI 帮你整理了这次问诊的情况。这份总结不能代替医生当面问诊、检查或开药。';
   const hasPriorityNotice = flags.length > 0 || referralNeeded;
 
   return (
     <Stack spacing={isRecord ? 2.5 : compact ? 2.25 : 2.75} sx={{ overflowWrap: 'anywhere' }}>
-      {hasPriorityNotice && (
-        <Box role="alert" sx={{ display: 'flex', gap: 1.25, p: { xs: 1.45, sm: 1.6 }, borderRadius: '16px', border: '1px solid #f0c9c4', bgcolor: carePalette.dangerSoft }}>
-          <Box sx={{
-            width: 32, height: 32, flex: '0 0 auto', display: 'grid', placeItems: 'center',
-            borderRadius: '10px', color: '#fff', bgcolor: carePalette.danger,
-          }}>
-            <PriorityHighRoundedIcon sx={{ fontSize: 18 }} />
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 800, color: '#9b1c1c', mb: 0.4 }}>需要优先注意</Typography>
-            {flags.map((flag, index) => (
-              <Typography key={index} variant="body2" sx={{ color: '#7a2a24', whiteSpace: 'pre-wrap' }}>
-                <CitationText text={flag} anchors={citationAnchors} onNavigate={openCitationList} />
-              </Typography>
-            ))}
-            {referralNeeded && (
-              <Typography variant="body2" sx={{ mt: flags.length ? 0.5 : 0, color: '#7a2a24' }}>
-                {referralReason || '请尽早就医，由医生当面评估。'}
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      )}
-
-      {data.interview_is_sufficient === false && informationGaps.length > 0 && (
-        <Box role="status" sx={{ p: 1.75, borderRadius: '14px', bgcolor: '#fff8ee', border: '1px solid #f0dfc3' }}>
-          <Typography sx={{ fontWeight: 750, color: '#805e2b', mb: 0.5 }}>仍需确认的信息</Typography>
-          <Typography variant="body2">以下信息尚未确认，请结合已有回答阅读本次建议。</Typography>
-          {informationGaps.map((gap, index) => (
-            <Typography key={index} variant="body2" sx={{ mt: 0.35 }}>{gap}</Typography>
-          ))}
-        </Box>
-      )}
-
       {primary && (
         <Box component="section" aria-labelledby={`${citationPrefix}-primary-title`} sx={{
           p: { xs: 1.65, sm: 2.2 },
@@ -293,8 +259,8 @@ export default function PatientReportBody({
           bgcolor: '#f1faf6',
           backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.72), rgba(231,247,240,0.72))',
         }}>
-          <Typography sx={{ color: carePalette.primaryDark, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em' }}>
-            {isRecord ? '本次初步参考' : '先看这里'}
+          <Typography sx={{ color: carePalette.primaryDark, fontSize: 14, fontWeight: 750 }}>
+            可能是什么问题
           </Typography>
           <Typography id={`${citationPrefix}-primary-title`} sx={{
             mt: 0.5, fontFamily: careFonts.serif, fontWeight: 800, fontSize: { xs: 20, sm: isRecord ? 23 : compact ? 22 : 25 },
@@ -304,9 +270,9 @@ export default function PatientReportBody({
             <CitationText text={primary} anchors={citationAnchors} onNavigate={openCitationList} />
           </Typography>
           <Typography sx={{ mt: 0.75, color: '#4a6968', fontSize: { xs: 14, sm: 14.5 }, lineHeight: 1.65 }}>
-            {isRecord ? '基于本次描述的 AI 参考，需由医生结合面诊与检查确认。' : '这是基于当前描述整理出的初步参考，不等同于确诊结果；请结合症状变化和医生面诊判断。'}
+            {isRecord ? '这是 AI 根据你描述的情况作出的初步判断，不是确诊。还需医生结合当面问诊和检查确认。' : '这是 AI 根据你描述的情况作出的初步判断，不是确诊。请留意症状变化，具体情况还需医生当面判断。'}
           </Typography>
-          <Stack direction="row" spacing={0.8} useFlexGap sx={{ mt: 1.25, flexWrap: 'wrap' }}>
+          <Stack direction="row" spacing={0.8} useFlexGap sx={{ mt: 1.25, flexWrap: 'wrap', '& .MuiChip-root': { maxWidth: '100%', height: 'auto', minHeight: 28 }, '& .MuiChip-label': { whiteSpace: 'normal', py: 0.4, lineHeight: 1.5 } }}>
             {severityStyle && (
               <Chip size="small" label={severityStyle.label} sx={{ height: 28, color: severityStyle.color, bgcolor: severityStyle.background }} />
             )}
@@ -318,27 +284,37 @@ export default function PatientReportBody({
         </Box>
       )}
 
+      {data.interview_is_sufficient === false && informationGaps.length > 0 && (
+        <Box role="status" sx={{ p: 1.75, borderRadius: '14px', bgcolor: '#fff8ee', border: '1px solid #f0dfc3' }}>
+          <Typography sx={{ fontWeight: 750, color: '#805e2b', mb: 0.5 }}>还有这些情况没确认</Typography>
+          <Typography variant="body2">下面这些情况还没确认。这次建议只依据目前已了解的信息。</Typography>
+          {informationGaps.map((gap, index) => (
+            <Typography key={index} variant="body2" sx={{ mt: 0.35 }}>{gap}</Typography>
+          ))}
+        </Box>
+      )}
+
       {!isRecord && (actions.length > 0 || followUp || !hasPriorityNotice) && (
-        <Box component="section" aria-label="快速查看" sx={{ mt: compact ? -0.35 : -0.2 }}>
+        <Box component="section" aria-label="一眼看重点" sx={{ mt: compact ? -0.35 : -0.2 }}>
           <Typography sx={{ mb: 1, color: carePalette.ink, fontSize: 15.5, fontWeight: 800 }}>
-            快速查看
+            一眼看重点
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap>
             {actions.length > 0 && (
               <QuickReadCard
                 icon={<TaskAltRoundedIcon />}
                 label="下一步"
-                value={`${actions.length} 项可与医生讨论`}
-                detail="先按顺序查看下方建议"
+                value={`有 ${actions.length} 件事可以和医生讨论`}
+                detail="按顺序看看下面的建议"
                 tone="positive"
               />
             )}
             {followUp && (
               <QuickReadCard
                 icon={<EventNoteOutlinedIcon />}
-                label="后续关注"
-                value="记下变化，再带去复诊"
-                detail="具体时间以医生建议为准"
+                label="接下来要留意什么"
+                value="记下身体变化，再次就诊时告诉医生"
+                detail="什么时候再去看医生，以医生建议为准"
               />
             )}
             {!hasPriorityNotice && (
@@ -346,7 +322,7 @@ export default function PatientReportBody({
                 icon={<MedicalInformationOutlinedIcon />}
                 label="阅读提示"
                 value="请从上到下逐项阅读"
-                detail="没有标记紧急事项，不代表可以忽略症状变化"
+                detail="即使没有紧急提醒，也要留意症状变化。"
               />
             )}
           </Stack>
@@ -354,11 +330,16 @@ export default function PatientReportBody({
       )}
 
       {(findings.length > 0 || actions.length > 0) && <Box sx={{ display: 'grid', gridTemplateColumns: isRecord && findings.length > 0 && actions.length > 0 ? { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1fr)' } : '1fr', gap: 2.5 }}>
+      {actions.length > 0 && (
+        <ReportSection icon={<TaskAltRoundedIcon />} title="接下来可以做什么" hint="这些建议可以和医生讨论，不能当作已经确定的治疗安排。">
+          <NumberedList items={actions} anchors={citationAnchors} onNavigate={openCitationList} summarize={isRecord} />
+        </ReportSection>
+      )}
       {findings.length > 0 && (
-        <ReportSection icon={<FavoriteBorderRoundedIcon />} title={isRecord ? '症状与发现' : '你描述的情况与本次发现'}>
+        <ReportSection icon={<FavoriteBorderRoundedIcon />} title="这次了解到的情况">
           <ReportItems items={findings} label="症状要点" summarize={isRecord} renderItem={item => (
               <Box sx={{ px: { xs: 1.35, sm: 1.5 }, py: 1.15, borderRadius: '12px', bgcolor: '#f7faf8', border: '1px solid #e7eeea' }}>
-                <Typography sx={{ fontSize: { xs: isRecord ? 14 : 15.5, sm: isRecord ? 14.5 : 15 }, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                <Typography sx={{ fontSize: { xs: 15, sm: 15.5 }, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
                   <CitationText text={item} anchors={citationAnchors} onNavigate={openCitationList} />
                 </Typography>
               </Box>
@@ -366,22 +347,17 @@ export default function PatientReportBody({
         </ReportSection>
       )}
 
-      {actions.length > 0 && (
-        <ReportSection icon={<TaskAltRoundedIcon />} title="建议下一步" hint="可与医生讨论的行动，不是已确认的治疗方案">
-          <NumberedList items={actions} anchors={citationAnchors} onNavigate={openCitationList} summarize={isRecord} />
-        </ReportSection>
-      )}
       </Box>}
 
       {(tests.length > 0 || followUp) && <Box sx={{ display: 'grid', gridTemplateColumns: isRecord && tests.length > 0 && followUp ? { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1fr)' } : '1fr', gap: 2.5 }}>
       {tests.length > 0 && (
-        <ReportSection icon={<ScienceOutlinedIcon />} title="可与医生讨论的检查" hint="是否需要检查，由接诊医生决定">
+        <ReportSection icon={<ScienceOutlinedIcon />} title="可以和医生讨论哪些检查" hint="要不要做这些检查，由接诊医生决定。">
           <ReportItems items={tests} label="检查建议" summarize={isRecord} layout={isRecord ? 'stack' : 'wrap'} renderItem={item => (
               <Chip
                 label={<CitationText text={item} anchors={citationAnchors} onNavigate={openCitationList} />}
                 sx={{
                   maxWidth: '100%', height: 'auto', py: 0.75, px: 0.45, borderRadius: '10px', color: '#3d5a63', bgcolor: '#edf4f6',
-                  fontSize: isRecord ? 13 : { xs: 14.5, sm: 14 },
+                  fontSize: 14.5,
                   '& .MuiChip-label': { whiteSpace: 'normal', lineHeight: 1.55 },
                 }}
               />
@@ -390,7 +366,7 @@ export default function PatientReportBody({
       )}
 
       {followUp && (
-        <ReportSection icon={<EventNoteOutlinedIcon />} title="后续关注">
+        <ReportSection icon={<EventNoteOutlinedIcon />} title="接下来要留意什么">
           <Box sx={{ px: 1.5, py: 1.25, borderRadius: '14px', border: '1px dashed #d7e4df', bgcolor: '#f7fbf9' }}>
             <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
               <CitationText text={followUp} anchors={citationAnchors} onNavigate={openCitationList} />
@@ -400,9 +376,33 @@ export default function PatientReportBody({
       )}
       </Box>}
 
+      {hasPriorityNotice && (
+        <Box role="alert" sx={{ display: 'flex', gap: 1.25, p: { xs: 1.45, sm: 1.6 }, borderRadius: '16px', border: '1px solid #f0c9c4', bgcolor: carePalette.dangerSoft }}>
+          <Box sx={{
+            width: 32, height: 32, flex: '0 0 auto', display: 'grid', placeItems: 'center',
+            borderRadius: '10px', color: '#fff', bgcolor: carePalette.danger,
+          }}>
+            <PriorityHighRoundedIcon sx={{ fontSize: 18 }} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 800, color: '#9b1c1c', mb: 0.4 }}>请先注意这些情况</Typography>
+            {flags.map((flag, index) => (
+              <Typography key={index} variant="body2" sx={{ color: '#7a2a24', whiteSpace: 'pre-wrap' }}>
+                <CitationText text={flag} anchors={citationAnchors} onNavigate={openCitationList} />
+              </Typography>
+            ))}
+            {referralNeeded && (
+              <Typography variant="body2" sx={{ mt: flags.length ? 0.5 : 0, color: '#7a2a24' }}>
+                {referralReason || '请尽早就医，让医生当面判断你的情况。'}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      )}
+
       {precautions.length > 0 && (
         <Box sx={isRecord ? { p: 1.75, borderRadius: '14px', bgcolor: '#fffaf2', border: '1px solid #f0e4ce' } : {}}>
-          <ReportSection icon={<WarningAmberRoundedIcon />} title="需要注意的情况">
+          <ReportSection icon={<WarningAmberRoundedIcon />} title="还要注意什么">
             <NumberedList items={precautions} anchors={citationAnchors} onNavigate={openCitationList} />
           </ReportSection>
         </Box>
@@ -415,7 +415,7 @@ export default function PatientReportBody({
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <MedicalInformationOutlinedIcon sx={{ fontSize: 18, color: carePalette.primary }} />
-              <Typography sx={{ fontWeight: 700, fontSize: 14 }}>其他需要考虑的可能原因</Typography>
+              <Typography sx={{ fontWeight: 700, fontSize: 14 }}>还可能有哪些原因</Typography>
             </Box>
           </AccordionSummary>
           <AccordionDetails sx={{ px: 1.5, pt: 0, pb: 1.5 }}>
@@ -442,7 +442,7 @@ export default function PatientReportBody({
       )}
 
       <Box sx={{ pt: 0.5, borderTop: '1px solid #edf1ee' }}>
-        <Typography variant="caption" sx={{ display: 'block', color: carePalette.muted, lineHeight: 1.7 }}>
+        <Typography variant="body2" sx={{ display: 'block', color: carePalette.muted, lineHeight: 1.7 }}>
           {disclaimer}
         </Typography>
       </Box>
@@ -459,21 +459,21 @@ export default function PatientReportBody({
         <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <MenuBookOutlinedIcon sx={{ fontSize: 18, color: carePalette.primary }} />
-            <Typography sx={{ fontWeight: 700, fontSize: 14 }}>参考资料与说明</Typography>
-            {citations.length > 0 && <Chip size="small" label={`${citations.length} 条来源`} sx={{ height: 23, fontSize: 11, bgcolor: '#eef5f1', color: carePalette.primaryDark }} />}
+            <Typography sx={{ fontWeight: 700, fontSize: 14 }}>参考资料</Typography>
+            {citations.length > 0 && <Chip size="small" label={`${citations.length} 份资料`} sx={{ height: 23, fontSize: 11, bgcolor: '#eef5f1', color: carePalette.primaryDark }} />}
           </Box>
         </AccordionSummary>
         <AccordionDetails sx={{ px: 1.5, pt: 0, pb: 1.5 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             {citations.length
-              ? '以下为本次检索的参考资料。正文引用保留原编号，点击可查看对应原文；其余资料也可展开阅读。'
+              ? '这些是这次查到的参考资料。点击正文中的编号可查看对应原文，也可以展开其他资料。'
               : sources.length
-                ? '这份旧报告只有模型返回的来源名称，没有绑定实际检索记录，不能作为已核验引用。'
+                ? '这份旧总结只留有 AI 提供的资料名称，没有对应的查找记录，无法核对来源。'
                 : retrievalStatus === 'retrieved_not_cited'
-                  ? `这份历史报告记录了 ${retrievalCount} 个来源，但当前记录中缺少原文；无法恢复的来源不会补造。`
+                  ? `这份旧总结记录了 ${retrievalCount} 份资料，但原文缺失，无法核对。找不回的资料不会补写。`
                   : retrievalStatus === 'failed'
-                    ? '本次知识检索失败或超时；报告未附知识来源。'
-                    : '本次检索没有返回可核验来源；报告中的医学判断未附知识库引文。'}
+                    ? '这次查找参考资料失败或超时，总结中没有附上资料来源。'
+                    : '这次没有找到能核对的参考资料，因此没有附上支持医学判断的资料原文。'}
           </Typography>
           {citations.length > 0 ? (
             <Box>
@@ -485,7 +485,7 @@ export default function PatientReportBody({
                 ))}
               </Stack>
               {citations.length > 3 && <Button size="small" aria-expanded={allCitationsExpanded} onClick={() => setAllCitationsExpanded(value => !value)} sx={{ mt: 1, fontSize: 12 }}>
-                {allCitationsExpanded ? '收起更多来源' : `展开全部参考资料（${citations.length} 条）`}
+                {allCitationsExpanded ? '收起更多资料' : `展开全部参考资料（${citations.length} 份）`}
               </Button>}
             </Box>
           ) : (

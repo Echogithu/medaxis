@@ -101,12 +101,16 @@ class SearchMedicalKnowledgeTool(Tool):
             dt = DocType(doc_type) if doc_type else None
             try:
                 chunks = await rag.search(query=query, doc_type=dt, top_k=internal_limit)
+                from app.services.rag_context import expand_retrieved_contexts
+                chunks = await expand_retrieved_contexts(db, query, chunks)
                 # 报告稍后统一生成；这里只取原文，避免生成随后被丢弃的内部摘要。
                 rag_result = {"sources": [{
                     "source_type": "internal", "title": c["document_title"],
                     "document_type": c["document_type"], "document_id": c["document_id"],
                     "chunk_id": c["chunk_id"], "chunk_index": c["chunk_index"],
                     "source_url": c.get("source_url"), "excerpt": c["content"], "relevance": c["rank"],
+                    **{key: c.get(key) for key in ("retrieval_method", "retrieval_model", "retrieval_dimension",
+                        "retrieval_score", "retrieval_query_fingerprint", "retrieval_anchor_excerpt", "context_metadata")},
                 } for c in chunks], "retrieved_chunks": len(chunks)}
                 logger.info(f"[SEARXNG_DEBUG] RAG returned {len(rag_result.get('sources', []))} sources")
             except Exception as exc:

@@ -50,21 +50,21 @@ export default function FullScreenReport({ report, visible, onClose, caseId, can
         zIndex: 2,
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
+        gap: { xs: 0.75, sm: 1.5 },
         px: { xs: 1.5, sm: 3 },
         py: 1.25,
         borderBottom: '1px solid #e6ebe8',
         bgcolor: 'rgba(255,255,255,0.92)',
         backdropFilter: 'blur(12px)',
       }}>
-        <Button startIcon={<ArrowBackRoundedIcon />} onClick={handleClose} sx={{ color: carePalette.ink }}>
+        <Button startIcon={<ArrowBackRoundedIcon />} onClick={handleClose} sx={{ color: carePalette.ink, flexShrink: 0, px: { xs: 0.75, sm: 1.5 } }}>
           返回问诊
         </Button>
-        <Typography id="patient-report-title" component="h1" sx={{ flex: 1, minWidth: 0, fontFamily: careFonts.serif, fontWeight: 700, fontSize: { xs: 16, sm: 18 } }}>
-          本次问诊总结
+        <Typography id="patient-report-title" component="h1" sx={{ flex: 1, minWidth: 0, fontFamily: careFonts.serif, fontWeight: 700, fontSize: { xs: 15, sm: 18 }, lineHeight: 1.5 }}>
+          这次问诊总结
         </Typography>
         {canOpenCase && caseId && (
-          <Button variant="contained" startIcon={<FolderSharedOutlinedIcon />} onClick={onOpenCase} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+          <Button variant="outlined" startIcon={<FolderSharedOutlinedIcon />} onClick={onOpenCase} sx={{ display: { xs: 'none', sm: 'inline-flex' }, flexShrink: 0 }}>
             查看问诊记录
           </Button>
         )}
@@ -97,23 +97,23 @@ export default function FullScreenReport({ report, visible, onClose, caseId, can
             background: 'linear-gradient(180deg, #178f82 0%, #3aa394 58%, #e58a68 100%)',
           },
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 3, pb: 2.25, borderBottom: '1px solid #edf1ee' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-              <Box sx={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: '14px', color: '#fff', bgcolor: carePalette.primary, boxShadow: careShadows.brand }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2.5, pb: 2, borderBottom: '1px solid #edf1ee' }}>
+            <Box sx={{ display: 'flex', minWidth: 0, alignItems: 'center', gap: 1.25 }}>
+              <Box sx={{ width: 42, height: 42, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: '14px', color: '#fff', bgcolor: carePalette.primary, boxShadow: careShadows.brand }}>
                 <MonitorHeartRoundedIcon />
               </Box>
               <Box>
                 <Typography sx={{ fontFamily: careFonts.serif, fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em' }}>
                   医枢 MedAxis
                 </Typography>
-                <Typography variant="caption" sx={{ color: carePalette.muted }}>患者问诊总结 · AI 辅助整理</Typography>
+                <Typography variant="caption" sx={{ color: carePalette.muted }}>问诊总结 · AI 整理</Typography>
               </Box>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
               <Typography sx={{ fontFamily: careFonts.serif, fontSize: 13, fontWeight: 700, color: '#455f63' }}>
                 {issuedAt.toLocaleDateString('zh-CN')}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#98a3a3' }}>仅供健康参考</Typography>
+              <Typography variant="caption" sx={{ color: carePalette.muted }}>仅供健康参考</Typography>
             </Box>
           </Box>
 
@@ -121,22 +121,22 @@ export default function FullScreenReport({ report, visible, onClose, caseId, can
 
           {report.interview_is_sufficient === false && onSupplement && (
             <Box sx={{ mt: 2 }}>
-              <Button fullWidth variant="outlined" onClick={onSupplement}>补充信息并追问</Button>
-              <Typography variant="caption" component="p" sx={{ mt: 1, color: carePalette.muted }}>
-                您可以补充尚未确认的信息并获取回复。本次总结会保留。
+              <Button fullWidth variant="outlined" onClick={onSupplement}>补充情况，继续问</Button>
+              <Typography variant="body2" component="p" sx={{ mt: 1, color: carePalette.muted }}>
+                还有情况没说清？可以补充后继续问，这份总结会保留。
               </Typography>
             </Box>
           )}
 
           <Box sx={{ mt: 3.5, pt: 2, borderTop: '1px dashed #e2eae6' }}>
             {canOpenCase && caseId ? (
-              <Button fullWidth variant="contained" startIcon={<FolderSharedOutlinedIcon />} onClick={onOpenCase}>
-                查看问诊记录并准备就诊
+              <Button fullWidth variant="contained" startIcon={<FolderSharedOutlinedIcon />} onClick={onOpenCase} sx={{ minHeight: 48 }}>
+                查看记录，准备就诊
               </Button>
             ) : (
               <Box sx={{ px: 1.5, py: 1.25, borderRadius: '14px', bgcolor: '#f4f8f6', border: '1px solid #e2ebe6' }}>
                 <Typography variant="body2" color="text.secondary">
-                  此总结尚未保存到问诊记录。登录后完成问诊，即可保存并在下次查看。
+                  这份总结还没保存。登录并完成问诊后，可保存到问诊记录，下次再看。
                 </Typography>
               </Box>
             )}

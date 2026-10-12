@@ -15,6 +15,14 @@ from pydantic import BaseModel, Field
 
 MAX_CITATIONS = 10
 MAX_EXCERPT_CHARS = 800
+SOURCE_POLICY_VERSION = "source_gate_v3_query_coverage"
+# 本地开发集校准值，仅用于已核对同模型/维度的命中锚点，不套用到词覆盖率。
+CALIBRATED_EMBEDDING_GATES = {("text-embedding-3-small", 1536): 0.42}
+# 人群、操作类别及提问套话不能单独证明具体主题命中；用于弱语义分的复核，非分词医学实体表。
+_BROAD_MATCH_TERMS = {"成人", "患儿", "手术", "治疗", "药物", "时间", "依据", "选择", "标准",
+                      "需要", "是否", "如何", "哪些", "怎么", "什么", "方案", "文档", "这些", "哪里",
+                      "对应", "基础", "调节", "记录", "观察", "情况", "不同", "注意", "考虑", "严重", "专题",
+                      "only", "text", "guidance", "guideline", "treatment", "need", "which", "what"}
 _CITATION_MARKER = re.compile(r"\[(S\d+)\]")
 
 
@@ -116,10 +124,40 @@ class KnowledgeCitation(BaseModel):
     trust_score: int | None = None
     is_trusted: bool | None = None
     relevance: float | None = None
-    relevance_method: Literal["reranker", "keyword", "unassessed"] = "unassessed"
+    relevance_method: Literal["reranker", "keyword", "query_requirements", "unassessed"] = "unassessed"
     relevance_level: Literal["matched", "unassessed"] = "unassessed"
     relevance_reason: str = "未使用统一相关性评估"
     relevance_query_fingerprint: str = ""
+    relevance_policy_version: str = ""
+    retrieval_method: str | None = None
+    retrieval_model: str | None = None
+    retrieval_dimension: int | None = None
+    retrieval_score: float | None = None
+    retrieval_query_fingerprint: str = ""
+    retrieval_anchor_excerpt: str = ""
+    context_metadata: dict[str, Any] | None = None
+    query_coverage: dict[str, Any] | None = None
+
+
+def _checked_context_metadata(source: dict, raw: str, excerpt: str) -> dict | None:
+    """校验保存结构及截取坐标；原文真实性由只读文档定位端核对。"""
+    meta = source.get("context_metadata")
+    if not isinstance(meta, dict) or source.get("source_type") != "internal":
+        return None
+    start, end, ids = meta.get("start"), meta.get("end"), meta.get("chunk_ids")
+    if (type(start) is not int or type(end) is not int or start < 0 or end - start != len(raw)
+        or meta.get("document_id") != source.get("document_id")
+        or meta.get("anchor_chunk_id") != source.get("chunk_id")
+        or not isinstance(ids, list) or not 1 <= len(ids) <= 3
+        or any(not isinstance(cid, str) or not cid for cid in ids) or len(set(ids)) != len(ids)
+        or source.get("chunk_id") not in ids or meta.get("method") != "anchor_neighbors"
+        or not isinstance(meta.get("source_text_sha256"), str)
+        or not re.fullmatch(r"[a-f0-9]{64}", meta["source_text_sha256"])):
+        return None
+    start += len(raw) - len(raw.lstrip())
+    return {"document_id":meta["document_id"], "anchor_chunk_id":meta["anchor_chunk_id"],
+            "chunk_ids":list(ids), "source_text_sha256":meta["source_text_sha256"],
+            "method":"anchor_neighbors", "start":start, "end":start+len(excerpt), "max_chars":1600}
 
 
 def _safe_http_url(value: Any) -> str | None:
@@ -133,11 +171,13 @@ def _safe_http_url(value: Any) -> str | None:
 
 
 def build_knowledge_citations(
-    sources: Any, max_citations: int = MAX_CITATIONS
+    sources: Any, max_citations: int = MAX_CITATIONS, *, max_excerpt_chars: int = MAX_EXCERPT_CHARS
 ) -> list[KnowledgeCitation]:
     """Normalize only traceable records returned by internal/external search."""
-    if not isinstance(sources, list) or max_citations <= 0:
+    if not isinstance(sources, list) or max_citations <= 0 or max_excerpt_chars <= 0:
         return []
+    # 上下文实验可显式扩大内部摘录；默认和外部摘录仍保持800，硬上限1600。
+    max_excerpt_chars = min(max_excerpt_chars, 1600)
 
     citations: list[KnowledgeCitation] = []
     seen: set[tuple[str, str]] = set()
@@ -174,11 +214,20 @@ def build_knowledge_citations(
             continue
         seen.add(dedupe_key)
 
+        budget = min(max_excerpt_chars, MAX_EXCERPT_CHARS) if source_type == "external" else max_excerpt_chars
+        # 已核对的上下文在后续Agent归一化/历史恢复中保留，不能再悄悄截回800。
+        checked = _checked_context_metadata(source, excerpt, excerpt.strip()[:1600])
+        if checked:
+            budget = 1600
+        normalized_excerpt = excerpt.strip()[:budget]
+        score = source.get("retrieval_score")
+        score = float(score) if type(score) in (int, float) and math.isfinite(score) and -1 <= score <= 1 else None
+
         citations.append(KnowledgeCitation(
             citation_id=f"S{len(citations) + 1}",
             source_type=source_type,
             title=title.strip(),
-            excerpt=excerpt.strip()[:MAX_EXCERPT_CHARS],
+            excerpt=normalized_excerpt,
             document_id=document_id if isinstance(document_id, str) else None,
             chunk_id=chunk_id if isinstance(chunk_id, str) else None,
             chunk_index=source.get("chunk_index") if isinstance(source.get("chunk_index"), int) else None,
@@ -192,10 +241,20 @@ def build_knowledge_citations(
             trust_score=source.get("trust_score") if isinstance(source.get("trust_score"), int) else None,
             is_trusted=source.get("is_trusted") if isinstance(source.get("is_trusted"), bool) else None,
             relevance=source.get("relevance") if isinstance(source.get("relevance"), (int, float)) else None,
-            relevance_method=source.get("relevance_method") if source.get("relevance_method") in {"reranker", "keyword"} else "unassessed",
+            relevance_method=source.get("relevance_method") if source.get("relevance_method") in {"reranker", "keyword", "query_requirements"} else "unassessed",
             relevance_level="matched" if source.get("relevance_level") == "matched" else "unassessed",
             relevance_reason=source.get("relevance_reason") if isinstance(source.get("relevance_reason"), str) else "未使用统一相关性评估",
             relevance_query_fingerprint=source.get("relevance_query_fingerprint") if isinstance(source.get("relevance_query_fingerprint"), str) else "",
+            relevance_policy_version=source.get("relevance_policy_version") if isinstance(source.get("relevance_policy_version"), str) else "",
+            query_coverage=deepcopy(source.get("query_coverage")) if isinstance(source.get("query_coverage"), dict)
+                and source['query_coverage'].get('excerpt_sha256') == hashlib.sha256(normalized_excerpt.encode()).hexdigest() else None,
+            retrieval_method=source.get("retrieval_method") if source_type == "internal" and source.get("retrieval_method") in {"embedding_cosine", "keyword", "reranker"} else None,
+            retrieval_model=source.get("retrieval_model") if source_type == "internal" and isinstance(source.get("retrieval_model"), str) else None,
+            retrieval_dimension=source.get("retrieval_dimension") if source_type == "internal" and type(source.get("retrieval_dimension")) is int else None,
+            retrieval_score=score if source_type == "internal" else None,
+            retrieval_query_fingerprint=source.get("retrieval_query_fingerprint") if source_type == "internal" and isinstance(source.get("retrieval_query_fingerprint"), str) else "",
+            retrieval_anchor_excerpt=source.get("retrieval_anchor_excerpt", "")[:800] if source_type == "internal" and isinstance(source.get("retrieval_anchor_excerpt", ""), str) else "",
+            context_metadata=_checked_context_metadata(source, excerpt, normalized_excerpt),
         ))
         if len(citations) >= max_citations:
             break
@@ -214,23 +273,118 @@ def _query_terms(query: str) -> set[str]:
     return terms - _GENERIC_QUERY_TERMS
 
 
+def _specific_query_terms(query: str) -> set[str]:
+    # 先切开套话再生成bigram，避免“治疗时间”被当成具体主题词“疗时”。
+    generic = sorted(_GENERIC_QUERY_TERMS | _BROAD_MATCH_TERMS, key=len, reverse=True)
+    cleaned = query.casefold()
+    chinese = [term for term in generic if re.search(r"[\u4e00-\u9fff]", term)]
+    cleaned = re.sub("|".join(map(re.escape, chinese)), " ", cleaned)
+    return _query_terms(cleaned) - _BROAD_MATCH_TERMS
+
+
+def _passes_anchor_gate(query: str, citation: KnowledgeCitation, fingerprint: str) -> bool:
+    """只在无统一重排时复核已校准的弱锚点；具体词匹配不是支持证明。"""
+    threshold = CALIBRATED_EMBEDDING_GATES.get((citation.retrieval_model, citation.retrieval_dimension))
+    if (citation.source_type != "internal" or citation.retrieval_method != "embedding_cosine"
+        or citation.retrieval_query_fingerprint != fingerprint or threshold is None
+        or citation.retrieval_score is None or not math.isfinite(citation.retrieval_score)
+        or not -1 <= citation.retrieval_score <= 1 or citation.retrieval_score >= threshold):
+        return True
+    anchor = citation.retrieval_anchor_excerpt or (citation.excerpt[:800] if not citation.context_metadata else "")
+    text = f"{citation.title}\n{anchor}".casefold()
+    return any(term in text for term in _specific_query_terms(query))
+
+
+def _valid_query_coverage(citation: KnowledgeCitation) -> bool:
+    meta = citation.query_coverage
+    if not isinstance(meta, dict) or meta.get('excerpt_sha256') != hashlib.sha256(citation.excerpt.encode()).hexdigest():
+        return False
+    fields = [meta.get(k) for k in ('requirements', 'covered_requirements', 'missing_requirements', 'uncertain_requirements')]
+    if not all(isinstance(v, list) and all(isinstance(r, str) and r.strip() for r in v) and len(set(v)) == len(v) for v in fields):
+        return False
+    requirements, covered, missing, uncertain = fields
+    if not 1 <= len(requirements) <= 8 or len(covered + missing + uncertain) != len(requirements) or set(covered + missing + uncertain) != set(requirements):
+        return False
+    status = 'unknown' if uncertain else 'answers' if len(covered) == len(requirements) else 'partial_answer' if covered else 'does_not_answer'
+    fraction = None if uncertain else len(covered) / len(requirements)
+    return meta.get('status') == status and citation.relevance == fraction
+
+
+async def _assess_query_coverage(query, citations, db):
+    if db is None:
+        return {'status': 'assessment_error'}
+    from app.services.llm import LLMService
+    from app.services.query_requirements import assess_query
+    # 每组只调用一次；超时回退既有来源策略，不改变供应商/演示控制。
+    return await asyncio.wait_for(assess_query(query, [
+        {'id': c.citation_id, 'title': c.title, 'excerpt': c.excerpt} for c in citations],
+        LLMService(db=db, platform='web', model_type='diagnosis', timeout=10, max_retries=0)), timeout=12)
+
+
 async def rank_knowledge_citations(
     query: str, citations: list[KnowledgeCitation], db: Any, *, min_relevance: float = 0.25,
 ) -> list[KnowledgeCitation]:
-    """相同query和摘录口径重排两类来源；无供应商时明确降级为词匹配。"""
+    """先核对问题要点覆盖；失败回退既有重排/词匹配，保留真实出处。"""
     if not citations:
         return []
-    query = query.strip()[:512]
+    original_query = query.strip()
+    query = original_query[:512]
     fingerprint = hashlib.sha256(query.encode("utf-8")).hexdigest()
+    requested_years = set(re.findall(r"((?:19|20)\d{2})\s*(?:年\s*)?(?=版|(?:新|最新)?发布|更新|edition|guideline|update)", query, re.I))
+    retained = []
+    for citation in citations:
+        # 只匹配显式版本请求，不把出生年份或疗程数字视为资料版本。
+        if requested_years and not all(re.search(rf"(?<!\d){year}(?!\d)", citation.title)
+            or re.search(rf"(?<!\d){year}\s*年?\s*(?:版|edition)", citation.excerpt, re.I) for year in requested_years):
+            continue
+        retained.append(citation)
+    citations = retained
+    if not citations:
+        return []
+    if all(c.relevance_method == 'query_requirements' and c.relevance_query_fingerprint == fingerprint
+           and c.relevance_policy_version == SOURCE_POLICY_VERSION and _valid_query_coverage(c) for c in citations):
+        return sorted([c for c in citations if c.query_coverage['status'] != 'does_not_answer'],
+                      key=lambda c: -(c.relevance if c.relevance is not None else -1))
     if (len({c.relevance_method for c in citations if c.relevance_method != "unassessed"}) <= 1
-        and all(c.relevance_query_fingerprint == fingerprint for c in citations)) and all(
+        and all(c.relevance_query_fingerprint == fingerprint and c.relevance_policy_version == SOURCE_POLICY_VERSION for c in citations)) and all(
         (c.relevance_method in {"reranker", "keyword"} and c.relevance is not None
          and math.isfinite(c.relevance) and 0 <= c.relevance <= 1)
         or (c.relevance_method == "unassessed" and c.relevance is None) for c in citations
     ):
-        retained = [c for c in citations if c.relevance is None or (
-            c.relevance > 0 and (c.relevance_method == "keyword" or c.relevance >= min_relevance))]
+        retained = [c for c in citations if (c.relevance_method == "reranker" or _passes_anchor_gate(query,c,fingerprint))
+            and (c.relevance is None or (c.relevance > 0 and (c.relevance_method == "keyword" or c.relevance >= min_relevance)))]
         return sorted(retained, key=lambda c: c.relevance if c.relevance is not None else -1, reverse=True)
+    try:
+        if len(original_query) > 512:
+            raise ValueError('问题超出完整覆盖判断预算，回退而不宣称截断后的完整性')
+        coverage = await _assess_query_coverage(query, citations, db)
+        if coverage['status'] == 'assessed':
+            rows = {r['id']: r for r in coverage['candidates']}
+            if set(rows) != {c.citation_id for c in citations}:
+                raise ValueError('覆盖判断候选数量不完整')
+            ranked = []
+            for citation in citations:
+                row = rows[citation.citation_id]
+                if not row['retain']:
+                    continue
+                status = row['label']
+                missing = row['missing_requirements']
+                reason = {'answers': '模型判断：本资料覆盖所提问题的全部要点',
+                          'partial_answer': '模型判断：本资料覆盖部分要点；未覆盖：' + '、'.join(missing),
+                          'unknown': '模型未能确定本资料的覆盖情况，保留待核对'}[status]
+                ranked.append(citation.model_copy(update={
+                    'relevance': row['coverage_fraction'], 'relevance_method': 'query_requirements',
+                    'relevance_level': 'unassessed' if status == 'unknown' else 'matched',
+                    'relevance_reason': reason + '；不代表原文支持报告结论或适用于患者',
+                    'relevance_query_fingerprint': fingerprint, 'relevance_policy_version': SOURCE_POLICY_VERSION,
+                    'query_coverage': {k: deepcopy(row[k]) for k in ('covered_requirements', 'missing_requirements', 'uncertain_requirements')}
+                        | {'requirements': coverage['requirements'], 'status': status,
+                           'excerpt_sha256': hashlib.sha256(citation.excerpt.encode()).hexdigest()},
+                }))
+            return sorted(ranked, key=lambda c: -(c.relevance if c.relevance is not None else -1))
+        raise ValueError('覆盖判断未完成')
+    except Exception as exc:
+        logging.getLogger(__name__).info('问题覆盖判断未完成，回退来源策略：%s', type(exc).__name__)
     scored: list[tuple[int, float | None, str, str]] = []
     try:
         from app.services.reranker import RerankerService
@@ -249,6 +403,8 @@ async def rank_knowledge_citations(
         terms = _query_terms(query)
         scored = []
         for index, citation in enumerate(citations):
+            if not _passes_anchor_gate(query,citation,fingerprint):
+                continue
             text = f"{citation.title}\n{citation.excerpt}".casefold()
             matches = sorted(term for term in terms if term in text)
             different_language = bool(re.search(r"[\u4e00-\u9fff]", query)) != bool(re.search(r"[\u4e00-\u9fff]", text))
@@ -267,6 +423,9 @@ async def rank_knowledge_citations(
             "relevance": score, "relevance_method": method,
             "relevance_level": "matched" if score is not None else "unassessed",
             "relevance_reason": reason, "relevance_query_fingerprint": fingerprint,
+            "relevance_policy_version": SOURCE_POLICY_VERSION,
+            # 回退口径不能携带已失效的模型覆盖结果。
+            "query_coverage": None,
         }))
     logging.getLogger(__name__).info("来源筛选：候选=%d 保留=%d 方法=%s", len(citations), len(ranked),
                                     ",".join(sorted({method for _, _, method, _ in scored})))
@@ -292,6 +451,9 @@ def format_knowledge_context(citations: list[KnowledgeCitation]) -> str:
                 f"{citation.chunk_index + 1 if citation.chunk_index is not None else '未提供'}；"
                 f"片段ID：{citation.chunk_id}"
             )
+            if citation.context_metadata:
+                meta=citation.context_metadata
+                lines.append(f"此摘录包含同文档相邻内容；原文字符范围[{meta['start']}, {meta['end']})，命中片段为锚点。")
         elif citation.url:
             lines.append(f"链接：{citation.url}")
         lines.append(f"原文摘录：{citation.excerpt}")

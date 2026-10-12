@@ -97,18 +97,36 @@ export function citationEvidenceLabel(rows: KnowledgeEvidence[], citation: Knowl
 
 /** 只比较同一评估口径；旧报告的混合分数保持原顺序，编号永不重写。 */
 export function sortReportCitations(citations: KnowledgeCitation[]): KnowledgeCitation[] {
-  const assessed = citations.filter(row => row.relevance_method === 'reranker' || row.relevance_method === 'keyword');
+  const assessed = citations.filter(row => row.relevance_method === 'reranker' || row.relevance_method === 'keyword' || row.relevance_method === 'query_requirements');
   if (new Set(assessed.map(row => row.relevance_method)).size > 1
     || new Set(assessed.map(row => row.relevance_query_fingerprint ?? '')).size > 1) return [...citations];
   const score = (row: KnowledgeCitation) => row.relevance_method !== 'unassessed'
-    && (row.relevance_method === 'reranker' || row.relevance_method === 'keyword')
+    && (row.relevance_method === 'reranker' || row.relevance_method === 'keyword' || row.relevance_method === 'query_requirements')
     && typeof row.relevance === 'number' && Number.isFinite(row.relevance)
     && row.relevance >= 0 && row.relevance <= 1 ? row.relevance : -1;
   return [...citations].sort((a, b) => score(b) - score(a));
 }
 
 export function citationRelevanceLabel(citation: KnowledgeCitation): string {
+  if (citation.relevance_method === 'query_requirements') {
+    if (citation.query_coverage?.status === 'answers') return '模型判断：覆盖问题要点';
+    if (citation.query_coverage?.status === 'partial_answer') return '模型判断：部分覆盖问题要点';
+    return '问题覆盖情况待核对';
+  }
   if (citation.relevance_method === 'reranker') return '已按语义相关性排序';
   if (citation.relevance_method === 'keyword') return '主题词匹配';
   return '相关性待核对';
+}
+
+/** 旧记录可能缺少字段；只对结构一致的多片段摘录显示前后文提示。 */
+export function citationHasExpandedContext(citation: KnowledgeCitation): boolean {
+  const meta = citation.context_metadata;
+  return Boolean(meta && meta.method === 'anchor_neighbors'
+    && meta.document_id === citation.document_id && meta.anchor_chunk_id === citation.chunk_id
+    && Array.isArray(meta.chunk_ids) && meta.chunk_ids.length > 1 && meta.chunk_ids.length <= 3
+    && meta.chunk_ids.every(id => typeof id === 'string' && Boolean(id))
+    && new Set(meta.chunk_ids).size === meta.chunk_ids.length && meta.chunk_ids.includes(citation.chunk_id!)
+    && Number.isInteger(meta.start) && Number.isInteger(meta.end) && meta.start >= 0
+    && meta.end - meta.start === [...citation.excerpt].length
+    && [...citation.excerpt].length <= 1600);
 }

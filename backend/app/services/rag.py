@@ -1,11 +1,15 @@
 """RAG (Retrieval-Augmented Generation) service.
 
-MVP implementation using PostgreSQL ILIKE for Chinese text search.
-Phase 2: upgrade to pgvector for semantic search.
+关键词召回和同模型向量语义召回独立执行，候选并集使用共同语义量尺并可选重排。
+当前对JSON向量流式精确扫描；大语料的向量索引仍待单独建设。
 
 SearXNG integration planned for real-time external knowledge retrieval.
 """
 
+import heapq
+import hashlib
+import json
+import math
 import re
 import uuid
 from datetime import datetime, timezone
@@ -26,6 +30,20 @@ settings = get_settings()
 _CHUNK_SIZE = settings.rag_chunk_size
 _CHUNK_OVERLAP = settings.rag_chunk_overlap
 _MAX_COARSE_TERMS = 32
+
+
+def _safe_similarity(query_vector: list[float], stored_vector: Any) -> float | None:
+    """坏向量、不同维度或零向量不参与语义召回。"""
+    try:
+        vector = json.loads(stored_vector) if isinstance(stored_vector, str) else stored_vector
+        if not isinstance(vector, (list, tuple)) or len(vector) != len(query_vector):
+            return None
+        if any(type(v) not in (int, float) or not math.isfinite(v) for v in vector) or not any(vector):
+            return None
+        value = EmbeddingService.cosine_similarity(query_vector, vector)
+        return value if math.isfinite(value) else None
+    except (ValueError, TypeError, OverflowError):
+        return None
 
 
 def _coarse_search_terms(query: str, term_len: int) -> list[str]:
@@ -53,11 +71,68 @@ def _coarse_search_terms(query: str, term_len: int) -> list[str]:
     return list(dict.fromkeys(short_terms + long_terms))[:_MAX_COARSE_TERMS]
 
 
+def _reserve_keyword_candidate(query, vector_top, keyword_rows, similarities, top_k):
+    """最多保留一个具体词命中席位；原始余弦分、首位语义结果和预算不变。"""
+    from app.services.knowledge_citations import _specific_query_terms
+
+    if top_k < 2 or not keyword_rows:
+        return vector_top
+    terms = _specific_query_terms(query)
+    # 连续具体短语比零碎bigram更可靠；通用词不参与组成4字短语。
+    phrases = {part for part in re.findall(r"[a-z][a-z0-9-]{3,}", query.casefold()) if part in terms}
+    for part in re.findall(r"[\u4e00-\u9fff]+", query):
+        phrases.update(part[i:i + 4] for i in range(len(part) - 3)
+                       if all(part[j:j + 2] in terms for j in range(i, i + 3)))
+    pool = {str(row.id): row for _, row in vector_top}
+    pool.update({str(row.id): row for row in keyword_rows})
+    if len(terms) < 2:
+        return vector_top
+    texts = {key: row.content.casefold() for key, row in pool.items()}
+    weights = {term: math.log((len(pool) + 1) / (1 + sum(term in value for value in texts.values())))
+               for term in terms}
+    ranked = []
+    for row in keyword_rows:
+        matched = [term for term in terms if term in texts[str(row.id)]]
+        if len(matched) >= 2 and any(phrase in texts[str(row.id)] for phrase in phrases):
+            ranked.append((sum(weights[term] for term in matched), str(row.id), row))
+    if not ranked:
+        return vector_top
+    weight, key, row = sorted(ranked, key=lambda item: (-item[0], item[1]))[0]
+    if weight <= 0 or key in {str(r.id) for _, r in vector_top[:top_k]}:
+        return vector_top
+    # 权重仅用于候选保护，绝不写成语义相关分；不同模型仍沿用0分降级。
+    similarity = similarities.get(key)
+    reserved = (similarity if similarity is not None else 0., row)
+    remaining = [item for item in vector_top if str(item[1].id) != key]
+    position = min(top_k - 1, len(remaining))
+    return (remaining[:position] + [reserved] + remaining[position:])[:top_k * 2]
+
+
 class RAGService:
     """Retrieval-Augmented Generation service."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    async def _semantic_candidates(self, stmt, query_vector: list[float], model: str, limit: int):
+        """独立扫描同模型向量；流式读取，仅保留top候选，避免关键词漏召回。"""
+        stmt = stmt.where(DocumentChunk.embedding_json.is_not(None), Document.embedding_model == model)
+        result = await self.db.stream(stmt.execution_options(yield_per=64))
+        heap = []
+        try:
+            async for batch in result.partitions(64):
+                for row in batch:
+                    similarity = _safe_similarity(query_vector, row.embedding_json)
+                    if similarity is None:
+                        continue
+                    item = (similarity, -uuid.UUID(str(row.id)).int, row)
+                    if len(heap) < limit:
+                        heapq.heappush(heap, item)
+                    elif item[:2] > heap[0][:2]:
+                        heapq.heapreplace(heap, item)
+        finally:
+            await result.close()
+        return [(value, row) for value, _tie, row in sorted(heap, reverse=True)]
 
     @staticmethod
     def _chunk_text(text: str, chunk_size: int = _CHUNK_SIZE, overlap: int = _CHUNK_OVERLAP) -> list[str]:
@@ -168,10 +243,12 @@ class RAGService:
     ) -> list[dict[str, Any]]:
         """Semantic search: hybrid keyword + vector similarity + rerank.
 
-        Phase 1: keyword-based coarse retrieval (top 50)
-        Phase 2: vector cosine similarity re-rank
-        Phase 3: cross-encoder reranker refinement (if configured)
+        Phase 1: independent keyword and same-model semantic candidates
+        Phase 2: same-model cosine ordering of candidate union, retain 2*top_k
+        Phase 3: optional reranker, with candidates preserved on failure
         """
+        if top_k <= 0:
+            return []
         # Phase 1: coarse keyword retrieval (expand to configurable multiplier for re-ranking)
         coarse_k = max(top_k * settings.rag_coarse_multiplier, settings.rag_coarse_min)
         search_terms = _coarse_search_terms(query, settings.rag_query_term_length)
@@ -180,7 +257,7 @@ class RAGService:
         matches = [DocumentChunk.content.ilike(f"%{term}%") for term in search_terms]
         overlap_score = sum(case((match, 1), else_=0) for match in matches)
 
-        stmt = select(
+        base_stmt = select(
             DocumentChunk.id,
             DocumentChunk.content,
             DocumentChunk.chunk_index,
@@ -189,43 +266,64 @@ class RAGService:
             Document.title,
             Document.doc_type,
             Document.source_url,
-        ).join(Document).where(
-            or_(*matches),
-            Document.is_active == True,
-        )
+            Document.embedding_model,
+        ).join(Document).where(Document.is_active == True)
 
         if doc_type:
-            stmt = stmt.where(Document.doc_type == doc_type)
+            base_stmt = base_stmt.where(Document.doc_type == doc_type)
 
-        stmt = stmt.order_by(overlap_score.desc(), DocumentChunk.id).limit(coarse_k)
+        stmt = base_stmt.where(or_(*matches)).order_by(overlap_score.desc(), DocumentChunk.id).limit(coarse_k)
         result = await self.db.execute(stmt)
         rows = result.all()
 
-        if not rows:
-            return []
-
-        # Phase 2: vector similarity ranking
+        # 语义候选独立于关键词候选，空关键词结果也继续尝试语义召回。
+        retrieval_metadata = {}
         try:
             embed_svc = EmbeddingService(self.db)
-            query_emb = (await embed_svc.embed([query]))[0]
-
-            scored = []
-            for row in rows:
-                if row.embedding_json:
-                    emb = row.embedding_json
-                    if isinstance(emb, str):
-                        import json
-                        emb = json.loads(emb)
-                    score = EmbeddingService.cosine_similarity(query_emb, emb)
-                else:
-                    score = 0.0  # fallback for non-vectorized chunks
-                scored.append((score, row))
-
-            scored.sort(key=lambda x: x[0], reverse=True)
-            vector_top = scored[:top_k * 2]
+            try:
+                query_emb = (await embed_svc.embed([query]))[0]
+            finally:
+                if embed_svc._client is not None:
+                    await embed_svc._client.close()
+            if not query_emb or any(type(v) not in (int, float) or not math.isfinite(v) for v in query_emb) or not any(query_emb):
+                raise ValueError("Invalid query embedding")
+            semantic = await self._semantic_candidates(base_stmt, query_emb, embed_svc._model, coarse_k) if embed_svc._model else []
+            if semantic:
+                candidates = {str(r.id): r for r in rows}
+                similarities = {str(r.id): _safe_similarity(query_emb, r.embedding_json)
+                                for r in rows if r.embedding_model == embed_svc._model}
+                for similarity, row in semantic:
+                    key = str(row.id)
+                    candidates[key] = row
+                    similarities[key] = similarity
+                # 两路命中不额外加分，避免宽泛关键词挤掉正确的跨语言原文。
+                # 未向量化/不同模型的关键词来源只补充空位，不伪造可比较的向量分数。
+                keys = sorted(candidates, key=lambda key: (
+                    similarities.get(key) is None,
+                    -(similarities[key] if similarities.get(key) is not None else 0.), key))[:top_k * 2]
+                vector_top = [(similarities[key] if similarities.get(key) is not None else 0., candidates[key]) for key in keys]
+                vector_top = _reserve_keyword_candidate(query, vector_top, rows, similarities, top_k)
+            else:
+                scored = [(_safe_similarity(query_emb, r.embedding_json) or 0., r)
+                          if not embed_svc._model or r.embedding_model == embed_svc._model else (0., r) for r in rows]
+                scored.sort(key=lambda item: item[0], reverse=True)
+                vector_top = scored[:top_k * 2]
+            if embed_svc._model:
+                for _, row in vector_top:
+                    similarity = _safe_similarity(query_emb, row.embedding_json) if row.embedding_model == embed_svc._model else None
+                    if similarity is not None:
+                        retrieval_metadata[str(row.id)] = {
+                            "retrieval_method": "embedding_cosine", "retrieval_model": embed_svc._model,
+                            "retrieval_dimension": len(query_emb), "retrieval_score": similarity,
+                            "retrieval_query_fingerprint": hashlib.sha256(query.strip()[:512].encode()).hexdigest(),
+                            "retrieval_anchor_excerpt": row.content.strip()[:800],
+                        }
         except ValueError:
             # Embedding provider not configured — use keyword results as-is
             vector_top = [(0.0, r) for r in rows[:top_k * 2]]
+
+        if not vector_top:
+            return []
 
         # Phase 3: reranker refinement (optional)
         try:
@@ -233,7 +331,6 @@ class RAGService:
             docs_for_rerank = [r.content for _, r in vector_top]
             reranked = await reranker.rerank(query, docs_for_rerank, top_n=top_k)
             # 空、重复或越界响应不能把已召回原文变成“未检索到资料”。
-            import math
             if len(reranked) != min(top_k, len(vector_top)) or len({idx for idx, _ in reranked}) != len(reranked):
                 raise ValueError("Incomplete reranking response")
             if any(type(idx) is not int or not 0 <= idx < len(vector_top)
@@ -252,6 +349,7 @@ class RAGService:
                     "document_type": row.doc_type.value,
                     "source_url": row.source_url,
                     "rank": round(score, 4),
+                    **retrieval_metadata.get(str(row.id), {}),
                 })
             return final
         except Exception as exc:
@@ -268,6 +366,7 @@ class RAGService:
                     "document_type": row.doc_type.value,
                     "source_url": row.source_url,
                     "rank": round(score, 4),
+                    **retrieval_metadata.get(str(row.id), {}),
                 }
                 for score, row in vector_top[:top_k]
             ]

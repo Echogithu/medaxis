@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Box, Button, Chip, Collapse, Stack, Typography } from '@mui/material';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import type { KnowledgeCitation, KnowledgeEvidence } from '../types/agent';
-import { citationExcerptPreview, isSafeCitationUrl, evidenceMatchesExcerpt, citationEvidenceLabel, citationRelevanceLabel } from '../state/reportCitations';
+import { citationExcerptPreview, isSafeCitationUrl, evidenceMatchesExcerpt, citationEvidenceLabel, citationRelevanceLabel, citationHasExpandedContext } from '../state/reportCitations';
 import { carePalette } from '../theme';
 
 /** 引用概览与完整原文分层；来源定位只在需要核对时展开。 */
@@ -15,6 +15,7 @@ export default function ReportCitationCard({ citation, anchorId, evidence = [] }
   const isInternal = citation.source_type === 'internal';
   const hasLink = isSafeCitationUrl(citation.url);
   const excerptId = `${anchorId}-excerpt`;
+  const hasContext = isInternal && citationHasExpandedContext(citation);
   const rows = evidence.filter(row => row && row.citation_id === citation.citation_id && typeof row.claim === 'string');
   const metadata = isInternal
     ? [
@@ -44,6 +45,7 @@ export default function ReportCitationCard({ citation, anchorId, evidence = [] }
         </Box>
       </Stack>
       <Typography variant="caption" sx={{ display: 'block', color: carePalette.primaryDark }}>{citationRelevanceLabel(citation)}</Typography>
+      {hasContext && <Typography variant="caption" sx={{ display: 'block', color: carePalette.muted }}>已补充同一资料的前后文</Typography>}
       {citation.relevance_reason && <Typography variant="caption" sx={{ display: 'block', color: carePalette.muted }}>{citation.relevance_reason}</Typography>}
       {rows.length > 0 && <Typography variant="body2" sx={{ mt: 0.65, fontSize: 12.5 }}>对应报告陈述：{citationExcerptPreview(rows[0].claim)}</Typography>}
       <Typography variant="caption" color="text.secondary">

@@ -53,10 +53,28 @@ export interface KnowledgeCitation {
   trust_score?: number | null;
   is_trusted?: boolean | null;
   relevance?: number | null;
-  relevance_method?: 'reranker' | 'keyword' | 'unassessed';
+  relevance_method?: 'reranker' | 'keyword' | 'query_requirements' | 'unassessed';
+  query_coverage?: {
+    status: 'answers' | 'partial_answer' | 'does_not_answer' | 'unknown';
+    requirements: string[];
+    covered_requirements: string[];
+    missing_requirements: string[];
+    uncertain_requirements: string[];
+    excerpt_sha256: string;
+  } | null;
   relevance_level?: 'matched' | 'unassessed';
   relevance_reason?: string;
   relevance_query_fingerprint?: string;
+  context_metadata?: {
+    document_id: string;
+    anchor_chunk_id: string;
+    chunk_ids: string[];
+    start: number;
+    end: number;
+    source_text_sha256: string;
+    method: 'anchor_neighbors';
+    max_chars: number;
+  } | null;
 }
 
 export interface KnowledgeEvidence {
