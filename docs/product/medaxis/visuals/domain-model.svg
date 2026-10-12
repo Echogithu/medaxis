@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="1120" viewBox="0 0 1480 1120" role="img"><title>MedAxis · 资料与对象关系</title>
+<rect width="100%" height="100%" fill="#f4f7f6"/>
+<g font-family="Microsoft YaHei, sans-serif">
+<text x="44" y="42" fill="#173a38" font-size="34" text-anchor="start" dominant-baseline="central">MedAxis · 资料与对象关系</text>
+<text x="44" y="83" fill="#536d6a" font-size="19" text-anchor="start" dominant-baseline="central">产品流程示意 · REVIEW · 静态梳理，运行与专业验收未由本图证明</text>
+<polyline points="740,198.0 740,250.0 270,250.0 270,302.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="270,302.0 265.3269798922962,290.94726807196537 274.6730201077038,290.94726807196537" fill="#9bb4b0"/>
+<polyline points="740,198.0 740,482.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="740,482.0 735.3269798922962,470.94726807196537 744.6730201077038,470.94726807196537" fill="#9bb4b0"/>
+<polyline points="740,198.0 740,250.0 1210,250.0 1210,302.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="1210,302.0 1205.326979892296,290.94726807196537 1214.673020107704,290.94726807196537" fill="#9bb4b0"/>
+<polyline points="270,398.0 270,440.0 740,440.0 740,482.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="740,482.0 735.3269798922962,470.94726807196537 744.6730201077038,470.94726807196537" fill="#9bb4b0"/>
+<text x="495" y="422" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">来源保存</text>
+<polyline points="1210,398.0 1210,440.0 740,440.0 740,482.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="740,482.0 735.3269798922962,470.94726807196537 744.6730201077038,470.94726807196537" fill="#9bb4b0"/>
+<text x="985" y="422" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">固定版本引用，零至多病例</text>
+<polyline points="740,578.0 740,645.0 260,645.0 260,712.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="260,712.0 255.3269798922962,700.9472680719654 264.6730201077038,700.9472680719654" fill="#9bb4b0"/>
+<polyline points="740,578.0 740,712.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="740,712.0 735.3269798922962,700.9472680719654 744.6730201077038,700.9472680719654" fill="#9bb4b0"/>
+<polyline points="740,578.0 740,645.0 1210,645.0 1210,712.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="1210,712.0 1205.326979892296,700.9472680719654 1214.673020107704,700.9472680719654" fill="#9bb4b0"/>
+<polyline points="740,808.0 740,912.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="740,912.0 735.3269798922962,900.9472680719654 744.6730201077038,900.9472680719654" fill="#9bb4b0"/>
+<text x="740.0" y="842.0" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">可选同意与逐项确认</text>
+<polyline points="545.0,150 40,150 40,960 545.0,960" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="545.0,960 533.9472680719654,964.6730201077038 533.9472680719654,955.3269798922962" fill="#9bb4b0"/>
+<text x="292.5" y="132.0" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">手动创建</text>
+<polyline points="935.0,960 1015.0,960" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="1015.0,960 1003.9472680719654,964.6730201077038 1003.9472680719654,955.3269798922962" fill="#9bb4b0"/>
+<rect x="545.0" y="102.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="740" y="135.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">患者</text>
+<text x="740" y="165.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">资料主体与所有者</text>
+<rect x="75.0" y="302.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="270" y="335.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">问诊会话</text>
+<text x="270" y="365.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">采集过程与来源</text>
+<rect x="545.0" y="482.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="740" y="515.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">病例</text>
+<text x="740" y="545.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">一次问题的组织单元</text>
+<rect x="1015.0" y="302.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="1210" y="335.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">独立报告</text>
+<text x="1210" y="365.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">有序原件与核对版本</text>
+<rect x="65.0" y="712.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="260" y="745.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">就医准备</text>
+<text x="260" y="775.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">版本化资料包</text>
+<rect x="545.0" y="712.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="740" y="745.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">诊后自报</text>
+<text x="740" y="775.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">患者陈述与历史</text>
+<rect x="1015.0" y="712.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="1210" y="745.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">定向咨询</text>
+<text x="1210" y="775.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">单活动医生 · 授权快照</text>
+<rect x="545.0" y="912.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="740" y="945.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">计划与任务</text>
+<text x="740" y="975.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">手动或逐项确认后生效</text>
+<rect x="1015.0" y="912.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="1210" y="945.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">提醒事件</text>
+<text x="1210" y="975.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">排程 · 送达 · 确认</text>
+</g></svg>

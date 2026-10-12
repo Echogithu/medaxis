@@ -1,0 +1,21 @@
+flowchart TB
+  user["患者／资料主体与所有者"]
+  session["问诊会话／采集过程与来源"]
+  case["病例／一次问题的组织单元"]
+  report["独立报告／有序原件与核对版本"]
+  prep["就医准备／版本化资料包"]
+  feedback["诊后自报／患者陈述与历史"]
+  consultation["定向咨询／单活动医生 · 授权快照"]
+  plan["计划与任务／手动或逐项确认后生效"]
+  event["提醒事件／排程 · 送达 · 确认"]
+  user --> session
+  user --> case
+  user --> report
+  session -->|来源保存| case
+  report -->|固定版本引用，零至多病例| case
+  case --> prep
+  case --> feedback
+  case --> consultation
+  feedback -->|可选同意与逐项确认| plan
+  user -->|手动创建| plan
+  plan --> event

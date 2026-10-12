@@ -43,11 +43,11 @@ node --test tests/patientProfile.test.mjs
 .\node_modules\.bin\tsc.cmd -p tsconfig.app.json --noEmit
 ```
 
-人工验收见 [.claude/manual-test-health-profile-chain.md](../../.claude/manual-test-health-profile-chain.md)。自动化模型边界使用替身，只证明档案被传递，不证明真实模型采纳或临床质量。
+本机人工验收清单位于 `.claude/manual-test-health-profile-chain.md`，该过程文件不随仓库分发；公开验收范围以本页行为与验证入口为准。自动化模型边界使用替身，只证明档案被传递，不证明真实模型采纳或临床质量。
 
 ## 上线与恢复边界
 
-运行环境需先备份数据库，在计划窗口执行 `alembic upgrade head` 到 `d4e5f6a7b8c9`，再更新应用服务。本轮仅运行隔离验收，不迁移现有业务库，不重启已有服务。
+运行环境需先备份数据库，再在计划窗口按当前仓库迁移 head 执行 `alembic upgrade head`，之后更新应用服务。`d4e5f6a7b8c9` 是本次档案切片对应的历史迁移，不是当前全仓 head；新增模块还需后续迁移。本轮仅运行隔离验收，不迁移现有业务库，不重启已有服务。
 
 新增的 `record_metadata` 列保存来源、时间、状态和修订。若已有非空元数据，迁移拒绝直接降级删除该列；需先导出并确认恢复方案。回退应用时应保留元数据列，并避免旧客户端继续写入。工作区回退只针对本轮修改，不覆盖其他未提交工作。
 

@@ -47,6 +47,6 @@
 
 frontend 定向检查：`node --test tests/patientCarePlans.test.mjs tests/patientProfile.test.mjs tests/patientReminders.test.mjs`、`.\node_modules\.bin\tsc.cmd -p tsconfig.app.json --noEmit`、`npm run build`。
 
-真人验收见 [.claude 手动清单](../../.claude/manual-test-followup-plan-chain.md)。现有业务服务未升级或重启，业务数据库未写入。部署时先确认现有迁移 head（含上一轮档案迁移），再更新 API/前端，验证真实患者登录与旧计划；本轮无新增迁移。
+本机真人验收清单位于 `.claude/manual-test-followup-plan-chain.md`，该文件不随公开克隆分发；行为和验收入口见本页。现有业务服务未升级或重启，业务数据库未写入。部署时先确认现有迁移 head（含上一轮档案迁移），再更新 API/前端，验证真实患者登录与旧计划；本轮无新增迁移。
 
 恢复时按本轮差异回退代码，保留元数据和执行记录；不能整仓覆盖已有未提交改动或清除新计划。修改前文件保存在任务目录 backups；前后端需配套恢复，避免旧客户端把暂停/取消误认为可执行。

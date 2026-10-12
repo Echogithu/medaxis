@@ -145,7 +145,7 @@ P1 未关闭前不得宣称模块完整。三个门禁通过才可称限定范�
 | `.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_patient_reminders.py tests/test_monitoring_reminder_retry.py`（backend，使用下面合成进程环境） | 0 | 14 passed；fake session 状态/游标及局部查询测试；未连接 PostgreSQL、Redis 或 SMTP |
 | `.\backend\.venv\Scripts\python.exe .\.ai\tasks\2026-10-02-health-followup-medication-review\review_probes.py`（仓库根） | 0 | 6 组缺陷观察成立：未知 ack、未知 check-in、JSONB 未变脏、列表打卡不更新、SMTP False 被标 sent、空性别被拒；这是缺陷复现成功，不是业务验收通过 |
 
-后端局部测试的可复跑配置（PowerShell，从 backend 目录运行；全为合成值，不可用于数据库集成验收）：
+2026-10-02 局部测试的历史进程配置（PowerShell；全为合成值，不可用于数据库集成验收）。当前复跑数据库 fixture 须使用 `medaxis_test_*`、三个一致 URL 和显式清表确认，见[当前后端说明](../engineering/backend.md#本地运行与测试)；不能直接沿用下面的历史库名：
 
 ```powershell
 $env:TEST_DATABASE_URL = 'postgresql+asyncpg://review:review@127.0.0.1:1/medaxis_pytest_module_review'
@@ -156,7 +156,7 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 & '.\.venv\Scripts\python.exe' -m pytest -q -p no:cacheprovider tests/test_patient_reminders.py tests/test_monitoring_reminder_retry.py
 ```
 
-探针源码和输出位于本地 [review_probes.py](../../.ai/tasks/2026-10-02-health-followup-medication-review/review_probes.py)、[probe-results.json](../../.ai/tasks/2026-10-02-health-followup-medication-review/probe-results.json)。`.ai` 不随项目文档分发；后续修复应将相关场景转为正式回归，并移除“预期缺陷”的探针断言。
+探针源码和输出位于本机 `.ai/tasks/2026-10-02-health-followup-medication-review/` 内的 `review_probes.py`、`probe-results.json`，它们不是公开可下载附件。`.ai` 不随项目文档分发；后续修复应将相关场景转为正式回归，并移除“预期缺陷”的探针断言。
 
 执行回退：首次后端测试使用 SQLite DSN，被 Settings 的 PostgresDsn 校验拒绝（exit 1），改为上述合成 PostgreSQL 格式的进程环境后通过；未改环境文件、未开库。探针首次网络保护覆盖到了 Windows asyncio 内部 socketpair（exit 1），将保护移到事件循环初始化后再次运行成功。初次根配置 `tsc --noEmit` 返回 0，但根 tsconfig 没有源码文件；补核后运行表中应用配置命令，实际源码检查返回 0。
 

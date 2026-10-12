@@ -1,22 +1,22 @@
-# 待处理问题摘要
+# 当前待处理问题摘要
 
-> 静态核对日期：**2026-09-24**。本页是高优先级风险摘要，不是已批准排期；完整范围、证据和验收要求以[审查型 PRD](./PRD.md)为准。本轮未运行应用测试或生产验证。
->
-> **2026-09-27 更新**：本页部分条目（注册角色、病例/解析结果归属校验、解析任务持久化）已在当前源码修复。按链路排序的最新计划见[业务链路闭环路线图](./CLOSURE_ROADMAP.md)。
+> 静态核对日期：**2026-10-06**。本页只整理当前工作区代码与已有验证记录，不是开发排期，也不表示本轮运行了应用测试。历史缺陷与原编号见[审查型 PRD](./PRD.md)。
 
-## 需要优先处理
+## 当前仍需处理或补证据
 
-| 优先级 | 问题 | 当前证据与边界 |
+| 优先级建议 | 问题 | 当前证据与边界 |
 |---|---|---|
-| P0 | 限制公开注册可授予的角色 | 注册 schema 接受管理员角色且注册入口直接使用请求角色；应通过授权边界和拒绝用例修复。见 [R01](./PRD.md) 与 [auth API](../../backend/app/api/v1/auth.py)。 |
-| P0 | 补齐病例与解析结果的角色/所有权校验 | 医生详情和文档结果接口存在权限缺口；登录或 task ID 不能代替资源所有权校验。见 [R02](./PRD.md)、[doctor API](../../backend/app/api/v1/doctor.py)、[documents API](../../backend/app/api/v1/documents.py)。 |
-| P0 | 隔离演示数据并修正失败反馈 | 医生详情、评论和计划路径仍存在模拟数据或失败时展示成功的风险。见 [R03](./PRD.md) 与 [CaseDetailPage](../../frontend/src/doctor/pages/CaseDetailPage.tsx)。 |
-| P1 | 对齐前后端数据契约并恢复可运行检查 | 病例、随访、模型配置等模块仍有字段/类型差异。PRD 记录的 165 条 TypeScript 错误是前次审查结果，当前数量需重跑确认。见 [R04/R05](./PRD.md)。 |
-| P1 | 让解析任务状态跨重启、跨 worker 可恢复 | documents API 当前在进程内字典保存任务状态；异步状态应使用共享持久化机制或明确单 worker 限制。见 [documents API](../../backend/app/api/v1/documents.py)。 |
-| P1 | 闭合随访、提醒与监测失败路径 | 目前有页面、API 和定时任务代码，但并未证明创建、发送、确认、重试和重启恢复构成可用闭环。见 [患者 API](../../backend/app/api/v1/patient.py) 与 [Celery 配置](../../backend/app/tasks/celery_app.py)。 |
+| P0 | 医生认证门禁与真实数据展示 | [doctor.py](../../backend/app/api/v1/doctor.py) 已检查角色和分配归属，但 `_require_doctor` 未检查 `is_verified`；[详情页](../../frontend/src/doctor/pages/CaseDetailPage.tsx) 仍混入 MOCK_CASE。医生计划接口返回 501，评论与患者接收未形成完整路径。 |
+| P1 | 真实模型的完整问诊验收 | 两次短对话证明模型可回答与额度持久化，不能替代首轮→补问→报告→保存→恢复。10 个固定案例仍未完整验收，见[冒烟题集](../../evals/patient-smoke/README.md)。 |
+| P1 | 新报告中心部署与最终验收 | 归档、取字、核对、引用、去重和回收站代码已接入；当前本机演示尚缺新版迁移。真实拍照 OCR、真实模型整理、Linux 部署及完整链路需分别验证，见[报告现状](./PATIENT_REPORTS_REQUIREMENTS.md)。 |
+| P1 | 提醒送达与故障恢复 | 患者手动计划和诊后 AI 安排已有实现；不再描述为“没有创建 CarePlan 的路径”。真实模型提取质量、邮件送达、长期队列运行及重启/重复投递仍需验收，见[随访](./FOLLOWUP_PLAN_SPEC.md)和[诊后安排](./POST_VISIT_AI_ACTIONS_SPEC.md)。 |
+| P1 | 旧聊天附件的原件外发边界 | [documents.py](../../backend/app/api/v1/documents.py) 仍可能发送原图或文件；新报告中心的文字预览同意不能覆盖旧入口。演示只使用合成资料。 |
+| P1 | 撤销与全量权限审计 | [身份依赖](../../backend/app/api/deps.py) 的 Redis blacklist 查询异常仍走 fail-open。专用演示保护不代替全应用安全审计。 |
 
-## 与旧 TODO 的对照
+## 已修复的历史问题
 
-旧列表中的 patientHistory、SSE 解析复用和医生页面“全为空壳”等描述已不准确：当前代码已有相关实现，但聊天错误透传和医生端模拟数据问题仍在。provider 配置也支持多供应商选择；缺少的是跨供应商故障切换，不能继续描述成“只有单 provider”。
+公开注册管理员、医生病例角色/归属、解析结果归属、解析任务内存状态、旧病例字段和医生审核响应问题已不应照旧作为待修复清单；对应历史记录保留在 PRD 与[路线图快照](./CLOSURE_ROADMAP.md)。
 
-DoctorAgent、KnowledgeAgent、MCP、GraphRAG、WebSocket 和 Android 仍属于待规划能力，不应作为当前产品功能宣传。实现顺序和需求优先级需要先经过 PRD 评审。
+旧 PRD 的 165 条 TypeScript 错误不是当前结果；2026-10-06 的类型检查与构建通过记录见[演示说明](../INTERVIEW_DEMO.md)。构建成功不证明所有页面行为、全仓 lint 或生产部署通过。
+
+DoctorAgent、独立 KnowledgeAgent、MCP、GraphRAG、Android 和完整医生协作仍不能列为已交付能力。个人贡献、真实用户价值与医疗内容专业验证也不能由工程测试代替。

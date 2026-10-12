@@ -1,0 +1,16 @@
+flowchart TB
+  enter["登录患者：描述问题"] --> collect["补充信息／允许未知"]
+  collect --> retrieve["检索与辅助整理"]
+  retrieve --> gate{"可核验来源与有效引用？"}
+  gate -->|否| fail["说明证据不足／保留已输入资料"]
+  gate -->|是| report["显示辅助报告与来源"]
+  report --> save{"病例保存成功？"}
+  save -->|否| retry["报告保持可见／明确未保存"]
+  retry --> save
+  save -->|是| prep["同病例：核对就医准备"]
+  prep --> revision{"来源与修订一致？"}
+  revision -->|否| conflict["保留草稿／对照新版本"]
+  conflict --> prep
+  revision -->|是| ready["保存后复制摘要"]
+  ready --> feedback["就诊后：保存本人自报反馈"]
+  feedback --> restore["重登：恢复已保存病例资料"]

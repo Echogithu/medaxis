@@ -1,0 +1,16 @@
+flowchart TB
+  case["患者选择已保存病例"] --> choose["选择可用认证医生、快照与材料"]
+  choose --> grant["明确同意本次分享"]
+  grant --> active{"已有活动咨询？"}
+  active -->|是| existing["查看或取消旧咨询后重选"]
+  existing --> choose
+  active -->|否| pending["pending：医生查看授权快照"]
+  pending --> decision{"医生处理"}
+  decision -->|婉拒| declined["declined：停止共享"]
+  decision -->|接受| accepted["accepted：健康建议／持续留言"]
+  accepted --> waiting["awaiting_patient：请求补充"]
+  waiting --> accepted
+  accepted --> completed["completed：停止共享"]
+  pending --> stop["患者取消或医生失效：停止共享"]
+  accepted --> stop
+  waiting --> stop

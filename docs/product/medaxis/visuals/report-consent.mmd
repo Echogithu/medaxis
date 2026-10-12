@@ -1,0 +1,16 @@
+flowchart TB
+  upload["本人上传有序原件／选择复用或新副本"] --> archive["归档：仅本人可见"]
+  archive --> parse["本地取字／OCR"]
+  parse --> preview["预览脱敏文字、来源版本与接收模型"]
+  preview --> consent{"本次明确同意？"}
+  consent -->|否| manual["保留原件／可手动整理"]
+  consent -->|是| version{"文字、来源、接收方一致？"}
+  version -->|否| preview
+  version -->|是| ai["仅发送同意文字／失败不自动重发"]
+  ai --> candidate["AI 候选：待本人核对"]
+  candidate --> draft["编辑／另存手动草稿"]
+  manual --> draft
+  draft --> confirm["明确确认：生成核对历史版本"]
+  confirm --> link["按版本引用到本人病例"]
+  link --> changed["来源变化：标记待重新核对"]
+  changed --> preview

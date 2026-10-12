@@ -1,0 +1,140 @@
+workflow:
+  id: medaxis-product-dossier
+  version: 1
+  mode: standard
+  status: active
+  current_phase: 0
+  owner_approval_required: true
+  created_at: '2026-10-09'
+  updated_at: '2026-10-09'
+project_docs:
+  product_truth: docs/product/medaxis/PRD.md
+  code_index: null
+  technical_whitepaper: docs/engineering/architecture.md
+  conventions: AGENTS.md
+  trace_root: null
+  trace: null
+  handoff: null
+policies:
+  branch: preserve-existing-worktree-no-app-code
+  code_index_update: required-when-entry-or-module-changes
+  technical_whitepaper_sync: required-when-architecture-changes
+  subagents: read-only-evidence-and-review
+  production_actions: explicit-owner-authorization
+phases:
+  - id: 0
+    name: product-definition
+    applicability: required
+    status: active
+    entry_gate: user-request-for-whole-project-documentation
+    exit_gate: owner-review-and-critical-readiness-gates-pass
+    source_docs:
+      - docs/product/DOCTOR_PRD.md
+      - docs/product/PATIENT_REPORTS_REQUIREMENTS.md
+      - docs/product/EVALUATION_PROTOCOL.md
+    output_docs:
+      - docs/product/medaxis/PRD.md
+      - docs/product/medaxis/PRODUCT_SPEC.md
+      - docs/product/medaxis/DEVELOPMENT_READINESS.md
+    verification:
+      - 静态源码与历史证据分别记录于EVIDENCE.md
+      - 文档验收结果见本目录VERIFICATION.md；产品整稿尚未批准
+    reopen_when:
+      - Owner改变用户、范围、授权或能力承诺
+    next_phase: 1
+  - id: 1
+    name: information-architecture-and-ux
+    applicability: merged
+    merged_into: 0
+    status: pending
+    entry_gate: existing-route-and-task-inventory-available
+    exit_gate: owner-review-of-task-flows-and-screen-responsibilities
+    source_docs:
+      - frontend/src/App.tsx
+    output_docs:
+      - docs/product/medaxis/USER_FLOWS.md
+      - docs/product/medaxis/EVIDENCE.md
+    verification:
+      - 本次只核对现有导航并写评审流程，不修改应用页面
+    reopen_when:
+      - Owner批准新增或重构患者、医生、管理入口
+    next_phase: 2
+  - id: 2
+    name: wireframe
+    applicability: deferred
+    status: pending
+    entry_gate: approved-application-screen-change
+    exit_gate: structure-and-navigation-validated
+    source_docs: []
+    output_docs: []
+    verification: []
+    reopen_when:
+      - 获准替换旧医生详情或重构报告页面结构
+    next_phase: 3
+  - id: 3
+    name: visual-design
+    applicability: deferred
+    status: pending
+    entry_gate: approved-application-visual-change
+    exit_gate: visual-and-interaction-states-validated
+    source_docs: []
+    output_docs: []
+    verification:
+      - 本次文档阅读版排版不作为应用视觉设计验收
+    reopen_when:
+      - Owner批准应用视觉或交互状态变更
+    next_phase: 4
+  - id: 4
+    name: technical-design
+    applicability: deferred
+    status: pending
+    entry_gate: approved-product-and-implementation-scope
+    exit_gate: implementation-contract-ready
+    source_docs:
+      - docs/engineering/architecture.md
+      - docs/product/medaxis/DOMAIN_MODEL.md
+    output_docs: []
+    verification: []
+    reopen_when:
+      - 产品获批且明确API、权限、数据模型或迁移变更
+    next_phase: 5
+  - id: 5
+    name: implementation
+    applicability: deferred
+    status: pending
+    entry_gate: approved-technical-contract-and-code-authorization
+    exit_gate: code-and-automated-verification-ready
+    source_docs: []
+    output_docs: []
+    verification: []
+    reopen_when:
+      - Owner授权具体应用代码切片且技术契约和恢复点明确
+    next_phase: 6
+  - id: 6
+    name: integration-validation
+    applicability: deferred
+    status: pending
+    entry_gate: isolated-or-target-environment-test-authorization
+    exit_gate: integration-evidence-ready
+    source_docs:
+      - docs/product/PATIENT_REPORTS_REQUIREMENTS.md
+      - docs/product/POST_VISIT_AI_ACTIONS_SPEC.md
+    output_docs: []
+    verification:
+      - 当前实例、业务库和模型本轮未运行
+    reopen_when:
+      - 获准运行合成隔离或指定目标环境恢复与权限场景
+    next_phase: 7
+  - id: 7
+    name: release
+    applicability: not_applicable
+    status: pending
+    entry_gate: explicit-release-authorization-and-target
+    exit_gate: release-rollback-observation-evidence-ready
+    source_docs: []
+    output_docs: []
+    verification: []
+    rationale: 本次仅交付产品文档与派生阅读材料，没有应用发布动作
+    reopen_when:
+      - Owner指定发布环境、授权、负责人及可执行回滚方案
+    next_phase: null

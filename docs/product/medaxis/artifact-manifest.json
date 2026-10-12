@@ -1,0 +1,191 @@
+{
+  "scope": "product-doc-artifacts",
+  "date": "2026-10-09",
+  "files": [
+    {
+      "path": "DECISIONS.md",
+      "bytes": 5250,
+      "sha256": "7f6a3df5994e29eceedf4dba4b7b8f1523eb1dca6dc14beeda8498c678436622"
+    },
+    {
+      "path": "DEVELOPMENT_READINESS.md",
+      "bytes": 7807,
+      "sha256": "3d879d770765464b14d7311cc7fd5aa2974c2bdcbf43045161b602d35b3916f2"
+    },
+    {
+      "path": "DOMAIN_MODEL.md",
+      "bytes": 6448,
+      "sha256": "d8b67789c08d1888df285796206279741a9a89332e53e65d83e5fcbbec986922"
+    },
+    {
+      "path": "EVIDENCE.md",
+      "bytes": 15835,
+      "sha256": "f68c87e1f562c1d9097ce50f07e1d5bf87faae5f2b000dd345413ac814aef3bf"
+    },
+    {
+      "path": "index.html",
+      "bytes": 210094,
+      "sha256": "075927ec31586479fab7f9d999e8401367c6c47e0412865bac8f38ccf970c68a"
+    },
+    {
+      "path": "phase-manifest.yaml",
+      "bytes": 4587,
+      "sha256": "8e0dc3fa5e0ff424b63a39aa37c2bd52137d0d872de6c2406829627891b776d8"
+    },
+    {
+      "path": "PRD.md",
+      "bytes": 14976,
+      "sha256": "bd7a8c94268cf3f268f1a6c45d4677802876bd5a08db0efb23f1671cb6865029"
+    },
+    {
+      "path": "PRODUCT_SPEC.md",
+      "bytes": 10016,
+      "sha256": "63456ffdfcc7a29da0f6ce0e938c0e21e173a40b0dcff68a196574ea2bbcd884"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3457,
+      "sha256": "f20e5bf79710b0995c73bcafdfe561e60c4381440542f85ceaae1700267f8414"
+    },
+    {
+      "path": "tools/build_reader.mjs",
+      "bytes": 14767,
+      "sha256": "c00611458a2780df8054ba00e48f83e1bfe719b11b95350849f9da32c6f3a942"
+    },
+    {
+      "path": "tools/prepare_mindmap.mjs",
+      "bytes": 1105,
+      "sha256": "cb7a9bcf5cf3fb02e5ce57a8c8debdab8e019c8af328331be6d75c3a525be344"
+    },
+    {
+      "path": "tools/render_diagrams.py",
+      "bytes": 8707,
+      "sha256": "fb2bab17a54bc8132e2a54c789b642713fbaabdf3bc3aa481db106e0b5511539"
+    },
+    {
+      "path": "tools/validate_docs.mjs",
+      "bytes": 6904,
+      "sha256": "c353d75fc44eb9758064a28dee423e2763ed100d2eb974976a43ae0742b43ab9"
+    },
+    {
+      "path": "tools/verify_reader.mjs",
+      "bytes": 9216,
+      "sha256": "5b62779717e05e527a7f1e6fddb7ce01e088fc387ffed39cdf12dd5d321fdbe2"
+    },
+    {
+      "path": "USER_FLOWS.md",
+      "bytes": 6080,
+      "sha256": "43dcbc1017cf2786e140b7d4144f026135793520ca2a066f2974ae520be5f593"
+    },
+    {
+      "path": "VERIFICATION.md",
+      "bytes": 5424,
+      "sha256": "86a273ea8562fc96a469bdb0353f41a8d898b2301c70e7c56df8a3c5454cb8d1"
+    },
+    {
+      "path": "visuals/diagram-manifest.json",
+      "bytes": 590,
+      "sha256": "d59046440d3bf0d48fd5b5e60ad97d69a21293e47a72d19930304d3f1fdd6273"
+    },
+    {
+      "path": "visuals/doctor-consultation.mmd",
+      "bytes": 775,
+      "sha256": "191bef56856777e0593cc35c1fb2a0023182e96341cf65cf9d754a02dd67fb42"
+    },
+    {
+      "path": "visuals/doctor-consultation.png",
+      "bytes": 106659,
+      "sha256": "f292d9ff76c94f26aba1045fafd8dfe950c2f5cfe81224bcffa96a019447abab"
+    },
+    {
+      "path": "visuals/doctor-consultation.svg",
+      "bytes": 7435,
+      "sha256": "43f7fbeec627e090947e4227ce2d28d6b274fe713377bbaad8dbdf8049837e24"
+    },
+    {
+      "path": "visuals/domain-model.mmd",
+      "bytes": 779,
+      "sha256": "548a845535fc878382bccdc5a7c50f6e930c4de953967b9cfe6461873f33498e"
+    },
+    {
+      "path": "visuals/domain-model.png",
+      "bytes": 113794,
+      "sha256": "0f0f64f59ef5b6dfa7c3f2c33db60924630a2ae33012dcab43f7ed1528a431d6"
+    },
+    {
+      "path": "visuals/domain-model.svg",
+      "bytes": 6885,
+      "sha256": "03eb3ca73e093960c524bc7ea0be7e91e56e28bdac0e065a1c32fd36dd7758fc"
+    },
+    {
+      "path": "visuals/patient-flow.mmd",
+      "bytes": 820,
+      "sha256": "43edc62d127453b65b0c7247113eb9b7c6042358001ef360f8702eed4297bef3"
+    },
+    {
+      "path": "visuals/patient-flow.png",
+      "bytes": 126652,
+      "sha256": "59a9cf358116231177e8aeb4c5f98959d9e0a4f69f6bbac991e769a2430a461b"
+    },
+    {
+      "path": "visuals/patient-flow.svg",
+      "bytes": 8449,
+      "sha256": "98dcbf2f9cb7d4c44eeb2c2c7c2d0956e7f4b13dab6ac890e904bf47dad6c079"
+    },
+    {
+      "path": "visuals/product-map.mmd",
+      "bytes": 960,
+      "sha256": "c6a6df36b14f6f58787653c8a6ac98886de09eabce49e9639dcfe040d77ee0fe"
+    },
+    {
+      "path": "visuals/product-map.png",
+      "bytes": 144790,
+      "sha256": "86030ca913b1912d3d6f4b3dadc3576d095e4223c0912c3c37a009d56ade8f5e"
+    },
+    {
+      "path": "visuals/product-map.svg",
+      "bytes": 8355,
+      "sha256": "c7ee585902fb67e16fad1426741101469bf5e753f6e4a2188f078a6ccdfd5944"
+    },
+    {
+      "path": "visuals/product-mindmap.html",
+      "bytes": 380474,
+      "sha256": "1b087bdfbee7680274e7c9f2a90722e40db3da288d7fdea840b7b960df8e4d9a"
+    },
+    {
+      "path": "visuals/product-mindmap.md",
+      "bytes": 1716,
+      "sha256": "d7ecbae8c46bb47f45c7d6814c8b6519098db0114abe6918a20bef84b2b021c2"
+    },
+    {
+      "path": "visuals/product-mindmap.png",
+      "bytes": 164138,
+      "sha256": "2c4b758531721612bb942042e615788c90722c732fcccc7a81372b9a390c26c9"
+    },
+    {
+      "path": "visuals/README.md",
+      "bytes": 3152,
+      "sha256": "73d1ef4e910268a53cd28655f1e4647895e7387d11223eed7abba2e6b24ba04e"
+    },
+    {
+      "path": "visuals/report-consent.mmd",
+      "bytes": 838,
+      "sha256": "26a0bad7d2dbbec25f13ccff27cc0a098e2f23c6758e12888d98cee514a38bc8"
+    },
+    {
+      "path": "visuals/report-consent.png",
+      "bytes": 132626,
+      "sha256": "78397cc8826c16c6eab823ca5ccbc97c56c2990e19e03c290b33ce1086918916"
+    },
+    {
+      "path": "visuals/report-consent.svg",
+      "bytes": 8234,
+      "sha256": "65b35a3fdc516049b0ed5b6fe8ebd98d46bfef0347243312e02f61f0c5a1a404"
+    },
+    {
+      "path": "WORKFLOW.md",
+      "bytes": 2187,
+      "sha256": "c31d4d48574a2a9824abccd1864150c2dbc85be8c338dfb7ab1820740dc76f90"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1980" viewBox="0 0 1500 1980" role="img"><title>报告 · 逐次同意与本人核对</title>
+<rect width="100%" height="100%" fill="#f4f7f6"/>
+<g font-family="Microsoft YaHei, sans-serif">
+<text x="44" y="42" fill="#173a38" font-size="34" text-anchor="start" dominant-baseline="central">报告 · 逐次同意与本人核对</text>
+<text x="44" y="83" fill="#536d6a" font-size="19" text-anchor="start" dominant-baseline="central">产品流程示意 · REVIEW · 静态梳理，运行与专业验收未由本图证明</text>
+<polyline points="560,208.0 560,257.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,257.0 555.3269798922962,245.94726807196537 564.6730201077038,245.94726807196537" fill="#9bb4b0"/>
+<polyline points="560,353.0 560,402.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,402.0 555.3269798922962,390.94726807196537 564.6730201077038,390.94726807196537" fill="#9bb4b0"/>
+<polyline points="560,498.0 560,552.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,552.0 555.3269798922962,540.9472680719654 564.6730201077038,540.9472680719654" fill="#9bb4b0"/>
+<polyline points="560,648.0 560,695.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,695.0 555.3269798922962,683.9472680719654 564.6730201077038,683.9472680719654" fill="#9bb4b0"/>
+<polyline points="560,825.0 560,845.0 1140,845.0 1140,882.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="1140,882.0 1135.326979892296,870.9472680719654 1144.673020107704,870.9472680719654" fill="#9bb4b0"/>
+<text x="850" y="830" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">否</text>
+<polyline points="560,825.0 560,875.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,875.0 555.3269798922962,863.9472680719654 564.6730201077038,863.9472680719654" fill="#9bb4b0"/>
+<text x="560.0" y="832.0" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">是</text>
+<polyline points="560,875.0 560,648.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,648.0 564.6730201077038,659.0527319280346 555.3269798922962,659.0527319280346" fill="#9bb4b0"/>
+<text x="822" y="930" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">否</text>
+<polyline points="560,1005.0 560,1072.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,1072.0 555.3269798922962,1060.9472680719655 564.6730201077038,1060.9472680719655" fill="#9bb4b0"/>
+<text x="560.0" y="1020.5" fill="#0f766e" font-size="19" text-anchor="middle" dominant-baseline="central">是</text>
+<polyline points="560,1168.0 560,1237.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,1237.0 555.3269798922962,1225.9472680719655 564.6730201077038,1225.9472680719655" fill="#9bb4b0"/>
+<polyline points="560,1333.0 560,1402.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,1402.0 555.3269798922962,1390.9472680719655 564.6730201077038,1390.9472680719655" fill="#9bb4b0"/>
+<polyline points="1140,978.0 1140,1450 755.0,1450" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="755.0,1450 766.0527319280346,1445.326979892296 766.0527319280346,1454.673020107704" fill="#9bb4b0"/>
+<polyline points="560,1498.0 560,1567.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,1567.0 555.3269798922962,1555.9472680719655 564.6730201077038,1555.9472680719655" fill="#9bb4b0"/>
+<polyline points="560,1663.0 560,1722.0" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="560,1722.0 555.3269798922962,1710.9472680719655 564.6730201077038,1710.9472680719655" fill="#9bb4b0"/>
+<polyline points="755.0,1770 945.0,1770" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="945.0,1770 933.9472680719654,1774.673020107704 933.9472680719654,1765.326979892296" fill="#9bb4b0"/>
+<polyline points="1335.0,1770 1380,1770 1380,600 755.0,600" fill="none" stroke="#9bb4b0" stroke-width="3"/>
+<polygon points="755.0,600 766.0527319280346,595.3269798922962 766.0527319280346,604.6730201077038" fill="#9bb4b0"/>
+<rect x="365.0" y="112.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="145.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">本人上传有序原件</text>
+<text x="560" y="175.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">选择复用或新副本</text>
+<rect x="365.0" y="257.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="305.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">归档：仅本人可见</text>
+<rect x="365.0" y="402.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="435.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">本地取字</text>
+<text x="560" y="465.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">OCR</text>
+<rect x="365.0" y="552.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="585.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">预览脱敏文字、来源版本与接收</text>
+<text x="560" y="615.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">模型</text>
+<polygon points="560,695.0 755.0,760 560,825.0 365.0,760" fill="#e3f2ed" stroke="#0f766e" stroke-width="2"/>
+<text x="560" y="760.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">本次明确同意？</text>
+<rect x="945.0" y="882.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="1140" y="915.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">保留原件</text>
+<text x="1140" y="945.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">可手动整理</text>
+<polygon points="560,875.0 755.0,940 560,1005.0 365.0,940" fill="#e3f2ed" stroke="#0f766e" stroke-width="2"/>
+<text x="560" y="940.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">文字、来源、接收方一致？</text>
+<rect x="365.0" y="1072.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="1105.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">仅发送同意文字</text>
+<text x="560" y="1135.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">失败不自动重发</text>
+<rect x="365.0" y="1237.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="1285.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">AI 候选：待本人核对</text>
+<rect x="365.0" y="1402.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="1435.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">编辑</text>
+<text x="560" y="1465.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">另存手动草稿</text>
+<rect x="365.0" y="1567.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="1615.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">明确确认：生成核对历史版本</text>
+<rect x="365.0" y="1722.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="560" y="1770.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">按版本引用到本人病例</text>
+<rect x="945.0" y="1722.0" width="390" height="96" rx="18" fill="#ffffff" stroke="#cadbd7" stroke-width="2"/>
+<text x="1140" y="1770.0" fill="#173a38" font-size="25" text-anchor="middle" dominant-baseline="central">来源变化：标记待重新核对</text>
+</g></svg>
