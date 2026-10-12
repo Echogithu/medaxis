@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from openai import AsyncOpenAI
+from app.services.interview_demo import provider_http_client
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import undefer
 
@@ -238,7 +239,8 @@ class ReportLLM(LLMService):
         self.config, self.client = config, None
 
     async def _get_client(self):
-        self.client = AsyncOpenAI(base_url=self.config['base_url'], api_key=self.config['api_key'], timeout=45, max_retries=0)
+        self.client = AsyncOpenAI(base_url=self.config['base_url'], api_key=self.config['api_key'], timeout=45, max_retries=0,
+                                  http_client=provider_http_client())
         return self.client
 
     async def _get_default_model(self):

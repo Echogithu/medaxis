@@ -32,6 +32,7 @@ import { agentApi } from '../api/agent';
 import { getToken } from '../api/client';
 import { completeGuestMigration } from './guestMigration';
 import { carePalette } from '../theme';
+import { useDemoMode } from '../state/demoMode';
 
 const serviceItems = [
   { label: 'AI 问诊', icon: <ChatBubbleOutlineRounded /> },
@@ -51,12 +52,14 @@ const LoginPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const demo = useDemoMode();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
+  const [guestError, setGuestError] = useState('');
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -78,14 +81,17 @@ const LoginPage: React.FC = () => {
 
   const handleGuestAccess = async () => {
     setGuestLoading(true);
-    if (!getToken()) {
-      try {
+    setGuestError('');
+    try {
+      if (!getToken()) {
         await agentApi.createGuestSession();
-      } catch (error) {
-        console.error('创建访客会话失败:', error);
       }
+      navigate('/chat');
+    } catch {
+      setGuestError('暂时无法开始访客问诊，请检查网络后重试。');
+    } finally {
+      setGuestLoading(false);
     }
-    navigate('/chat');
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -98,7 +104,7 @@ const LoginPage: React.FC = () => {
     try {
       await login({ email: email.trim(), password, role: 'patient' });
       try {
-        await completeGuestMigration();
+        if (!demo?.enabled) await completeGuestMigration();
       } catch {
         setSnackbar({
           open: true,
@@ -352,8 +358,11 @@ const LoginPage: React.FC = () => {
                 </Button>
               </Box>
 
+              {demo?.enabled && <Alert severity="info" sx={{ mt: 2 }}>请使用单独提供的演示账号登录。访客体验与公开注册已停用。</Alert>}
+              {demo?.enabled === false && <>
               <Divider sx={{ my: 2.5, color: 'text.secondary', fontSize: 12 }}>或</Divider>
 
+              {guestError && <Alert severity="error" sx={{ mb: 1.5 }}>{guestError}</Alert>}
               <Button
                 fullWidth
                 variant="outlined"
@@ -377,6 +386,7 @@ const LoginPage: React.FC = () => {
                   去注册
                 </Link>
               </Typography>
+              </>}
             </Box>
           </Box>
         </Paper>

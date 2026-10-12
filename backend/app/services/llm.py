@@ -30,6 +30,7 @@ from app.core.encryption import decrypt_value
 from app.models.config import LLMProviderConfig
 from app.services.llm_errors import LLMConfigurationError, supports_structured_output_fallback
 from app.services.text_privacy import redact_for_provider, redact_messages_for_provider
+from app.services.interview_demo import provider_http_client, demo_max_tokens
 
 
 @dataclass
@@ -227,6 +228,7 @@ class LLMService:
             )
 
         return AsyncOpenAI(
+            http_client=provider_http_client(),
             base_url=config["base_url"],
             api_key=config["api_key"],
             timeout=self.timeout,
@@ -259,6 +261,7 @@ class LLMService:
         disable_thinking: bool = True,
     ) -> LLMResponse:
         """Send a non-streaming chat completion request."""
+        max_tokens = await demo_max_tokens(max_tokens)
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
@@ -328,6 +331,7 @@ class LLMService:
         system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Send a streaming chat completion request."""
+        max_tokens = await demo_max_tokens(max_tokens)
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
@@ -379,6 +383,7 @@ class LLMService:
         The LLM may return tool_calls instead of content.
         The caller is responsible for executing tools and calling again.
         """
+        max_tokens = await demo_max_tokens(max_tokens)
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
@@ -444,6 +449,7 @@ class LLMService:
         Uses OpenAI's response_format with json_schema when supported,
         falling back to strict prompting + manual validation.
         """
+        max_tokens = await demo_max_tokens(max_tokens)
         client = await self._get_client()
         default_model = await self._get_default_model()
         if not model and not default_model:
@@ -537,6 +543,7 @@ class LLMService:
         Returns:
             LLMResponse with vision model output.
         """
+        max_tokens = await demo_max_tokens(max_tokens)
         client = await self._get_client()
         default_model = await self._get_default_model()
 

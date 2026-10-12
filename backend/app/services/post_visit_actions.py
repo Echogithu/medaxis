@@ -20,6 +20,7 @@ from app.schemas.post_visit_actions import ExtractedActions
 from app.services.care_plan import PROFILE_TIMEZONE, today
 from app.services.llm import LLMService, _get_default_provider, _get_provider_config
 from app.services.text_privacy import redact_for_provider
+from app.services.interview_demo import provider_http_client
 
 log = logging.getLogger(__name__)
 POLICY = "post_visit_minimal_v1"
@@ -62,7 +63,8 @@ class ConsentedLLM(LLMService):
         self.config = config
 
     async def _get_client(self):
-        return AsyncOpenAI(base_url=self.config["base_url"], api_key=self.config["api_key"], timeout=45, max_retries=0)
+        return AsyncOpenAI(base_url=self.config["base_url"], api_key=self.config["api_key"], timeout=45, max_retries=0,
+                           http_client=provider_http_client())
 
     async def _get_default_model(self):
         return self.config["default_model"]

@@ -6,6 +6,7 @@ import { Box, CircularProgress } from '@mui/material';
 import patientTheme from './theme';
 import doctorTheme from './themes/doctorTheme';
 import { getUserRole, isLoggedIn } from './api/auth';
+import { DemoModeProvider } from './components/DemoMode';
 
 // 公共路由
 const EntryPage = lazy(() => import('./auth/LoginPage'));
@@ -75,7 +76,7 @@ function App() {
   return (
     <ThemeProvider theme={patientTheme}>
       <CssBaseline />
-      <BrowserRouter>
+      <DemoModeProvider><BrowserRouter>
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             {/* 公共路由 */}
@@ -120,7 +121,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
-      </BrowserRouter>
+      </BrowserRouter></DemoModeProvider>
     </ThemeProvider>
   );
 }

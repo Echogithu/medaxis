@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import decrypt_value
 from app.models.config import LLMProviderConfig
+from app.services.interview_demo import reserve_provider_request
 
 INTENT_TIMEOUT_SECONDS = 8.0
 # Initial routing threshold; calibrate against labelled Chinese requests before tuning.
@@ -102,7 +103,8 @@ async def classify_with_jev(config: LLMProviderConfig, state: dict) -> dict[str,
         raise ValueError("Jev API key is not configured")
     base_url = config.base_url.rstrip("/")
     endpoint = base_url if base_url.endswith("/systemone") else f"{base_url}/systemone"
-    async with httpx.AsyncClient(timeout=INTENT_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=INTENT_TIMEOUT_SECONDS,
+                                 event_hooks={'request': [reserve_provider_request]}) as client:
         response = await client.post(
             endpoint,
             headers={"Authorization": f"Bearer {api_key}"},

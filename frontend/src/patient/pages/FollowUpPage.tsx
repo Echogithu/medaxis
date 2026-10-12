@@ -9,6 +9,7 @@ import {
 } from '../../api/patient';
 import type { CarePlan, CarePlanAction, CarePlanCursor, CarePlanFields, CareTask, MedicalCase } from '../../api/patient';
 import { pageHeader } from '../../styles/sxUtils';
+import { useDemoMode } from '../../state/demoMode';
 import { carePalette } from '../../theme';
 import PendingPostVisitActions from '../components/PendingPostVisitActions';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
@@ -28,6 +29,9 @@ const messageOf = (error: unknown) => error instanceof Error ? error.message : '
 const formatTime = (value?: string | null) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未记录';
 
 export default function FollowUpPage() {
+  const demo = useDemoMode();
+  const reportReady = !(demo?.enabled && !demo.report_center_ready);
+  const reportPath = reportReady ? '/reports' : '/cases';
   const [plans, setPlans] = useState<CarePlan[]>([]);
   const [filter, setFilter] = useState('');
   const [cursor, setCursor] = useState<CarePlanCursor | null>(null);
@@ -233,7 +237,7 @@ export default function FollowUpPage() {
         {!upcoming.length && <Typography variant="body2" color="text.secondary">{summaryError ? '安排暂未加载' : summaryLoaded ? '暂无待办安排' : '安排加载中…'}</Typography>}
         {upcoming.slice(0, 3).map(({ plan, task }) => <Box key={`${plan.id}-${task.id}`} sx={{ borderLeft: '3px solid', borderColor: carePalette.coral, pl: 1.5, my: 2 }}><Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{task.due_date?.slice(5).replace('-', '.')} · {task.description || task.name}</Typography><Typography variant="caption">{plan.title}</Typography></Box>)}
       </CardContent></Card>
-      <Card sx={{ borderRadius: '24px' }}><CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}><Typography component="h2" variant="h6" sx={{ mb: 2 }}>就诊前准备</Typography>{[['核对健康档案', '过敏史、疾病与当前用药', '/health'], ['整理检查报告', '携带原件供医生核对', '/cases']].map(([title, detail, link]) => <Stack direction="row" key={title} sx={{ py: 1.5, alignItems: 'center', justifyContent: 'space-between', gap: 1 }}><Box><Typography sx={{ fontWeight: 600 }}>{title}</Typography><Typography variant="caption">{detail}</Typography></Box><Button component={RouterLink} to={link} aria-label={title}>查看 →</Button></Stack>)}</CardContent></Card>
+      <Card sx={{ borderRadius: '24px' }}><CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}><Typography component="h2" variant="h6" sx={{ mb: 2 }}>就诊前准备</Typography>{[['核对健康档案', '过敏史、疾病与当前用药', '/health'], [reportReady ? '整理检查报告' : '查看病例附件', '携带原件供医生核对', reportPath]].map(([title, detail, link]) => <Stack direction="row" key={title} sx={{ py: 1.5, alignItems: 'center', justifyContent: 'space-between', gap: 1 }}><Box><Typography sx={{ fontWeight: 600 }}>{title}</Typography><Typography variant="caption">{detail}</Typography></Box><Button component={RouterLink} to={link} aria-label={title}>查看 →</Button></Stack>)}</CardContent></Card>
       <Alert severity="warning" icon={false}>症状明显加重或出现紧急危险信号时，请及时就医。</Alert>
     </Stack></Box>
 

@@ -13,6 +13,7 @@ import HealthMeasurementsPanel from '../components/HealthMeasurementsPanel';
 import { getProfile, ProfileSaveError, updateProfile } from '../../api/patient';
 import type { DiseaseRecord, MedicationRecord, PatientProfile, ProfileSection, RecordMetadata, RecordState } from '../../api/patient';
 import { pageHeader } from '../../styles/sxUtils';
+import { useDemoMode } from '../../state/demoMode';
 import { carePalette } from '../../theme';
 
 const STATES: Record<RecordState, string> = { present: '有记录', none: '明确无', unknown: '未知', not_recorded: '未填写' };
@@ -80,6 +81,9 @@ export default function HealthProfilePage() {
   const [draft, setDraft] = useState<PatientProfile | null>(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const demo = useDemoMode();
+  const reportReady = !(demo?.enabled && !demo.report_center_ready);
+  const reportPath = reportReady ? '/reports' : '/cases';
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -293,7 +297,7 @@ export default function HealthProfilePage() {
       </Stack>
       <Stack component="aside" spacing={3} sx={{ minWidth: 0 }}>
         <HealthMeasurementsPanel open={measurementOpen} onClose={() => setMeasurementOpen(false)} onOpen={() => setMeasurementOpen(true)} />
-        <Card><CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}><Typography component="h2" variant="h6" sx={{ mb: 1.5 }}>就诊资料</Typography><Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button component={RouterLink} to="/cases">检查报告 →</Button><Button component={RouterLink} to="/followups">随访记录 →</Button></Stack></CardContent></Card>
+        <Card><CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}><Typography component="h2" variant="h6" sx={{ mb: 1.5 }}>就诊资料</Typography><Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}><Button component={RouterLink} to={reportPath}>{reportReady ? '检查报告' : '病例附件'} →</Button><Button component={RouterLink} to="/followups">随访记录 →</Button></Stack></CardContent></Card>
       </Stack>
     </Box>
     <Dialog open={editing} onClose={saving ? undefined : () => setEditing(false)} fullWidth maxWidth="md" aria-labelledby="profile-edit-title"><DialogTitle id="profile-edit-title">编辑健康档案</DialogTitle><DialogContent dividers>{editor}</DialogContent><DialogActions sx={{ p: 2.5 }}><Button disabled={saving} onClick={() => setEditing(false)}>取消</Button><Button disabled={saving} variant="contained" startIcon={<SaveIcon />} onClick={() => void save()}>{saving ? '保存中…' : '保存'}</Button></DialogActions></Dialog>

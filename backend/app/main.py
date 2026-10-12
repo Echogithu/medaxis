@@ -22,6 +22,7 @@ from app.core.security import get_password_hash
 from app.db.redis_client import get_redis
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.user import User, UserRole, UserStatus
+from app.services.interview_demo import InterviewDemoMiddleware
 
 settings = get_settings()
 
@@ -98,6 +99,7 @@ app.add_middleware(
 )
 
 app.include_router(v1_router, prefix="/api/v1")
+app.add_middleware(InterviewDemoMiddleware)
 
 
 @app.get("/health", tags=["System"])

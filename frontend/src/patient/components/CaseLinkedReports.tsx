@@ -4,18 +4,23 @@ import { Alert, Box, Button, Pagination, Stack, Typography } from '@mui/material
 import { listCaseReports } from '../../api/reports';
 import type { CaseReportsPage } from '../../api/reports';
 import { reportLinkLabels } from '../../state/reportLinks';
+import { useDemoMode } from '../../state/demoMode';
 
 export default function CaseLinkedReports({ caseId }: { caseId: string }) {
+  const demo = useDemoMode();
+  const demoAttachmentsOnly = demo?.enabled && !demo.report_center_ready;
   const [data, setData] = useState<CaseReportsPage | null>(null);
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState('');
   useEffect(() => {
+    if (demoAttachmentsOnly) return;
     let live = true;
     listCaseReports(caseId,page).then(value => { if (live) { setData(value); setError(''); } })
       .catch(failure => { if (live) setError(failure.message); });
     return () => { live = false; };
-  }, [caseId,page,reload]);
+  }, [caseId,page,reload,demoAttachmentsOnly]);
+  if (demoAttachmentsOnly) return <Alert severity="info">本次演示的合成报告在下方“上传的检查资料”中，可下载查看。</Alert>;
   return <Box component="section" aria-label="病例关联报告" sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
     <Typography component="h3" variant="subtitle1">关联的独立报告（本人可见）</Typography>
     <Typography variant="body2" color="text.secondary" sx={{ my: 1 }}>这里是资料引用；不自动授权医生或进入诊断。删除病例后，独立报告仍保留。</Typography>

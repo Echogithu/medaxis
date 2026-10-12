@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.core.encryption import decrypt_value
 from app.models.config import LLMProviderConfig
 from app.services.text_privacy import redact_for_provider
+from app.services.interview_demo import provider_http_client
 
 
 class EmbeddingService:
@@ -34,6 +35,7 @@ class EmbeddingService:
         config = await self._resolve_provider()
         self._model = config["default_model"]
         self._client = AsyncOpenAI(
+            http_client=provider_http_client(),
             base_url=config["base_url"],
             api_key=config["api_key"],
             timeout=30.0,

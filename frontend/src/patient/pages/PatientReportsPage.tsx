@@ -14,6 +14,7 @@ import ReportCaseLinksPanel from '../components/ReportCaseLinksPanel';
 import ReportLifecycleControl from '../components/ReportLifecycleControl';
 import { reviewLabels } from '../../state/reportReview';
 import { carePalette } from '../../theme';
+import { useDemoMode } from '../../state/demoMode';
 
 const panel = { p: { xs: 2.5, sm: 3 }, minWidth: 0 };
 const timestamp = (value: string) => new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
@@ -163,5 +164,11 @@ function ReportList() {
 }
 export default function PatientReportsPage() {
   const { reportId } = useParams();
+  const demo = useDemoMode();
+  if (demo?.enabled && !demo.report_center_ready) return <Box sx={{ p: 3 }}>
+    <Typography component="h1" variant="h5" sx={{ mb: 2 }}>检查报告</Typography>
+    <Alert severity="info">本次演示的合成报告放在问诊记录的“上传的检查资料”中，可下载查看。</Alert>
+    <Button component={RouterLink} to="/cases" sx={{ mt: 2 }}>查看合成病例与报告附件</Button>
+  </Box>;
   return <Box sx={{ maxWidth: 1440, mx: 'auto', p: { xs: 2, sm: 3, lg: 4 } }}>{reportId ? <ReportDetail key={reportId} id={reportId} /> : <ReportList />}</Box>;
 }
